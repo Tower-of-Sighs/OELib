@@ -13,17 +13,17 @@ import net.minecraftforge.eventbus.api.Event;
  * @since 1.0.0
  */
 public class DataReloadEvent extends Event {
-    
+
     private final Class<?> dataClass;
     private final int loadedCount;
     private final int invalidCount;
-    
+
     public DataReloadEvent(Class<?> dataClass, int loadedCount, int invalidCount) {
         this.dataClass = dataClass;
         this.loadedCount = loadedCount;
         this.invalidCount = invalidCount;
     }
-    
+
     /**
      * 获取重载的数据类型。
      *
@@ -32,7 +32,7 @@ public class DataReloadEvent extends Event {
     public Class<?> getDataClass() {
         return dataClass;
     }
-    
+
     /**
      * 获取成功加载的数据条目数量。
      *
@@ -41,7 +41,7 @@ public class DataReloadEvent extends Event {
     public int getLoadedCount() {
         return loadedCount;
     }
-    
+
     /**
      * 获取无效的数据条目数量。
      *
@@ -50,7 +50,7 @@ public class DataReloadEvent extends Event {
     public int getInvalidCount() {
         return invalidCount;
     }
-    
+
     /**
      * 检查是否为指定的数据类型。
      *

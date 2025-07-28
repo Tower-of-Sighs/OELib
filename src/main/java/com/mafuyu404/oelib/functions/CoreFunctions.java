@@ -13,7 +13,7 @@ import net.minecraftforge.fml.ModList;
  * @since 1.0.0
  */
 public class CoreFunctions {
-    
+
     /**
      * 检查模组是否已加载。
      *

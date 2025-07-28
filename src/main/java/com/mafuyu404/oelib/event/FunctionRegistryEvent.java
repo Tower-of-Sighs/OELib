@@ -29,9 +29,9 @@ import java.util.List;
  * @since 1.0.0
  */
 public class FunctionRegistryEvent extends Event {
-    
+
     private final List<Pair<Class<?>, String>> registered = new ArrayList<>();
-    
+
     /**
      * 注册包含 {@link com.mafuyu404.oelib.api.ExpressionFunction} 注解方法的类。
      *
@@ -47,7 +47,7 @@ public class FunctionRegistryEvent extends Event {
         }
         registered.add(Pair.of(clazz, modid));
     }
-    
+
     /**
      * 获取所有已注册的函数类列表。
      *

@@ -64,7 +64,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
      * 注册数据驱动类型。
      *
      * @param dataClass 数据类型
-     * @param <T> 数据类型泛型
+     * @param <T>       数据类型泛型
      * @return 数据管理器实例
      */
     @SuppressWarnings("unchecked")
@@ -80,7 +80,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
      * 获取数据管理器实例。
      *
      * @param dataClass 数据类型
-     * @param <T> 数据类型泛型
+     * @param <T>       数据类型泛型
      * @return 数据管理器实例，如果未注册则返回 null
      */
     @SuppressWarnings("unchecked")
@@ -136,7 +136,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
      * 添加数据到缓存。
      *
      * @param cacheKey 缓存键
-     * @param data 数据
+     * @param data     数据
      */
     public void addToCache(String cacheKey, T data) {
         if (annotation.enableCache()) {

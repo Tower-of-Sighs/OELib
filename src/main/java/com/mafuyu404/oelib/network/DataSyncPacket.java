@@ -1,7 +1,6 @@
 package com.mafuyu404.oelib.network;
 
 import com.mafuyu404.oelib.OElib;
-import com.mafuyu404.oelib.core.DataManager;
 import com.mafuyu404.oelib.util.CodecUtils;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -25,17 +24,17 @@ import java.util.UUID;
  * @since 1.0.0
  */
 public class DataSyncPacket<T> {
-    
+
     private static final int MAX_CHUNK_SIZE = 30000; // 30KB
-    
+
     private final Class<T> dataClass;
     private final Map<ResourceLocation, T> data;
-    
+
     public DataSyncPacket(Class<T> dataClass, Map<ResourceLocation, T> data) {
         this.dataClass = dataClass;
         this.data = data;
     }
-    
+
     /**
      * 发送到指定玩家。
      *
@@ -48,7 +47,7 @@ public class DataSyncPacket<T> {
         }
         sendToTarget(PacketDistributor.PLAYER.with(() -> player));
     }
-    
+
     /**
      * 发送到所有玩家。
      */
@@ -84,7 +83,7 @@ public class DataSyncPacket<T> {
             OElib.LOGGER.error("Failed to send {} sync packet: {}", dataClass.getSimpleName(), e.getMessage(), e);
         }
     }
-    
+
     private void sendSingleChunk(PacketDistributor.PacketTarget target, byte[] dataBytes) {
         try {
             UUID sessionId = UUID.randomUUID();
@@ -96,27 +95,27 @@ public class DataSyncPacket<T> {
             OElib.LOGGER.error("Failed to send single chunk for {}: {}", dataClass.getSimpleName(), e.getMessage(), e);
         }
     }
-    
+
     private void sendChunked(PacketDistributor.PacketTarget target, byte[] data) {
         try {
             UUID sessionId = UUID.randomUUID();
             int totalChunks = (int) Math.ceil((double) data.length / MAX_CHUNK_SIZE);
-            
-            OElib.LOGGER.info("Splitting {} data into {} chunks for session {}", 
+
+            OElib.LOGGER.info("Splitting {} data into {} chunks for session {}",
                     dataClass.getSimpleName(), totalChunks, sessionId);
-            
+
             for (int i = 0; i < totalChunks; i++) {
                 int start = i * MAX_CHUNK_SIZE;
                 int end = Math.min(start + MAX_CHUNK_SIZE, data.length);
                 int chunkSize = end - start;
-                
+
                 byte[] chunkData = new byte[chunkSize];
                 System.arraycopy(data, start, chunkData, 0, chunkSize);
-                
+
                 DataSyncChunkPacket chunk = new DataSyncChunkPacket(
                         sessionId, i, totalChunks, dataClass.getName(), chunkData);
                 NetworkHandler.INSTANCE.send(target, chunk);
-                
+
                 OElib.LOGGER.debug("Sent chunk {}/{} ({} bytes) for {} session {}",
                         i + 1, totalChunks, chunkSize, dataClass.getSimpleName(), sessionId);
             }

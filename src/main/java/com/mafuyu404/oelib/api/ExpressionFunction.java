@@ -27,7 +27,7 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ExpressionFunction {
-    
+
     /**
      * 函数在表达式中的名称。
      * <p>
@@ -38,7 +38,7 @@ public @interface ExpressionFunction {
      * @return 函数名称，默认为空字符串
      */
     String value() default "";
-    
+
     /**
      * 函数的描述信息。
      * <p>
@@ -48,7 +48,7 @@ public @interface ExpressionFunction {
      * @return 函数描述，默认为空字符串
      */
     String description() default "";
-    
+
     /**
      * 函数的分类。
      * <p>
