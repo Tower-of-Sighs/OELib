@@ -171,34 +171,6 @@ dependencies {
         jarJar.ranged(it, '[2.5.0.Final,2.6.0)')
     }
 }
-
-publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
-            groupId = mod_group_id
-            artifactId = mod_artifact_id
-            version = mod_version
-
-            artifact(tasks.named("shadowJar").get()) {
-                classifier = null // 让它变成 oelib-0.0.1.jar 而不是 oelib-0.0.1-all.jar
-            }
-        }
-    }
-
-    repositories {
-        maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/Tower-of-Sighs/OELib")
-            credentials {
-                username = project.findProperty("USERNAME") ?: System.getenv("USERNAME")
-                password = project.findProperty("TOKEN") ?: System.getenv("TOKEN")
-            }
-        }
-    }
-}
-
-
 // This block of code expands all declared replace properties in the specified resource targets.
 // A missing property will result in an error. Properties are expanded using ${} Groovy notation.
 // When "copyIdeResources" is enabled, this will also run before the game launches in IDE environments.
