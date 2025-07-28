@@ -1,44 +1,56 @@
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-# This workflow will build a package using Gradle and then publish it to GitHub packages when a release is created
-# For more information see: https://github.com/actions/setup-java/blob/main/docs/advanced-usage.md#Publishing-using-gradle
-
 name: Gradle Package
 
 on:
-  release:
-    types: [created]
+  push:
+    paths:
+      - gradle.properties  # 或者你的 mod_version 所在文件
+  workflow_dispatch:  # 手动触发
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        server-id: github # Value of the distributionManagement/repository/id field of the pom.xml
-        settings-path: ${{ github.workspace }} # location for the settings.xml file
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # 以便获取前一次提交
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@af1da67850ed9a4cedd57bfd976089dd991e2582 # v4.0.0
+      - name: Compare mod_version
+        id: version_check
+        run: |
+          CURRENT=$(grep "^mod_version=" gradle.properties | cut -d= -f2)
+          PREVIOUS=$(git show HEAD^:gradle.properties | grep "^mod_version=" | cut -d= -f2)
+          echo "Current version: $CURRENT"
+          echo "Previous version: $PREVIOUS"
+          if [ "$CURRENT" = "$PREVIOUS" ]; then
+            echo "mod_version 没有变更，跳过后续步骤。"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "mod_version 有变更，继续执行。"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
 
-    - name: Build with Gradle
-      run: ./gradlew build
+      - name: Exit if no mod_version change
+        if: steps.version_check.outputs.skip == 'true'
+        run: |
+          echo "跳过构建，因为 mod_version 没有变化。"
+          exit 0
 
-    # The USERNAME and TOKEN need to correspond to the credentials environment variables used in
-    # the publishing section of your build.gradle
-    - name: Publish to GitHub Packages
-      run: ./gradlew publish
-      env:
-        USERNAME: ${{ github.actor }}
-        TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build with Gradle
+        run: ./gradlew build
+
+      - name: Publish to GitHub Packages
+        run: ./gradlew publish
+        env:
+          USERNAME: ${{ github.actor }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}

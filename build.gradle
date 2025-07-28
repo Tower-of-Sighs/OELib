@@ -12,6 +12,7 @@ buildscript {
 plugins {
     id 'eclipse'
     id 'idea'
+    id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0.16,6.2)'
 }
 
@@ -175,9 +176,10 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
-            groupId = ${mod_group_id}      // 自定义
-            artifactId = ${mod_artifact_id}  // 自定义
-            version = ${mod_version}          // 或自动从 tag 获取
+            groupId = mod_group_id
+            artifactId = mod_artifact_id
+            version = mod_version
+
         }
     }
 
