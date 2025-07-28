@@ -171,6 +171,29 @@ dependencies {
     }
 }
 
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            groupId = ${mod_group_id}      // 自定义
+            artifactId = ${mod_artifact_id}  // 自定义
+            version = ${mod_version}          // 或自动从 tag 获取
+        }
+    }
+
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/Tower-of-Sighs/OELib")
+            credentials {
+                username = project.findProperty("USERNAME") ?: System.getenv("USERNAME")
+                password = project.findProperty("TOKEN") ?: System.getenv("TOKEN")
+            }
+        }
+    }
+}
+
+
 // This block of code expands all declared replace properties in the specified resource targets.
 // A missing property will result in an error. Properties are expanded using ${} Groovy notation.
 // When "copyIdeResources" is enabled, this will also run before the game launches in IDE environments.
