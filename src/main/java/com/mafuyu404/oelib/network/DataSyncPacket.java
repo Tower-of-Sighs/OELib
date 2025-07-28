@@ -20,8 +20,6 @@ import java.util.UUID;
  * </p>
  *
  * @param <T> 数据类型
- * @author Flechazo
- * @since 1.0.0
  */
 public class DataSyncPacket<T> {
 
@@ -36,9 +34,7 @@ public class DataSyncPacket<T> {
     }
 
     /**
-     * 发送到指定玩家。
-     *
-     * @param player 玩家
+     * 发送到指定玩家
      */
     public void sendTo(ServerPlayer player) {
         if (player == null) {

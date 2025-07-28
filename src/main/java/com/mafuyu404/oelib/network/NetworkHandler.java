@@ -5,15 +5,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
 
-/**
- * 网络处理器。
- * <p>
- * 负责注册和管理所有网络数据包。
- * </p>
- *
- * @author Flechazo
- * @since 1.0.0
- */
 public class NetworkHandler {
 
     private static final String PROTOCOL_VERSION = "1";

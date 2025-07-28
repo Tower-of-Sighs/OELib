@@ -16,11 +16,8 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 编解码工具类。
  * <p>
- * 提供通用的数据序列化和反序列化功能。
+ * 提供通用的针对数据包序列化和反序列化功能。
  * </p>
- *
- * @author Flechazo
- * @since 1.0.0
  */
 public class CodecUtils {
 

@@ -8,9 +8,6 @@ import net.minecraftforge.fml.ModList;
  * <p>
  * 提供一些常用的表达式函数。
  * </p>
- *
- * @author Flechazo
- * @since 1.0.0
  */
 public class CoreFunctions {
 

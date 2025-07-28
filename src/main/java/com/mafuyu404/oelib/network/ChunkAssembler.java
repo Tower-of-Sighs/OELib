@@ -22,8 +22,6 @@ import java.util.concurrent.TimeUnit;
  * 负责接收和组装分片数据包。
  * </p>
  *
- * @author Flechazo
- * @since 1.0.0
  */
 public class ChunkAssembler {
 

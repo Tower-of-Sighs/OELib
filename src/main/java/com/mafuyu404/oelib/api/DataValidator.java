@@ -1,5 +1,6 @@
 package com.mafuyu404.oelib.api;
 
+
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -9,8 +10,6 @@ import net.minecraft.resources.ResourceLocation;
  * </p>
  *
  * @param <T> 数据类型
- * @author Flechazo
- * @since 1.0.0
  */
 public interface DataValidator<T> {
 

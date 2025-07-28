@@ -15,8 +15,6 @@ import java.util.function.Supplier;
  * @param totalChunks   总分片数
  * @param dataClassName 数据类名
  * @param chunkData     分片数据
- * @author Flechazo
- * @since 1.0.0
  */
 public record DataSyncChunkPacket(UUID sessionId, int chunkIndex, int totalChunks, String dataClassName,
                                   byte[] chunkData) {

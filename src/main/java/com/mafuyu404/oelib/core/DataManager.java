@@ -35,8 +35,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * </p>
  *
  * @param <T> 数据类型
- * @author Flechazo
- * @since 1.0.0
  */
 @Mod.EventBusSubscriber(modid = OElib.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class DataManager<T> extends SimpleJsonResourceReloadListener {
@@ -44,7 +42,6 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
     private static final Gson GSON = new GsonBuilder().setLenient().create();
     private static final Map<Class<?>, DataManager<?>> managers = new ConcurrentHashMap<>();
     private static boolean serverStarted = false;
-
     private final Class<T> dataClass;
     private final DataDriven annotation;
     private final Codec<T> codec;
@@ -73,7 +70,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
             throw new IllegalArgumentException("Class " + dataClass.getSimpleName() + " must be annotated with @DataDriven");
         }
 
-        return (DataManager<T>) managers.computeIfAbsent(dataClass, clazz -> new DataManager<>((Class<T>) clazz));
+        return (DataManager<T>) managers.computeIfAbsent(dataClass, DataManager::new);
     }
 
     /**
@@ -173,7 +170,6 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
 
         OElib.LOGGER.debug("Updated client data for {}: {} entries", dataClass.getSimpleName(), data.size());
 
-        // 发布客户端数据重载事件
         MinecraftForge.EVENT_BUS.post(new DataReloadEvent(dataClass, data.size(), 0));
     }
 
@@ -267,12 +263,10 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         OElib.LOGGER.info("Loaded {} valid {} entries, {} invalid entries were skipped",
                 validCount, dataClass.getSimpleName(), invalidCount);
 
-        // 同步到客户端
         if (annotation.syncToClient() && serverStarted) {
             syncToAllPlayers();
         }
 
-        // 发布数据重载事件
         MinecraftForge.EVENT_BUS.post(new DataReloadEvent(dataClass, validCount, invalidCount));
     }
 
@@ -285,7 +279,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
      * @param data 数据
      */
     protected void buildCache(T data) {
-        // 默认实现：将数据添加到 "all" 缓存键
+        // 默认实现，将数据添加到 "all" 缓存键
         addToCache("all", data);
     }
 

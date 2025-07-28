@@ -19,8 +19,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * 负责管理所有数据驱动类型的注册和初始化。
  * </p>
  *
- * @author Flechazo
- * @since 1.0.0
  */
 @Mod.EventBusSubscriber(modid = OElib.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class DataRegistry {
@@ -53,10 +51,8 @@ public class DataRegistry {
             return;
         }
 
-        // 注册核心函数
         ExpressionEngine.registerFunctionClass(CoreFunctions.class, OElib.MODID);
 
-        // 初始化表达式引擎
         ExpressionEngine.initialize();
 
         initialized = true;

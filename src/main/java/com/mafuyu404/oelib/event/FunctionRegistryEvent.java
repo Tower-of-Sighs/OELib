@@ -24,9 +24,6 @@ import java.util.List;
  *     }
  * }
  * }</pre>
- *
- * @author Flechazo
- * @since 1.0.0
  */
 public class FunctionRegistryEvent extends Event {
 

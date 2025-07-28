@@ -9,8 +9,6 @@ import net.minecraftforge.eventbus.api.Event;
  * 外部模组可以监听此事件来更新自己的缓存或执行其他操作。
  * </p>
  *
- * @author Flechazo
- * @since 1.0.0
  */
 public class DataReloadEvent extends Event {
 

@@ -22,8 +22,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * 负责管理和执行 MVEL 表达式，支持自定义函数注册。
  * </p>
  *
- * @author Flechazo
- * @since 1.0.0
  */
 public class ExpressionEngine {
 

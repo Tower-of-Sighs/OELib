@@ -29,9 +29,6 @@ import java.lang.annotation.Target;
  *     );
  * }
  * }</pre>
- *
- * @author Flechazo
- * @since 1.0.0
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
