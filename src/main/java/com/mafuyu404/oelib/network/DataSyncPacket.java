@@ -11,6 +11,7 @@ import net.minecraftforge.server.ServerLifecycleHooks;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -59,26 +60,26 @@ public class DataSyncPacket<T> {
         }
         sendToTarget(PacketDistributor.ALL.noArg());
     }
-    
+
     private void sendToTarget(PacketDistributor.PacketTarget target) {
         try {
-            String jsonData = CodecUtils.encodeToJson(dataClass, data);
-            if (jsonData == null) {
+            Optional<String> jsonOpt = CodecUtils.encodeToJson(dataClass, data);
+            if (jsonOpt.isEmpty()) {
                 OElib.LOGGER.error("Failed to encode {} data to JSON", dataClass.getSimpleName());
                 return;
             }
-            
+
+            String jsonData = jsonOpt.get();
             byte[] dataBytes = jsonData.getBytes(StandardCharsets.UTF_8);
-            
-            OElib.LOGGER.info("Sending {} data: {} entries, {} bytes", 
+
+            OElib.LOGGER.info("Sending {} data: {} entries, {} bytes",
                     dataClass.getSimpleName(), data.size(), dataBytes.length);
-            
+
             if (dataBytes.length <= MAX_CHUNK_SIZE) {
                 sendSingleChunk(target, dataBytes);
             } else {
                 sendChunked(target, dataBytes);
             }
-            
         } catch (Exception e) {
             OElib.LOGGER.error("Failed to send {} sync packet: {}", dataClass.getSimpleName(), e.getMessage(), e);
         }

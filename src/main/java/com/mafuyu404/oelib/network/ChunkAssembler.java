@@ -7,7 +7,9 @@ import net.minecraft.resources.ResourceLocation;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -45,24 +47,26 @@ public class ChunkAssembler {
      * @param dataClassName 数据类名
      * @param chunkData 分片数据
      */
-    public static void receiveChunk(UUID sessionId, int chunkIndex, int totalChunks, String dataClassName, byte[] chunkData) {
+    public static <T> void receiveChunk(UUID sessionId, int chunkIndex, int totalChunks, String dataClassName, byte[] chunkData) {
         AssemblySession session = assemblingSessions.computeIfAbsent(sessionId,
                 id -> new AssemblySession(totalChunks, dataClassName));
-        
+
         if (session.addChunk(chunkIndex, chunkData)) {
             try {
                 byte[] completeData = session.assembleData();
-                String jsonData = new String(completeData);
-                
-                // 解析数据并更新客户端
-                Class<?> dataClass = Class.forName(dataClassName);
-                Map<ResourceLocation, ?> data = CodecUtils.decodeFromJson(dataClass, jsonData);
-                
-                if (data != null) {
-                    DataManager<?> manager = DataManager.get(dataClass);
+                String jsonData = new String(completeData, StandardCharsets.UTF_8);
+
+                @SuppressWarnings("unchecked")
+                Class<T> dataClass = (Class<T>) Class.forName(dataClassName);
+                Optional<Map<ResourceLocation, T>> dataOpt = CodecUtils.decodeFromJson(dataClass, jsonData);
+
+                if (dataOpt.isPresent()) {
+                    Map<ResourceLocation, T> data = dataOpt.get();
+
+                    DataManager<T> manager = DataManager.get(dataClass);
                     if (manager != null) {
                         updateClientData(manager, data);
-                        OElib.LOGGER.info("Successfully processed {} {} data entries", 
+                        OElib.LOGGER.info("Successfully processed {} {} data entries",
                                 data.size(), dataClass.getSimpleName());
                     } else {
                         OElib.LOGGER.error("No data manager found for {}", dataClass.getSimpleName());
@@ -70,15 +74,15 @@ public class ChunkAssembler {
                 } else {
                     OElib.LOGGER.error("Failed to parse JSON data for {} session {}", dataClassName, sessionId);
                 }
-                
             } catch (Exception e) {
-                OElib.LOGGER.error("Failed to assemble chunk data for {} session {}: {}", 
+                OElib.LOGGER.error("Failed to assemble chunk data for {} session {}: {}",
                         dataClassName, sessionId, e.getMessage(), e);
             } finally {
                 assemblingSessions.remove(sessionId);
             }
         }
     }
+
     
     @SuppressWarnings("unchecked")
     private static <T> void updateClientData(DataManager<T> manager, Map<ResourceLocation, ?> data) {

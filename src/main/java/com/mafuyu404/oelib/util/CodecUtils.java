@@ -1,6 +1,7 @@
 package com.mafuyu404.oelib.util;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 import com.mafuyu404.oelib.OElib;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
@@ -11,6 +12,8 @@ import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 编解码工具类。
@@ -22,80 +25,61 @@ import java.util.Map;
  * @since 1.0.0
  */
 public class CodecUtils {
-    
-    /**
-     * 将数据序列化为 JSON 字符串。
-     *
-     * @param dataClass 数据类型
-     * @param data 数据
-     * @param <T> 数据类型泛型
-     * @return JSON 字符串，失败时返回 null
-     */
-    public static <T> String encodeToJson(Class<T> dataClass, Map<ResourceLocation, T> data) {
+
+    private static final Map<Class<?>, Codec<?>> codecCache = new ConcurrentHashMap<>();
+
+    public static <T> Optional<String> encodeToJson(Class<T> dataClass, Map<ResourceLocation, T> data) {
         try {
             Codec<Map<ResourceLocation, T>> mapCodec = createMapCodec(dataClass);
             DataResult<JsonElement> result = mapCodec.encodeStart(JsonOps.INSTANCE, data);
-            
+
             if (result.error().isPresent()) {
-                OElib.LOGGER.error("Failed to encode {} data: {}", dataClass.getSimpleName(), result.error().get().message());
-                return null;
+                var error = result.error().get();
+                OElib.LOGGER.error("Failed to encode {} data: {}", dataClass.getSimpleName(), error.message());
+                return Optional.empty();
             }
-            
-            return result.result().orElse(null).toString();
+
+            return result.result().map(JsonElement::toString);
         } catch (Exception e) {
             OElib.LOGGER.error("Exception during {} encoding: {}", dataClass.getSimpleName(), e.getMessage(), e);
-            return null;
+            return Optional.empty();
         }
     }
-    
-    /**
-     * 从 JSON 字符串反序列化数据。
-     *
-     * @param dataClass 数据类型
-     * @param jsonData JSON 字符串
-     * @param <T> 数据类型泛型
-     * @return 数据映射，失败时返回 null
-     */
-    public static <T> Map<ResourceLocation, T> decodeFromJson(Class<T> dataClass, String jsonData) {
+
+    public static <T> Optional<Map<ResourceLocation, T>> decodeFromJson(Class<T> dataClass, String jsonData) {
         try {
-            JsonElement jsonElement = com.google.gson.JsonParser.parseString(jsonData);
+            JsonElement jsonElement = JsonParser.parseString(jsonData);
             Codec<Map<ResourceLocation, T>> mapCodec = createMapCodec(dataClass);
             DataResult<Map<ResourceLocation, T>> result = mapCodec.parse(JsonOps.INSTANCE, jsonElement);
-            
+
             if (result.error().isPresent()) {
-                OElib.LOGGER.error("Failed to decode {} data: {}", dataClass.getSimpleName(), result.error().get().message());
-                return null;
+                var error = result.error().get();
+                OElib.LOGGER.error("Failed to decode {} data: {}", dataClass.getSimpleName(), error.message());
+                return Optional.empty();
             }
-            
-            return result.result().orElse(null);
+
+            return result.result();
         } catch (Exception e) {
             OElib.LOGGER.error("Exception during {} decoding: {}", dataClass.getSimpleName(), e.getMessage(), e);
-            return null;
+            return Optional.empty();
         }
     }
-    
-    /**
-     * 从 JsonElement 反序列化单个数据对象。
-     *
-     * @param dataClass 数据类型
-     * @param jsonElement JSON 元素
-     * @param <T> 数据类型泛型
-     * @return 数据对象，失败时返回 null
-     */
-    public static <T> T decodeSingle(Class<T> dataClass, JsonElement jsonElement) {
+
+    public static <T> Optional<T> decodeSingle(Class<T> dataClass, JsonElement jsonElement) {
         try {
             Codec<T> codec = getCodec(dataClass);
             DataResult<T> result = codec.parse(JsonOps.INSTANCE, jsonElement);
-            
+
             if (result.error().isPresent()) {
-                OElib.LOGGER.error("Failed to decode {} data: {}", dataClass.getSimpleName(), result.error().get().message());
-                return null;
+                var error = result.error().get();
+                OElib.LOGGER.error("Failed to decode {} data: {}", dataClass.getSimpleName(), error.message());
+                return Optional.empty();
             }
-            
-            return result.result().orElse(null);
+
+            return result.result();
         } catch (Exception e) {
             OElib.LOGGER.error("Exception during {} decoding: {}", dataClass.getSimpleName(), e.getMessage(), e);
-            return null;
+            return Optional.empty();
         }
     }
 
@@ -103,16 +87,18 @@ public class CodecUtils {
         Codec<T> codec = getCodec(dataClass);
         return Codec.unboundedMap(ResourceLocation.CODEC, codec);
     }
-    
+
     @SuppressWarnings("unchecked")
     private static <T> Codec<T> getCodec(Class<T> dataClass) {
-        try {
-            Field codecField = dataClass.getDeclaredField("CODEC");
-            codecField.setAccessible(true);
-            return (Codec<T>) codecField.get(null);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to get CODEC field from " + dataClass.getSimpleName() + 
-                    ". Make sure the class has a public static final CODEC field.", e);
-        }
+        return (Codec<T>) codecCache.computeIfAbsent(dataClass, cls -> {
+            try {
+                Field codecField = cls.getDeclaredField("CODEC");
+                codecField.setAccessible(true);
+                return (Codec<?>) codecField.get(null);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to get CODEC field from " + cls.getSimpleName() +
+                        ". Make sure the class has a public static final CODEC field.", e);
+            }
+        });
     }
 }
