@@ -180,6 +180,9 @@ publishing {
             artifactId = mod_artifact_id
             version = mod_version
 
+            artifact(tasks.named("shadowJar").get()) {
+                classifier = null // 让它变成 oelib-0.0.1.jar 而不是 oelib-0.0.1-all.jar
+            }
         }
     }
 
