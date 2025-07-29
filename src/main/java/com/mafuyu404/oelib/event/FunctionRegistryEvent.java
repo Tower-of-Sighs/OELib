@@ -14,6 +14,7 @@ import java.util.Set;
  * <p>
  * 此事件在 OELib 初始化表达式引擎时触发，
  * 支持智能注册（只注册实际使用的函数）和全量注册。
+ * 现在支持优先级注册，确保核心函数优先注册。
  * </p>
  *
  * <h3>使用示例：</h3>
@@ -21,15 +22,26 @@ import java.util.Set;
  * public class YourModOELibIntegration {
  *
  *     public static void init() {
- *         FunctionRegistryEvent.EVENT.register((event) -> {
+ *         // 方式1：使用便捷 API
+ *         Events.on(FunctionRegistryEvent.EVENT)
+ *               .highest()
+ *               .register((event) -> {
+ *                   event.registerFunctionClass(CoreFunctions.class, "mymod");
+ *               });
+ *
+ *         // 方式2：使用注解
+ *         Events.register(MyEventHandlers.class);
+ *     }
+ *
+ *     public static class MyEventHandlers {
+ *         @EventPriority(priority = EventPriority.HIGHEST)
+ *         public static void onFunctionRegistry(FunctionRegistryEvent event) {
  *             if (event.isSmartRegistration()) {
- *                 // 智能注册：只注册需要的函数
  *                 event.registerFunctionClassSmart(YourModFunctions.class, "yourmod");
  *             } else {
- *                 // 全量注册：注册所有函数
  *                 event.registerFunctionClass(YourModFunctions.class, "yourmod");
  *             }
- *         });
+ *         }
  *     }
  * }
  * }</pre>

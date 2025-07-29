@@ -9,6 +9,7 @@ import net.minecraft.server.packs.PackType;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * 数据注册表。
@@ -18,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class DataRegistry {
 
-    private static final Set<Class<?>> registeredTypes = ConcurrentHashMap.newKeySet();
+    private static final Map<Class<?>, Integer> registeredTypes = new ConcurrentHashMap<>();
     private static final Map<Class<?>, FunctionUsageAnalyzer.DataExpressionExtractor<?>> extractors = new ConcurrentHashMap<>();
     private static boolean initialized = false;
     private static boolean expressionEngineInitialized = false;
@@ -34,13 +35,15 @@ public class DataRegistry {
             throw new IllegalArgumentException("Class " + dataClass.getSimpleName() + " must be annotated with @DataDriven");
         }
 
-        registeredTypes.add(dataClass);
+        DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
+        int priority = annotation.priority();
+
+        registeredTypes.put(dataClass, priority);
         DataManager<T> manager = DataManager.register(dataClass);
 
-        // 注册到 Fabric 资源管理器
         ResourceManagerHelper.get(PackType.SERVER_DATA).registerReloadListener(manager);
 
-        OElib.LOGGER.debug("Registered data-driven type: {}", dataClass.getSimpleName());
+        OElib.LOGGER.debug("Registered data-driven type: {} with priority: {}", dataClass.getSimpleName(), priority);
     }
 
     /**
@@ -71,6 +74,7 @@ public class DataRegistry {
      * 智能初始化表达式引擎。
      * <p>
      * 在所有数据包加载完成后调用，分析所有数据包中使用的函数并进行智能注册。
+     * 按照优先级顺序处理数据类型。
      * </p>
      */
     @SuppressWarnings("unchecked")
@@ -79,11 +83,21 @@ public class DataRegistry {
             return;
         }
 
-        // 添加核心必需函数
         Set<String> allUsedFunctions = new HashSet<>(FunctionUsageAnalyzer.getCoreRequiredFunctions());
 
+        // 按优先级排序处理数据类型（数值越小优先级越高）
+        List<Class<?>> sortedTypes = registeredTypes.entrySet().stream()
+                .sorted(Map.Entry.comparingByValue())
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+
+        OElib.LOGGER.debug("Processing data types in priority order: {}",
+                sortedTypes.stream()
+                        .map(clazz -> clazz.getSimpleName() + "(priority:" + registeredTypes.get(clazz) + ")")
+                        .collect(Collectors.joining(", ")));
+
         // 分析所有已注册数据类型中使用的函数
-        for (Class<?> dataClass : registeredTypes) {
+        for (Class<?> dataClass : sortedTypes) {
             FunctionUsageAnalyzer.DataExpressionExtractor<Object> extractor =
                     (FunctionUsageAnalyzer.DataExpressionExtractor<Object>) extractors.get(dataClass);
 
@@ -94,8 +108,9 @@ public class DataRegistry {
                     Set<String> usedFunctions = FunctionUsageAnalyzer.analyzeUsedFunctions(data, extractor);
                     allUsedFunctions.addAll(usedFunctions);
 
-                    OElib.LOGGER.debug("Found {} functions in {}: {}",
-                            usedFunctions.size(), dataClass.getSimpleName(), usedFunctions);
+                    OElib.LOGGER.debug("Found {} functions in {} (priority:{}): {}",
+                            usedFunctions.size(), dataClass.getSimpleName(),
+                            registeredTypes.get(dataClass), usedFunctions);
                 }
             }
         }
@@ -115,7 +130,29 @@ public class DataRegistry {
      * @return 已注册的数据类型集合
      */
     public static Set<Class<?>> getRegisteredTypes() {
-        return Set.copyOf(registeredTypes);
+        return Set.copyOf(registeredTypes.keySet());
+    }
+
+    /**
+     * 获取按优先级排序的数据类型列表。
+     *
+     * @return 按优先级排序的数据类型列表（优先级数值越小越靠前）
+     */
+    public static List<Class<?>> getRegisteredTypesByPriority() {
+        return registeredTypes.entrySet().stream()
+                .sorted(Map.Entry.comparingByValue())
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 获取数据类型的优先级。
+     *
+     * @param dataClass 数据类型
+     * @return 优先级，如果未注册则返回 null
+     */
+    public static Integer getPriority(Class<?> dataClass) {
+        return registeredTypes.get(dataClass);
     }
 
     /**
@@ -125,7 +162,7 @@ public class DataRegistry {
      * @return 是否已注册
      */
     public static boolean isRegistered(Class<?> dataClass) {
-        return registeredTypes.contains(dataClass);
+        return registeredTypes.containsKey(dataClass);
     }
 
     /**
