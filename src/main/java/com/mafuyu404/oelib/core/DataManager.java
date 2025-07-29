@@ -10,22 +10,21 @@ import com.mafuyu404.oelib.event.DataReloadEvent;
 import com.mafuyu404.oelib.network.DataSyncPacket;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.fabricmc.fabric.api.resource.SimpleResourceReloadListener;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraft.server.packs.resources.SimpleJsonResourceReloadListener;
 import net.minecraft.util.profiling.ProfilerFiller;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.event.server.ServerStartedEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.server.ServerLifecycleHooks;
 
 import java.lang.reflect.Field;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 
 /**
  * 通用数据管理器。
@@ -36,12 +35,13 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @param <T> 数据类型
  */
-@Mod.EventBusSubscriber(modid = OElib.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
-public class DataManager<T> extends SimpleJsonResourceReloadListener {
+public class DataManager<T> implements SimpleResourceReloadListener<Map<ResourceLocation, JsonElement>> {
 
     private static final Gson GSON = new GsonBuilder().setLenient().create();
     private static final Map<Class<?>, DataManager<?>> managers = new ConcurrentHashMap<>();
     private static boolean serverStarted = false;
+    private static MinecraftServer currentServer = null;
+
     private final Class<T> dataClass;
     private final DataDriven annotation;
     private final Codec<T> codec;
@@ -49,8 +49,27 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
     private final Map<ResourceLocation, T> loadedData = new ConcurrentHashMap<>();
     private final Map<String, Set<T>> cache = new ConcurrentHashMap<>();
 
+    static {
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            serverStarted = true;
+            currentServer = server;
+        });
+
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            serverStarted = false;
+            currentServer = null;
+        });
+
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+            for (DataManager<?> manager : managers.values()) {
+                if (manager.annotation.syncToClient()) {
+                    manager.syncToPlayer(handler.getPlayer());
+                }
+            }
+        });
+    }
+
     private DataManager(Class<T> dataClass) {
-        super(GSON, getFolder(dataClass));
         this.dataClass = dataClass;
         this.annotation = dataClass.getAnnotation(DataDriven.class);
         this.codec = getCodec(dataClass);
@@ -83,6 +102,130 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
     @SuppressWarnings("unchecked")
     public static <T> DataManager<T> get(Class<T> dataClass) {
         return (DataManager<T>) managers.get(dataClass);
+    }
+
+    @Override
+    public ResourceLocation getFabricId() {
+        return new ResourceLocation(OElib.MODID, "data_manager_" + dataClass.getSimpleName().toLowerCase());
+    }
+
+    @Override
+    public CompletableFuture<Map<ResourceLocation, JsonElement>> load(ResourceManager manager, ProfilerFiller profiler, Executor executor) {
+        return CompletableFuture.supplyAsync(() -> {
+            Map<ResourceLocation, JsonElement> data = new HashMap<>();
+            String folder = getFolder(dataClass);
+
+            manager.listResources(folder, path -> path.getPath().endsWith(".json")).forEach((rl, resource) -> {
+                try {
+                    JsonElement json = GSON.fromJson(resource.openAsReader(), JsonElement.class);
+                    data.put(rl, json);
+                } catch (Exception e) {
+                    OElib.LOGGER.error("Failed to load JSON from {}", rl, e);
+                }
+            });
+
+            return data;
+        }, executor);
+    }
+
+    @Override
+    public CompletableFuture<Void> apply(Map<ResourceLocation, JsonElement> data, ResourceManager manager, ProfilerFiller profiler, Executor executor) {
+        return CompletableFuture.runAsync(() -> {
+            loadedData.clear();
+            clearCache();
+
+            OElib.LOGGER.info("Loading {} data from {} files", dataClass.getSimpleName(), data.size());
+
+            int validCount = 0;
+            int invalidCount = 0;
+
+            for (Map.Entry<ResourceLocation, JsonElement> entry : data.entrySet()) {
+                ResourceLocation location = entry.getKey();
+                JsonElement json = entry.getValue();
+
+                try {
+                    if (annotation.supportArray() && json.isJsonArray()) {
+                        // 处理数组格式
+                        var jsonArray = json.getAsJsonArray();
+                        OElib.LOGGER.debug("Processing array with {} elements from {}", jsonArray.size(), location);
+
+                        for (int i = 0; i < jsonArray.size(); i++) {
+                            JsonElement element = jsonArray.get(i);
+                            ResourceLocation elementLocation = new ResourceLocation(
+                                    location.getNamespace(),
+                                    location.getPath() + "_" + i
+                            );
+
+                            var result = codec.parse(JsonOps.INSTANCE, element);
+                            if (result.result().isPresent()) {
+                                T dataObj = result.result().get();
+
+                                // 验证数据
+                                var validationResult = validator.validate(dataObj, elementLocation);
+                                if (validationResult.valid()) {
+                                    loadedData.put(elementLocation, dataObj);
+
+                                    // 构建缓存
+                                    if (annotation.enableCache()) {
+                                        buildCache(dataObj);
+                                    }
+
+                                    validCount++;
+                                    OElib.LOGGER.debug("Loaded {} from array[{}]: {}", dataClass.getSimpleName(), i, elementLocation);
+                                } else {
+                                    invalidCount++;
+                                    OElib.LOGGER.warn("Invalid {} data in array[{}] of {}: {}",
+                                            dataClass.getSimpleName(), i, location, validationResult.message());
+                                }
+                            } else {
+                                invalidCount++;
+                                OElib.LOGGER.error("Failed to parse {} data from array[{}] of {}: {}",
+                                        dataClass.getSimpleName(), i, location, result.error().orElse(null));
+                            }
+                        }
+                    } else {
+                        // 处理单个对象格式
+                        var result = codec.parse(JsonOps.INSTANCE, json);
+                        if (result.result().isPresent()) {
+                            T dataObj = result.result().get();
+
+                            // 验证数据
+                            var validationResult = validator.validate(dataObj, location);
+                            if (validationResult.valid()) {
+                                loadedData.put(location, dataObj);
+
+                                // 构建缓存
+                                if (annotation.enableCache()) {
+                                    buildCache(dataObj);
+                                }
+
+                                validCount++;
+                                OElib.LOGGER.debug("Loaded {}: {}", dataClass.getSimpleName(), location);
+                            } else {
+                                invalidCount++;
+                                OElib.LOGGER.warn("Invalid {} data in {}: {}", dataClass.getSimpleName(), location, validationResult.message());
+                            }
+                        } else {
+                            invalidCount++;
+                            OElib.LOGGER.error("Failed to parse {} data from {}: {}", dataClass.getSimpleName(), location, result.error().orElse(null));
+                        }
+                    }
+                } catch (Exception e) {
+                    invalidCount++;
+                    OElib.LOGGER.error("Error loading {} data from {}", dataClass.getSimpleName(), location, e);
+                }
+            }
+
+            OElib.LOGGER.info("Loaded {} valid {} entries, {} invalid entries were skipped",
+                    validCount, dataClass.getSimpleName(), invalidCount);
+
+            if (annotation.syncToClient() && serverStarted) {
+                syncToAllPlayers();
+            }
+
+            // 触发数据重载事件
+            DataReloadEvent.EVENT.invoker().onDataReload(dataClass, validCount, invalidCount);
+        }, executor);
     }
 
     /**
@@ -170,104 +313,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
 
         OElib.LOGGER.debug("Updated client data for {}: {} entries", dataClass.getSimpleName(), data.size());
 
-        MinecraftForge.EVENT_BUS.post(new DataReloadEvent(dataClass, data.size(), 0));
-    }
-
-    @Override
-    protected void apply(Map<ResourceLocation, JsonElement> object, ResourceManager resourceManager, ProfilerFiller profiler) {
-        loadedData.clear();
-        clearCache();
-
-        OElib.LOGGER.info("Loading {} data from {} files", dataClass.getSimpleName(), object.size());
-
-        int validCount = 0;
-        int invalidCount = 0;
-
-        for (Map.Entry<ResourceLocation, JsonElement> entry : object.entrySet()) {
-            ResourceLocation location = entry.getKey();
-            JsonElement json = entry.getValue();
-
-            try {
-                if (annotation.supportArray() && json.isJsonArray()) {
-                    // 处理数组格式
-                    var jsonArray = json.getAsJsonArray();
-                    OElib.LOGGER.debug("Processing array with {} elements from {}", jsonArray.size(), location);
-
-                    for (int i = 0; i < jsonArray.size(); i++) {
-                        JsonElement element = jsonArray.get(i);
-                        ResourceLocation elementLocation = new ResourceLocation(
-                                location.getNamespace(),
-                                location.getPath() + "_" + i
-                        );
-
-                        var result = codec.parse(JsonOps.INSTANCE, element);
-                        if (result.result().isPresent()) {
-                            T data = result.result().get();
-
-                            // 验证数据
-                            var validationResult = validator.validate(data, elementLocation);
-                            if (validationResult.valid()) {
-                                loadedData.put(elementLocation, data);
-
-                                // 构建缓存
-                                if (annotation.enableCache()) {
-                                    buildCache(data);
-                                }
-
-                                validCount++;
-                                OElib.LOGGER.debug("Loaded {} from array[{}]: {}", dataClass.getSimpleName(), i, elementLocation);
-                            } else {
-                                invalidCount++;
-                                OElib.LOGGER.warn("Invalid {} data in array[{}] of {}: {}",
-                                        dataClass.getSimpleName(), i, location, validationResult.message());
-                            }
-                        } else {
-                            invalidCount++;
-                            OElib.LOGGER.error("Failed to parse {} data from array[{}] of {}: {}",
-                                    dataClass.getSimpleName(), i, location, result.error().orElse(null));
-                        }
-                    }
-                } else {
-                    // 处理单个对象格式
-                    var result = codec.parse(JsonOps.INSTANCE, json);
-                    if (result.result().isPresent()) {
-                        T data = result.result().get();
-
-                        // 验证数据
-                        var validationResult = validator.validate(data, location);
-                        if (validationResult.valid()) {
-                            loadedData.put(location, data);
-
-                            // 构建缓存
-                            if (annotation.enableCache()) {
-                                buildCache(data);
-                            }
-
-                            validCount++;
-                            OElib.LOGGER.debug("Loaded {}: {}", dataClass.getSimpleName(), location);
-                        } else {
-                            invalidCount++;
-                            OElib.LOGGER.warn("Invalid {} data in {}: {}", dataClass.getSimpleName(), location, validationResult.message());
-                        }
-                    } else {
-                        invalidCount++;
-                        OElib.LOGGER.error("Failed to parse {} data from {}: {}", dataClass.getSimpleName(), location, result.error().orElse(null));
-                    }
-                }
-            } catch (Exception e) {
-                invalidCount++;
-                OElib.LOGGER.error("Error loading {} data from {}", dataClass.getSimpleName(), location, e);
-            }
-        }
-
-        OElib.LOGGER.info("Loaded {} valid {} entries, {} invalid entries were skipped",
-                validCount, dataClass.getSimpleName(), invalidCount);
-
-        if (annotation.syncToClient() && serverStarted) {
-            syncToAllPlayers();
-        }
-
-        MinecraftForge.EVENT_BUS.post(new DataReloadEvent(dataClass, validCount, invalidCount));
+        DataReloadEvent.EVENT.invoker().onDataReload(dataClass, data.size(), 0);
     }
 
     /**
@@ -285,10 +331,12 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
 
     private void syncToAllPlayers() {
         try {
-            MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+            MinecraftServer server = getCurrentServer();
             if (server != null && !loadedData.isEmpty()) {
                 DataSyncPacket<T> packet = new DataSyncPacket<>(dataClass, new HashMap<>(loadedData));
-                packet.sendToAll();
+                for (ServerPlayer player : PlayerLookup.all(server)) {
+                    packet.sendTo(player);
+                }
                 OElib.LOGGER.debug("Synced {} data to all players", dataClass.getSimpleName());
             }
         } catch (Exception e) {
@@ -313,21 +361,8 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         }
     }
 
-    @SubscribeEvent
-    public static void onServerStarted(ServerStartedEvent event) {
-        serverStarted = true;
-    }
-
-    @SubscribeEvent
-    public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player) {
-            // 同步所有需要客户端同步的数据
-            for (DataManager<?> manager : managers.values()) {
-                if (manager.annotation.syncToClient()) {
-                    manager.syncToPlayer(player);
-                }
-            }
-        }
+    private MinecraftServer getCurrentServer() {
+        return currentServer;
     }
 
     private static String getFolder(Class<?> dataClass) {

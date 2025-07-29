@@ -1,6 +1,7 @@
 package com.mafuyu404.oelib.event;
 
-import net.minecraftforge.eventbus.api.Event;
+import net.fabricmc.fabric.api.event.Event;
+import net.fabricmc.fabric.api.event.EventFactory;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.ArrayList;
@@ -17,23 +18,30 @@ import java.util.Set;
  *
  * <h3>使用示例：</h3>
  * <pre>{@code
- * @Mod.EventBusSubscriber(modid = "yourmod")
  * public class YourModOELibIntegration {
  *
- *     @SubscribeEvent(priority = EventPriority.HIGH)
- *     public static void onFunctionRegistration(FunctionRegistryEvent event) {
- *         if (event.isSmartRegistration()) {
- *             // 智能注册：只注册需要的函数
- *             event.registerFunctionClassSmart(YourModFunctions.class, "yourmod");
- *         } else {
- *             // 全量注册：注册所有函数
- *             event.registerFunctionClass(YourModFunctions.class, "yourmod");
- *         }
+ *     public static void init() {
+ *         FunctionRegistryEvent.EVENT.register((event) -> {
+ *             if (event.isSmartRegistration()) {
+ *                 // 智能注册：只注册需要的函数
+ *                 event.registerFunctionClassSmart(YourModFunctions.class, "yourmod");
+ *             } else {
+ *                 // 全量注册：注册所有函数
+ *                 event.registerFunctionClass(YourModFunctions.class, "yourmod");
+ *             }
+ *         });
  *     }
  * }
  * }</pre>
  */
-public class FunctionRegistryEvent extends Event {
+public class FunctionRegistryEvent {
+
+    public static final Event<FunctionRegistryCallback> EVENT = EventFactory.createArrayBacked(FunctionRegistryCallback.class,
+            (listeners) -> (event) -> {
+                for (FunctionRegistryCallback listener : listeners) {
+                    listener.onFunctionRegistry(event);
+                }
+            });
 
     private final List<Pair<Class<?>, String>> registered = new ArrayList<>();
     private final Set<String> requiredFunctions;
@@ -130,5 +138,13 @@ public class FunctionRegistryEvent extends Event {
      */
     public List<Pair<Class<?>, String>> getRegisteredClasses() {
         return registered;
+    }
+
+    /**
+     * 函数注册回调接口。
+     */
+    @FunctionalInterface
+    public interface FunctionRegistryCallback {
+        void onFunctionRegistry(FunctionRegistryEvent event);
     }
 }

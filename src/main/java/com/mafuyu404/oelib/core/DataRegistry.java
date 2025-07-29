@@ -2,11 +2,10 @@ package com.mafuyu404.oelib.core;
 
 import com.mafuyu404.oelib.OElib;
 import com.mafuyu404.oelib.api.DataDriven;
-import com.mafuyu404.oelib.functions.CoreFunctions;
 import com.mafuyu404.oelib.util.FunctionUsageAnalyzer;
-import net.minecraftforge.event.AddReloadListenerEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.PackType;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,9 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>
  * 负责管理所有数据驱动类型的注册和初始化。
  * </p>
- *
  */
-@Mod.EventBusSubscriber(modid = OElib.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class DataRegistry {
 
     private static final Set<Class<?>> registeredTypes = ConcurrentHashMap.newKeySet();
@@ -38,7 +35,10 @@ public class DataRegistry {
         }
 
         registeredTypes.add(dataClass);
-        DataManager.register(dataClass);
+        DataManager<T> manager = DataManager.register(dataClass);
+
+        // 注册到 Fabric 资源管理器
+        ResourceManagerHelper.get(PackType.SERVER_DATA).registerReloadListener(manager);
 
         OElib.LOGGER.debug("Registered data-driven type: {}", dataClass.getSimpleName());
     }
@@ -90,7 +90,7 @@ public class DataRegistry {
             if (extractor != null) {
                 DataManager<Object> manager = (DataManager<Object>) DataManager.get(dataClass);
                 if (manager != null) {
-                    Map<net.minecraft.resources.ResourceLocation, Object> data = manager.getAllData();
+                    Map<ResourceLocation, Object> data = manager.getAllData();
                     Set<String> usedFunctions = FunctionUsageAnalyzer.analyzeUsedFunctions(data, extractor);
                     allUsedFunctions.addAll(usedFunctions);
 
@@ -107,21 +107,6 @@ public class DataRegistry {
         ExpressionEngine.initialize(allUsedFunctions);
 
         expressionEngineInitialized = true;
-    }
-
-    @SubscribeEvent
-    public static void onAddReloadListener(AddReloadListenerEvent event) {
-        // 按优先级排序注册数据管理器
-        List<Class<?>> sortedTypes = new ArrayList<>(registeredTypes);
-        sortedTypes.sort(Comparator.comparingInt(clazz -> clazz.getAnnotation(DataDriven.class).priority()));
-
-        for (Class<?> dataClass : sortedTypes) {
-            DataManager<?> manager = DataManager.get(dataClass);
-            if (manager != null) {
-                event.addListener(manager);
-                OElib.LOGGER.debug("Added reload listener for: {}", dataClass.getSimpleName());
-            }
-        }
     }
 
     /**

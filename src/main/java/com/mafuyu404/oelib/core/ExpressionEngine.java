@@ -5,8 +5,6 @@ import com.mafuyu404.oelib.api.ExpressionFunction;
 import com.mafuyu404.oelib.event.FunctionRegistryEvent;
 import com.mafuyu404.oelib.functions.CoreFunctions;
 import com.mafuyu404.oelib.util.FunctionUsageAnalyzer;
-import net.minecraftforge.common.MinecraftForge;
-import org.apache.commons.lang3.tuple.Pair;
 import org.mvel2.MVEL;
 import org.mvel2.ParserContext;
 
@@ -21,7 +19,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>
  * 负责管理和执行 MVEL 表达式，支持自定义函数注册。
  * </p>
- *
  */
 public class ExpressionEngine {
 
@@ -79,7 +76,7 @@ public class ExpressionEngine {
         FunctionRegistryEvent event = requiredFunctions != null ?
                 new FunctionRegistryEvent(requiredFunctions) :
                 new FunctionRegistryEvent();
-        MinecraftForge.EVENT_BUS.post(event);
+        FunctionRegistryEvent.EVENT.invoker().onFunctionRegistry(event);
 
         // 注册核心函数类（确保始终可用）
         if (event.isSmartRegistration()) {
@@ -89,7 +86,7 @@ public class ExpressionEngine {
         }
 
         // 注册事件中收集的函数类
-        for (Pair<Class<?>, String> entry : event.getRegisteredClasses()) {
+        for (var entry : event.getRegisteredClasses()) {
             if (event.isSmartRegistration()) {
                 scanClassSmart(entry.getLeft(), entry.getRight(), event.getRequiredFunctions());
             } else {
@@ -332,7 +329,6 @@ public class ExpressionEngine {
     private static void scanClass(Class<?> clazz, String modid) {
         scanClassInternal(clazz, modid, null, false);
     }
-
 
     private static void scanClassInternal(Class<?> clazz, String modid, Set<String> requiredFunctions, boolean smart) {
         for (Method method : clazz.getDeclaredMethods()) {

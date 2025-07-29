@@ -1,8 +1,8 @@
 package com.mafuyu404.oelib.util;
 
 import com.mafuyu404.oelib.OElib;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.fml.ModList;
 
 import java.util.HashSet;
 import java.util.Map;
@@ -68,7 +68,7 @@ public class FunctionUsageAnalyzer {
         try {
             String modId = extractModIdFromExpression(modLoadedExpression);
             if (modId != null) {
-                boolean isLoaded = ModList.get().isLoaded(modId);
+                boolean isLoaded = FabricLoader.getInstance().isModLoaded(modId);
                 OElib.LOGGER.debug("Mod '{}' loaded status: {} for datapack {}", modId, isLoaded, location);
                 return isLoaded;
             }

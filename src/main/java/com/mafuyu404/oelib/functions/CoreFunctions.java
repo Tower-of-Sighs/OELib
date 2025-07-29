@@ -1,7 +1,7 @@
 package com.mafuyu404.oelib.functions;
 
 import com.mafuyu404.oelib.api.ExpressionFunction;
-import net.minecraftforge.fml.ModList;
+import net.fabricmc.loader.api.FabricLoader;
 
 /**
  * 核心表达式函数。
@@ -19,6 +19,6 @@ public class CoreFunctions {
      */
     @ExpressionFunction(value = "isModLoaded", description = "检查模组是否已加载", category = "mod")
     public static boolean isModLoaded(String modid) {
-        return ModList.get().isLoaded(modid);
+        return FabricLoader.getInstance().isModLoaded(modid);
     }
 }

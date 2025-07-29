@@ -1,6 +1,7 @@
 package com.mafuyu404.oelib.event;
 
-import net.minecraftforge.eventbus.api.Event;
+import net.fabricmc.fabric.api.event.Event;
+import net.fabricmc.fabric.api.event.EventFactory;
 
 /**
  * 数据重载事件。
@@ -8,54 +9,22 @@ import net.minecraftforge.eventbus.api.Event;
  * 当数据驱动类型的数据重载完成时触发此事件。
  * 外部模组可以监听此事件来更新自己的缓存或执行其他操作。
  * </p>
- *
  */
-public class DataReloadEvent extends Event {
+public interface DataReloadEvent {
 
-    private final Class<?> dataClass;
-    private final int loadedCount;
-    private final int invalidCount;
-
-    public DataReloadEvent(Class<?> dataClass, int loadedCount, int invalidCount) {
-        this.dataClass = dataClass;
-        this.loadedCount = loadedCount;
-        this.invalidCount = invalidCount;
-    }
+    Event<DataReloadEvent> EVENT = EventFactory.createArrayBacked(DataReloadEvent.class,
+            (listeners) -> (dataClass, loadedCount, invalidCount) -> {
+                for (DataReloadEvent listener : listeners) {
+                    listener.onDataReload(dataClass, loadedCount, invalidCount);
+                }
+            });
 
     /**
-     * 获取重载的数据类型。
+     * 数据重载回调。
      *
-     * @return 数据类型
+     * @param dataClass    重载的数据类型
+     * @param loadedCount  成功加载的数据条目数量
+     * @param invalidCount 无效的数据条目数量
      */
-    public Class<?> getDataClass() {
-        return dataClass;
-    }
-
-    /**
-     * 获取成功加载的数据条目数量。
-     *
-     * @return 加载的数据数量
-     */
-    public int getLoadedCount() {
-        return loadedCount;
-    }
-
-    /**
-     * 获取无效的数据条目数量。
-     *
-     * @return 无效数据数量
-     */
-    public int getInvalidCount() {
-        return invalidCount;
-    }
-
-    /**
-     * 检查是否为指定的数据类型。
-     *
-     * @param clazz 要检查的数据类型
-     * @return 如果是指定类型则返回 true
-     */
-    public boolean isDataType(Class<?> clazz) {
-        return dataClass.equals(clazz);
-    }
+    void onDataReload(Class<?> dataClass, int loadedCount, int invalidCount);
 }

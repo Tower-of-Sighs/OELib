@@ -2,11 +2,10 @@ package com.mafuyu404.oelib.network;
 
 import com.mafuyu404.oelib.OElib;
 import com.mafuyu404.oelib.util.CodecUtils;
+import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.network.PacketDistributor;
-import net.minecraftforge.server.ServerLifecycleHooks;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -24,6 +23,7 @@ import java.util.UUID;
 public class DataSyncPacket<T> {
 
     private static final int MAX_CHUNK_SIZE = 30000; // 30KB
+    private static MinecraftServer currentServer = null;
 
     private final Class<T> dataClass;
     private final Map<ResourceLocation, T> data;
@@ -33,6 +33,7 @@ public class DataSyncPacket<T> {
         this.data = data;
     }
 
+
     /**
      * 发送到指定玩家
      */
@@ -41,22 +42,25 @@ public class DataSyncPacket<T> {
             OElib.LOGGER.warn("Cannot send packet: player is null");
             return;
         }
-        sendToTarget(PacketDistributor.PLAYER.with(() -> player));
+        sendToTarget(player);
     }
 
     /**
      * 发送到所有玩家。
      */
     public void sendToAll() {
-        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        MinecraftServer server = getCurrentServer();
         if (server == null) {
             OElib.LOGGER.warn("Cannot send packet to all players: server instance is null");
             return;
         }
-        sendToTarget(PacketDistributor.ALL.noArg());
+
+        for (ServerPlayer player : PlayerLookup.all(server)) {
+            sendToTarget(player);
+        }
     }
 
-    private void sendToTarget(PacketDistributor.PacketTarget target) {
+    private void sendToTarget(ServerPlayer player) {
         try {
             Optional<String> jsonOpt = CodecUtils.encodeToJson(dataClass, data);
             if (jsonOpt.isEmpty()) {
@@ -71,28 +75,28 @@ public class DataSyncPacket<T> {
                     dataClass.getSimpleName(), data.size(), dataBytes.length);
 
             if (dataBytes.length <= MAX_CHUNK_SIZE) {
-                sendSingleChunk(target, dataBytes);
+                sendSingleChunk(player, dataBytes);
             } else {
-                sendChunked(target, dataBytes);
+                sendChunked(player, dataBytes);
             }
         } catch (Exception e) {
             OElib.LOGGER.error("Failed to send {} sync packet: {}", dataClass.getSimpleName(), e.getMessage(), e);
         }
     }
 
-    private void sendSingleChunk(PacketDistributor.PacketTarget target, byte[] dataBytes) {
+    private void sendSingleChunk(ServerPlayer player, byte[] dataBytes) {
         try {
             UUID sessionId = UUID.randomUUID();
             DataSyncChunkPacket chunk = new DataSyncChunkPacket(
                     sessionId, 0, 1, dataClass.getName(), dataBytes);
-            NetworkHandler.INSTANCE.send(target, chunk);
+            NetworkHandler.sendTo(player, chunk);
             OElib.LOGGER.debug("Sent single chunk for {} session {}", dataClass.getSimpleName(), sessionId);
         } catch (Exception e) {
             OElib.LOGGER.error("Failed to send single chunk for {}: {}", dataClass.getSimpleName(), e.getMessage(), e);
         }
     }
 
-    private void sendChunked(PacketDistributor.PacketTarget target, byte[] data) {
+    private void sendChunked(ServerPlayer player, byte[] data) {
         try {
             UUID sessionId = UUID.randomUUID();
             int totalChunks = (int) Math.ceil((double) data.length / MAX_CHUNK_SIZE);
@@ -110,7 +114,7 @@ public class DataSyncPacket<T> {
 
                 DataSyncChunkPacket chunk = new DataSyncChunkPacket(
                         sessionId, i, totalChunks, dataClass.getName(), chunkData);
-                NetworkHandler.INSTANCE.send(target, chunk);
+                NetworkHandler.sendTo(player, chunk);
 
                 OElib.LOGGER.debug("Sent chunk {}/{} ({} bytes) for {} session {}",
                         i + 1, totalChunks, chunkSize, dataClass.getSimpleName(), sessionId);
@@ -118,5 +122,9 @@ public class DataSyncPacket<T> {
         } catch (Exception e) {
             OElib.LOGGER.error("Failed to send chunked {} data: {}", dataClass.getSimpleName(), e.getMessage(), e);
         }
+    }
+
+    private MinecraftServer getCurrentServer() {
+        return currentServer;
     }
 }
