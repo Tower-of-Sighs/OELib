@@ -15,6 +15,7 @@ import java.lang.annotation.Target;
  * <h3>使用示例：</h3>
  * <pre>{@code
  * @DataDriven(
+ *     modid = "mymod",
  *     folder = "replacements",
  *     syncToClient = true,
  *     validator = ReplacementValidator.class,
@@ -35,9 +36,20 @@ import java.lang.annotation.Target;
 public @interface DataDriven {
 
     /**
+     * 模组ID。
+     * <p>
+     * 指定数据包所属的模组ID，数据文件将从 {@code data/<modid>/<folder>/} 目录加载。
+     * 如果为空字符串，则使用注册时提供的默认模组ID。
+     * </p>
+     *
+     * @return 模组ID，默认为空字符串
+     */
+    String modid() default "";
+
+    /**
      * 数据包文件夹名称。
      * <p>
-     * 数据文件将从 {@code data/<namespace>/<folder>/} 目录加载。
+     * 数据文件将从 {@code data/<modid>/<folder>/} 目录加载。
      * </p>
      *
      * @return 文件夹名称

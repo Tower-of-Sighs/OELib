@@ -332,7 +332,15 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
 
     private static String getFolder(Class<?> dataClass) {
         DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
-        return annotation.folder();
+        String folder = annotation.folder();
+        String modid = annotation.modid();
+
+        // 如果指定了modid，则在文件夹路径前加上modid
+        if (!modid.isEmpty()) {
+            return modid + "/" + folder;
+        }
+
+        return folder;
     }
 
     @SuppressWarnings("unchecked")
