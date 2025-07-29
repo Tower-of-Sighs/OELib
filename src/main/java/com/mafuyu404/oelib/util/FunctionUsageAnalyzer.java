@@ -1,11 +1,9 @@
 package com.mafuyu404.oelib.util;
 
 import com.mafuyu404.oelib.OElib;
-import com.mafuyu404.oelib.core.ExpressionEngine;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.fml.ModList;
 
-import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -30,7 +28,7 @@ public class FunctionUsageAnalyzer {
      * @param <T> 数据类型
      * @return 使用的函数名集合
      */
-    public static <T> Set<String> analyzeUsedFunctions(Map<ResourceLocation, T> dataPackData, 
+    public static <T> Set<String> analyzeUsedFunctions(Map<ResourceLocation, T> dataPackData,
                                                        DataExpressionExtractor<T> dataExtractor) {
         Set<String> usedFunctions = new HashSet<>();
 
@@ -46,12 +44,8 @@ public class FunctionUsageAnalyzer {
             usedFunctions.addAll(fileFunctions);
         }
 
-        // 过滤出实际存在的函数
-        Set<String> availableFunctions = ExpressionEngine.getAllFunctions().keySet();
-        usedFunctions.retainAll(availableFunctions);
-
-        OElib.LOGGER.debug("Found {} used functions out of {} available functions",
-                usedFunctions.size(), availableFunctions.size());
+        OElib.LOGGER.debug("Found {} used functions in data packages: {}",
+                usedFunctions.size(), usedFunctions);
 
         return usedFunctions;
     }
@@ -59,8 +53,8 @@ public class FunctionUsageAnalyzer {
     /**
      * 检查是否应该加载数据包函数。
      */
-    private static <T> boolean shouldLoadDataPackFunctions(T data, ResourceLocation location, 
-                                                          DataExpressionExtractor<T> dataExtractor) {
+    private static <T> boolean shouldLoadDataPackFunctions(T data, ResourceLocation location,
+                                                           DataExpressionExtractor<T> dataExtractor) {
         Map<String, String> vars = dataExtractor.extractVariables(data);
         if (vars == null) {
             return true;
@@ -109,7 +103,7 @@ public class FunctionUsageAnalyzer {
 
         // 提取所有表达式
         Set<String> expressions = dataExtractor.extractAllExpressions(data);
-        
+
         // 分析每个表达式中的函数
         for (String expression : expressions) {
             functions.addAll(extractFunctionsFromExpression(expression));

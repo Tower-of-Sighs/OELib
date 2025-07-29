@@ -3,14 +3,12 @@ package com.mafuyu404.oelib.core;
 import com.mafuyu404.oelib.OElib;
 import com.mafuyu404.oelib.api.DataDriven;
 import com.mafuyu404.oelib.functions.CoreFunctions;
+import com.mafuyu404.oelib.util.FunctionUsageAnalyzer;
 import net.minecraftforge.event.AddReloadListenerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -24,7 +22,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public class DataRegistry {
 
     private static final Set<Class<?>> registeredTypes = ConcurrentHashMap.newKeySet();
+    private static final Map<Class<?>, FunctionUsageAnalyzer.DataExpressionExtractor<?>> extractors = new ConcurrentHashMap<>();
     private static boolean initialized = false;
+    private static boolean expressionEngineInitialized = false;
 
     /**
      * 注册数据驱动类型。
@@ -44,6 +44,18 @@ public class DataRegistry {
     }
 
     /**
+     * 注册数据表达式提取器。
+     *
+     * @param dataClass 数据类型
+     * @param extractor 表达式提取器
+     * @param <T>       数据类型泛型
+     */
+    public static <T> void registerExtractor(Class<T> dataClass, FunctionUsageAnalyzer.DataExpressionExtractor<T> extractor) {
+        extractors.put(dataClass, extractor);
+        OElib.LOGGER.debug("Registered expression extractor for: {}", dataClass.getSimpleName());
+    }
+
+    /**
      * 初始化数据注册表。
      */
     public static void initialize() {
@@ -51,12 +63,50 @@ public class DataRegistry {
             return;
         }
 
-        ExpressionEngine.registerFunctionClass(CoreFunctions.class, OElib.MODID);
-
-        ExpressionEngine.initialize();
-
         initialized = true;
         OElib.LOGGER.info("Data registry initialized with {} registered types", registeredTypes.size());
+    }
+
+    /**
+     * 智能初始化表达式引擎。
+     * <p>
+     * 在所有数据包加载完成后调用，分析所有数据包中使用的函数并进行智能注册。
+     * </p>
+     */
+    @SuppressWarnings("unchecked")
+    public static void initializeExpressionEngine() {
+        if (expressionEngineInitialized) {
+            return;
+        }
+
+        // 添加核心必需函数
+        Set<String> allUsedFunctions = new HashSet<>(FunctionUsageAnalyzer.getCoreRequiredFunctions());
+
+        // 分析所有已注册数据类型中使用的函数
+        for (Class<?> dataClass : registeredTypes) {
+            FunctionUsageAnalyzer.DataExpressionExtractor<Object> extractor =
+                    (FunctionUsageAnalyzer.DataExpressionExtractor<Object>) extractors.get(dataClass);
+
+            if (extractor != null) {
+                DataManager<Object> manager = (DataManager<Object>) DataManager.get(dataClass);
+                if (manager != null) {
+                    Map<net.minecraft.resources.ResourceLocation, Object> data = manager.getAllData();
+                    Set<String> usedFunctions = FunctionUsageAnalyzer.analyzeUsedFunctions(data, extractor);
+                    allUsedFunctions.addAll(usedFunctions);
+
+                    OElib.LOGGER.debug("Found {} functions in {}: {}",
+                            usedFunctions.size(), dataClass.getSimpleName(), usedFunctions);
+                }
+            }
+        }
+
+        OElib.LOGGER.info("Smart registration: found {} total used functions: {}",
+                allUsedFunctions.size(), allUsedFunctions);
+
+        // 使用智能注册初始化表达式引擎
+        ExpressionEngine.initialize(allUsedFunctions);
+
+        expressionEngineInitialized = true;
     }
 
     @SubscribeEvent
@@ -91,5 +141,22 @@ public class DataRegistry {
      */
     public static boolean isRegistered(Class<?> dataClass) {
         return registeredTypes.contains(dataClass);
+    }
+
+    /**
+     * 检查表达式引擎是否已初始化。
+     *
+     * @return 是否已初始化
+     */
+    public static boolean isExpressionEngineInitialized() {
+        return expressionEngineInitialized;
+    }
+
+    /**
+     * 重置表达式引擎初始化状态（用于热重载）。
+     */
+    public static void resetExpressionEngine() {
+        expressionEngineInitialized = false;
+        ExpressionEngine.clear();
     }
 }
