@@ -5,8 +5,8 @@ import com.mafuyu404.oelib.api.ExpressionFunction;
 import com.mafuyu404.oelib.event.FunctionRegistryEvent;
 import com.mafuyu404.oelib.functions.CoreFunctions;
 import com.mafuyu404.oelib.util.FunctionUsageAnalyzer;
+import com.mojang.datafixers.util.Pair;
 import net.neoforged.neoforge.common.NeoForge;
-import org.apache.commons.lang3.tuple.Pair;
 import org.mvel2.MVEL;
 import org.mvel2.ParserContext;
 
@@ -91,9 +91,9 @@ public class ExpressionEngine {
         // 注册事件中收集的函数类
         for (Pair<Class<?>, String> entry : event.getRegisteredClasses()) {
             if (event.isSmartRegistration()) {
-                scanClassSmart(entry.getLeft(), entry.getRight(), event.getRequiredFunctions());
+                scanClassSmart(entry.getFirst(), entry.getSecond(), event.getRequiredFunctions());
             } else {
-                scanClass(entry.getLeft(), entry.getRight());
+                scanClass(entry.getFirst(), entry.getSecond());
             }
         }
 

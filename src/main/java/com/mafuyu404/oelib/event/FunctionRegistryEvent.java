@@ -1,7 +1,7 @@
 package com.mafuyu404.oelib.event;
 
+import com.mojang.datafixers.util.Pair;
 import net.neoforged.bus.api.Event;
-import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.ArrayList;
 import java.util.Collections;
