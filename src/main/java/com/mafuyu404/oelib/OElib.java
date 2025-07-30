@@ -19,14 +19,14 @@ public class OElib {
 
     public OElib(IEventBus modEventBus) {
         modEventBus.addListener(this::commonSetup);
-        NeoForge.EVENT_BUS.register(this);
+        modEventBus.addListener(this::registerPayloads);
     }
 
     public void commonSetup(FMLCommonSetupEvent event) {
         DataRegistry.initialize();
     }
-    @SubscribeEvent
-    public static void registerPayloads(RegisterPayloadHandlersEvent event) {
+
+    public void registerPayloads(RegisterPayloadHandlersEvent event) {
         NetworkHandler.register(event);
     }
 }
