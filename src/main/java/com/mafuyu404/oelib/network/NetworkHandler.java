@@ -1,31 +1,22 @@
 package com.mafuyu404.oelib.network;
 
 import com.mafuyu404.oelib.OElib;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.network.NetworkRegistry;
-import net.minecraftforge.network.simple.SimpleChannel;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 public class NetworkHandler {
 
     private static final String PROTOCOL_VERSION = "1";
 
-    public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
-            new ResourceLocation(OElib.MODID, "main"),
-            () -> PROTOCOL_VERSION,
-            PROTOCOL_VERSION::equals,
-            PROTOCOL_VERSION::equals
-    );
+    public static void register(RegisterPayloadHandlersEvent event) {
+        PayloadRegistrar registrar = event.registrar(OElib.MODID)
+                .versioned(PROTOCOL_VERSION);
 
-    /**
-     * 注册所有网络数据包。
-     */
-    public static void register() {
-        int id = 0;
-
-        INSTANCE.registerMessage(id++, DataSyncChunkPacket.class,
-                DataSyncChunkPacket::encode,
-                DataSyncChunkPacket::decode,
-                DataSyncChunkPacket::handle);
+        registrar.playToClient(
+                DataSyncChunkPacket.TYPE,
+                DataSyncChunkPacket.STREAM_CODEC,
+                DataSyncChunkPacket::handle
+        );
 
         OElib.LOGGER.info("Registered network packets for data synchronization");
     }

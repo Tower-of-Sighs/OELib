@@ -2,7 +2,7 @@ package com.mafuyu404.oelib.util;
 
 import com.mafuyu404.oelib.OElib;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.fml.ModList;
+import net.neoforged.fml.ModList;
 
 import java.util.HashSet;
 import java.util.Map;

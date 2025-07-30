@@ -1,11 +1,15 @@
 package com.mafuyu404.oelib.network;
 
 import com.mafuyu404.oelib.OElib;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.network.NetworkEvent;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.UUID;
-import java.util.function.Supplier;
 
 /**
  * 数据同步分片数据包。
@@ -17,31 +21,21 @@ import java.util.function.Supplier;
  * @param chunkData     分片数据
  */
 public record DataSyncChunkPacket(UUID sessionId, int chunkIndex, int totalChunks, String dataClassName,
-                                  byte[] chunkData) {
+                                  byte[] chunkData) implements CustomPacketPayload {
 
-    public static void encode(DataSyncChunkPacket packet, FriendlyByteBuf buf) {
-        buf.writeUUID(packet.sessionId);
-        buf.writeInt(packet.chunkIndex);
-        buf.writeInt(packet.totalChunks);
-        buf.writeUtf(packet.dataClassName);
-        buf.writeInt(packet.chunkData.length);
-        buf.writeBytes(packet.chunkData);
-    }
+    public static final Type<DataSyncChunkPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(OElib.MODID, "data_sync_chunk"));
 
-    public static DataSyncChunkPacket decode(FriendlyByteBuf buf) {
-        UUID sessionId = buf.readUUID();
-        int chunkIndex = buf.readInt();
-        int totalChunks = buf.readInt();
-        String dataClassName = buf.readUtf();
-        int dataLength = buf.readInt();
-        byte[] chunkData = new byte[dataLength];
-        buf.readBytes(chunkData);
+    public static final StreamCodec<FriendlyByteBuf, DataSyncChunkPacket> STREAM_CODEC = StreamCodec.composite(
+            ByteBufCodecs.fromCodec(UUIDUtil.CODEC), DataSyncChunkPacket::sessionId,
+            ByteBufCodecs.VAR_INT, DataSyncChunkPacket::chunkIndex,
+            ByteBufCodecs.VAR_INT, DataSyncChunkPacket::totalChunks,
+            ByteBufCodecs.STRING_UTF8, DataSyncChunkPacket::dataClassName,
+            ByteBufCodecs.BYTE_ARRAY, DataSyncChunkPacket::chunkData,
+            DataSyncChunkPacket::new
+    );
 
-        return new DataSyncChunkPacket(sessionId, chunkIndex, totalChunks, dataClassName, chunkData);
-    }
-
-    public static void handle(DataSyncChunkPacket packet, Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() -> {
+    public static void handle(DataSyncChunkPacket packet, IPayloadContext context) {
+        context.enqueueWork(() -> {
             try {
                 ChunkAssembler.receiveChunk(packet.sessionId, packet.chunkIndex,
                         packet.totalChunks, packet.dataClassName, packet.chunkData);
@@ -49,6 +43,10 @@ public record DataSyncChunkPacket(UUID sessionId, int chunkIndex, int totalChunk
                 OElib.LOGGER.error("Failed to handle chunk packet: {}", e.getMessage(), e);
             }
         });
-        ctx.get().setPacketHandled(true);
+    }
+
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
     }
 }

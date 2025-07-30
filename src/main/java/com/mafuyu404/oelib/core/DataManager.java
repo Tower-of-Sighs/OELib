@@ -16,12 +16,12 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimpleJsonResourceReloadListener;
 import net.minecraft.util.profiling.ProfilerFiller;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.event.server.ServerStartedEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.server.ServerLifecycleHooks;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 import java.lang.reflect.Field;
 import java.util.*;
@@ -36,7 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @param <T> 数据类型
  */
-@Mod.EventBusSubscriber(modid = OElib.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+@EventBusSubscriber(modid = OElib.MODID)
 public class DataManager<T> extends SimpleJsonResourceReloadListener {
 
     private static final Gson GSON = new GsonBuilder().setLenient().create();
@@ -170,7 +170,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
 
         OElib.LOGGER.debug("Updated client data for {}: {} entries", dataClass.getSimpleName(), data.size());
 
-        MinecraftForge.EVENT_BUS.post(new DataReloadEvent(dataClass, data.size(), 0));
+        NeoForge.EVENT_BUS.post(new DataReloadEvent(dataClass, data.size(), 0));
     }
 
     @Override
@@ -195,7 +195,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
 
                     for (int i = 0; i < jsonArray.size(); i++) {
                         JsonElement element = jsonArray.get(i);
-                        ResourceLocation elementLocation = new ResourceLocation(
+                        ResourceLocation elementLocation = ResourceLocation.fromNamespaceAndPath(
                                 location.getNamespace(),
                                 location.getPath() + "_" + i
                         );
@@ -267,7 +267,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
             syncToAllPlayers();
         }
 
-        MinecraftForge.EVENT_BUS.post(new DataReloadEvent(dataClass, validCount, invalidCount));
+        NeoForge.EVENT_BUS.post(new DataReloadEvent(dataClass, validCount, invalidCount));
     }
 
     /**

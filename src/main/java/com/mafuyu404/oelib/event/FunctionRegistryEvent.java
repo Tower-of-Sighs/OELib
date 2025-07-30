@@ -1,6 +1,6 @@
 package com.mafuyu404.oelib.event;
 
-import net.minecraftforge.eventbus.api.Event;
+import net.neoforged.bus.api.Event;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.ArrayList;

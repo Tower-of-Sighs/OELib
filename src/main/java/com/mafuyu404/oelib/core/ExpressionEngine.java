@@ -5,7 +5,7 @@ import com.mafuyu404.oelib.api.ExpressionFunction;
 import com.mafuyu404.oelib.event.FunctionRegistryEvent;
 import com.mafuyu404.oelib.functions.CoreFunctions;
 import com.mafuyu404.oelib.util.FunctionUsageAnalyzer;
-import net.minecraftforge.common.MinecraftForge;
+import net.neoforged.neoforge.common.NeoForge;
 import org.apache.commons.lang3.tuple.Pair;
 import org.mvel2.MVEL;
 import org.mvel2.ParserContext;
@@ -79,7 +79,7 @@ public class ExpressionEngine {
         FunctionRegistryEvent event = requiredFunctions != null ?
                 new FunctionRegistryEvent(requiredFunctions) :
                 new FunctionRegistryEvent();
-        MinecraftForge.EVENT_BUS.post(event);
+        NeoForge.EVENT_BUS.post(event);
 
         // 注册核心函数类（确保始终可用）
         if (event.isSmartRegistration()) {

@@ -2,11 +2,10 @@ package com.mafuyu404.oelib.core;
 
 import com.mafuyu404.oelib.OElib;
 import com.mafuyu404.oelib.api.DataDriven;
-import com.mafuyu404.oelib.functions.CoreFunctions;
 import com.mafuyu404.oelib.util.FunctionUsageAnalyzer;
-import net.minecraftforge.event.AddReloadListenerEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.AddReloadListenerEvent;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -18,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * </p>
  *
  */
-@Mod.EventBusSubscriber(modid = OElib.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+@EventBusSubscriber(modid = OElib.MODID)
 public class DataRegistry {
 
     private static final Set<Class<?>> registeredTypes = ConcurrentHashMap.newKeySet();

@@ -1,6 +1,7 @@
 package com.mafuyu404.oelib.event;
 
-import net.minecraftforge.eventbus.api.Event;
+
+import net.neoforged.bus.api.Event;
 
 /**
  * 数据重载事件。

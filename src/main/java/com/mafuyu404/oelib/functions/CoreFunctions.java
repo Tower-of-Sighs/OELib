@@ -1,7 +1,7 @@
 package com.mafuyu404.oelib.functions;
 
 import com.mafuyu404.oelib.api.ExpressionFunction;
-import net.minecraftforge.fml.ModList;
+import net.neoforged.fml.ModList;
 
 /**
  * 核心表达式函数。
