@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "oelib",
+  "version": "0.0.1",
+  "name": "OELib",
+  "description": "Mafuyu never like you.",
+  "authors": [
+    "Flechazo"
+  ],
+  "contact": {},
+  "license": "MIT",
+  "icon": "",
+  "environment": "*",
+  "entrypoints": {
+    "client": [
+      "com.mafuyu404.oelib.OELibClient"
+    ],
+    "main": [
+      "com.mafuyu404.oelib.OElib"
+    ]
+  },
+  "mixins": [
+    "oelib.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": "*",
+    "fabric": "*",
+    "minecraft": "1.20.1"
+  }
+}
