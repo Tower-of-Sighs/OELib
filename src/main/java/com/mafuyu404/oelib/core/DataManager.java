@@ -373,7 +373,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
         }
     }
 
-    private MinecraftServer getCurrentServer() {
+    public MinecraftServer getCurrentServer() {
         return currentServer;
     }
 
