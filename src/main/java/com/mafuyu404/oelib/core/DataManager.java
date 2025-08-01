@@ -8,6 +8,7 @@ import com.mafuyu404.oelib.api.DataDriven;
 import com.mafuyu404.oelib.api.DataValidator;
 import com.mafuyu404.oelib.event.DataReloadEvent;
 import com.mafuyu404.oelib.network.DataSyncPacket;
+import com.mafuyu404.oelib.util.DelayedTaskManager;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -61,12 +62,17 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
         });
 
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            for (DataManager<?> manager : managers.values()) {
-                if (manager.annotation.syncToClient()) {
-                    manager.syncToPlayer(handler.getPlayer());
+            ServerPlayer player = handler.getPlayer();
+
+            DelayedTaskManager.scheduleDataSync(server, player, () -> {
+                for (DataManager<?> manager : managers.values()) {
+                    if (manager.annotation.syncToClient()) {
+                        manager.syncToPlayer(player);
+                    }
                 }
-            }
+            });
         });
+
     }
 
     private DataManager(Class<T> dataClass) {
