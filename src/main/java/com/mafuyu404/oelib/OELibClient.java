@@ -6,6 +6,6 @@ import net.fabricmc.api.ClientModInitializer;
 public class OELibClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
-        NetworkHandler.register();
+        NetworkHandler.registerClient();
     }
 }
