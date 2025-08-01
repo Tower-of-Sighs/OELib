@@ -2,6 +2,7 @@ package com.mafuyu404.oelib.api;
 
 
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 
 /**
  * 数据验证器接口。
@@ -21,6 +22,35 @@ public interface DataValidator<T> {
      * @return 验证结果
      */
     ValidationResult validate(T data, ResourceLocation source);
+
+    /**
+     * 上下文感知的数据验证器接口。
+     * <p>
+     * 实现此接口的验证器可以访问服务器实例，从而获取注册表查找器等上下文信息。
+     * </p>
+     *
+     * @param <T> 数据类型
+     */
+    interface ServerContextAware<T> extends DataValidator<T> {
+
+        /**
+         * 使用服务器上下文验证数据的有效性。
+         *
+         * @param data   要验证的数据
+         * @param source 数据来源文件位置
+         * @param server 服务器实例，可能为null（如在客户端）
+         * @return 验证结果
+         */
+        ValidationResult validateWithContext(T data, ResourceLocation source, MinecraftServer server);
+
+        /**
+         * 默认实现，如果服务器实例可用则使用上下文验证，否则使用基础验证。
+         */
+        @Override
+        default ValidationResult validate(T data, ResourceLocation source) {
+            return validateWithContext(data, source, null);
+        }
+    }
 
     /**
      * 验证结果。

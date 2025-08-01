@@ -161,7 +161,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
                                 T dataObj = result.result().get();
 
                                 // 验证数据
-                                var validationResult = validator.validate(dataObj, elementLocation);
+                                var validationResult = validateData(dataObj, elementLocation);
                                 if (validationResult.valid()) {
                                     loadedData.put(elementLocation, dataObj);
 
@@ -227,6 +227,18 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
             DataReloadEvent.EVENT.invoker().onDataReload(dataClass, validCount, invalidCount);
         }, executor);
     }
+
+    /**
+     * 验证数据，如果验证器支持服务器上下文则使用上下文验证。
+     */
+    private DataValidator.ValidationResult validateData(T data, ResourceLocation source) {
+        if (validator instanceof DataValidator.ServerContextAware<T> contextAwareValidator) {
+            return contextAwareValidator.validateWithContext(data, source, getCurrentServer());
+        } else {
+            return validator.validate(data, source);
+        }
+    }
+
 
     /**
      * 获取所有已加载的数据。
