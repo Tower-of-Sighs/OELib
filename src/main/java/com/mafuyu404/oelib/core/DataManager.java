@@ -8,6 +8,7 @@ import com.mafuyu404.oelib.api.DataDriven;
 import com.mafuyu404.oelib.api.DataValidator;
 import com.mafuyu404.oelib.event.DataReloadEvent;
 import com.mafuyu404.oelib.network.DataSyncPacket;
+import com.mafuyu404.oelib.util.DelayedTaskManager;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -22,9 +23,7 @@ import net.minecraft.util.profiling.ProfilerFiller;
 
 import java.lang.reflect.Field;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executor;
+import java.util.concurrent.*;
 
 /**
  * 通用数据管理器。
@@ -58,15 +57,22 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             serverStarted = false;
             currentServer = null;
+            // 在服务器停止时关闭延迟任务管理器
+            DelayedTaskManager.shutdown();
         });
 
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            for (DataManager<?> manager : managers.values()) {
-                if (manager.annotation.syncToClient()) {
-                    manager.syncToPlayer(handler.getPlayer());
+            ServerPlayer player = handler.getPlayer();
+
+            DelayedTaskManager.scheduleDataSync(server, player, () -> {
+                for (DataManager<?> manager : managers.values()) {
+                    if (manager.annotation.syncToClient()) {
+                        manager.syncToPlayer(player);
+                    }
                 }
-            }
+            });
         });
+
     }
 
     private DataManager(Class<T> dataClass) {
