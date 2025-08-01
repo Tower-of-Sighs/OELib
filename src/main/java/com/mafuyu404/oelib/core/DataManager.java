@@ -8,6 +8,7 @@ import com.mafuyu404.oelib.api.DataDriven;
 import com.mafuyu404.oelib.api.DataValidator;
 import com.mafuyu404.oelib.event.DataReloadEvent;
 import com.mafuyu404.oelib.network.DataSyncPacket;
+import com.mafuyu404.oelib.util.DelayedTaskManager;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.resources.ResourceLocation;
@@ -21,6 +22,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 import java.lang.reflect.Field;
@@ -205,7 +207,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
                             T data = result.result().get();
 
                             // 验证数据
-                            var validationResult = validator.validate(data, elementLocation);
+                            var validationResult = validateData(data, elementLocation);
                             if (validationResult.valid()) {
                                 loadedData.put(elementLocation, data);
 
@@ -271,6 +273,17 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
     }
 
     /**
+     * 验证数据，如果验证器支持服务器上下文则使用上下文验证。
+     */
+    private DataValidator.ValidationResult validateData(T data, ResourceLocation source) {
+        if (validator instanceof DataValidator.ServerContextAware<T> contextAwareValidator) {
+            return contextAwareValidator.validateWithContext(data, source, ServerLifecycleHooks.getCurrentServer());
+        } else {
+            return validator.validate(data, source);
+        }
+    }
+
+    /**
      * 构建缓存。
      * <p>
      * 子类可以重写此方法来实现自定义的缓存逻辑。
@@ -321,14 +334,23 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
     @SubscribeEvent
     public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            // 同步所有需要客户端同步的数据
-            for (DataManager<?> manager : managers.values()) {
-                if (manager.annotation.syncToClient()) {
-                    manager.syncToPlayer(player);
+            MinecraftServer server = player.getServer();
+
+            DelayedTaskManager.scheduleDataSync(server, player, () -> {
+                for (DataManager<?> manager : managers.values()) {
+                    if (manager.annotation.syncToClient()) {
+                        manager.syncToPlayer(player);
+                    }
                 }
-            }
+            });
         }
     }
+
+    @SubscribeEvent
+    public static void onServerStopping(ServerStoppingEvent event) {
+        DelayedTaskManager.shutdown();
+    }
+
 
     private static String getFolder(Class<?> dataClass) {
         DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
