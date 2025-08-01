@@ -2,7 +2,6 @@ package com.mafuyu404.oelib.network;
 
 import com.mafuyu404.oelib.OElib;
 import com.mafuyu404.oelib.util.CodecUtils;
-import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -43,21 +42,6 @@ public class DataSyncPacket<T> {
             return;
         }
         sendToTarget(player);
-    }
-
-    /**
-     * 发送到所有玩家。
-     */
-    public void sendToAll() {
-        MinecraftServer server = getCurrentServer();
-        if (server == null) {
-            OElib.LOGGER.warn("Cannot send packet to all players: server instance is null");
-            return;
-        }
-
-        for (ServerPlayer player : PlayerLookup.all(server)) {
-            sendToTarget(player);
-        }
     }
 
     private void sendToTarget(ServerPlayer player) {

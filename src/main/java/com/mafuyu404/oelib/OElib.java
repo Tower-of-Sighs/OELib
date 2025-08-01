@@ -14,6 +14,6 @@ public class OElib implements ModInitializer {
     @Override
     public void onInitialize() {
         DataRegistry.initialize();
-        NetworkHandler.registerServer();
+        NetworkHandler.register();
     }
 }

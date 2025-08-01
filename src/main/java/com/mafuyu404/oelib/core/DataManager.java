@@ -106,7 +106,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
 
     @Override
     public ResourceLocation getFabricId() {
-        return new ResourceLocation(OElib.MODID, "data_manager_" + dataClass.getSimpleName().toLowerCase());
+        return ResourceLocation.fromNamespaceAndPath(OElib.MODID, "data_manager_" + dataClass.getSimpleName().toLowerCase());
     }
 
     @Override
@@ -151,7 +151,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
 
                         for (int i = 0; i < jsonArray.size(); i++) {
                             JsonElement element = jsonArray.get(i);
-                            ResourceLocation elementLocation = new ResourceLocation(
+                            ResourceLocation elementLocation = ResourceLocation.fromNamespaceAndPath(
                                     location.getNamespace(),
                                     location.getPath() + "_" + i
                             );
