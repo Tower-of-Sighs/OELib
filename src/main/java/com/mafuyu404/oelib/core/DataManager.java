@@ -8,7 +8,6 @@ import com.mafuyu404.oelib.api.DataDriven;
 import com.mafuyu404.oelib.api.DataValidator;
 import com.mafuyu404.oelib.event.DataReloadEvent;
 import com.mafuyu404.oelib.network.DataSyncPacket;
-import com.mafuyu404.oelib.util.DelayedTaskManager;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.resources.ResourceLocation;
@@ -20,7 +19,6 @@ import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
-import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.server.ServerLifecycleHooks;
@@ -324,21 +322,36 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
     public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             MinecraftServer server = player.getServer();
-
-            DelayedTaskManager.scheduleDataSync(server, player, () -> {
-                for (DataManager<?> manager : managers.values()) {
-                    if (manager.annotation.syncToClient()) {
-                        manager.syncToPlayer(player);
-                    }
-                }
-            });
+            if (server != null) {
+                scheduleDelayedSync(server, player, 100);
+            }
         }
     }
 
-    @SubscribeEvent
-    public static void onServerStopping(ServerStoppingEvent event) {
-        DelayedTaskManager.shutdown();
+    private static void scheduleDelayedSync(MinecraftServer server, ServerPlayer player, int delayTicks) {
+        final int ticks = Math.max(delayTicks, 0);
+        Runnable[] task = new Runnable[1];
+        task[0] = () -> {
+            if (ticks <= 0) {
+                executeDataSync(server, player);
+            } else {
+                server.execute(() -> scheduleDelayedSync(server, player, ticks - 1));
+            }
+        };
+        server.execute(task[0]);
     }
+
+    private static void executeDataSync(MinecraftServer server, ServerPlayer player) {
+        if (server.getPlayerList().getPlayer(player.getUUID()) != null) {
+            for (DataManager<?> manager : managers.values()) {
+                if (manager.annotation.syncToClient()) {
+                    manager.syncToPlayer(player);
+                }
+            }
+            OElib.LOGGER.debug("Executed data sync for player: {}", player.getName().getString());
+        }
+    }
+
 
     private static String getFolder(Class<?> dataClass) {
         DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
