@@ -167,9 +167,9 @@ dependencies {
 
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
     implementation 'org.mvel:mvel2:2.5.0.Final'
-    minecraftLibrary(jarJar('org.mvel:mvel2:2.5.0.Final')) {
-        jarJar.ranged(it, '[2.5.0.Final,2.6.0)')
-    }
+//    minecraftLibrary(jarJar('org.mvel:mvel2:2.5.0.Final')) {
+//        jarJar.ranged(it, '[2.5.0.Final,2.6.0)')
+//    }
 }
 // This block of code expands all declared replace properties in the specified resource targets.
 // A missing property will result in an error. Properties are expanded using ${} Groovy notation.
@@ -187,6 +187,13 @@ tasks.named('processResources', ProcessResources).configure {
     filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
         expand replaceProperties + [project: project]
     }
+}
+
+// 生成 sources.jar（源码包）
+tasks.register('sourcesJar', Jar) {
+    dependsOn classes
+    from sourceSets.main.allSource
+    archiveClassifier = 'sources'
 }
 
 // Example for how to get properties into the manifest for reading at runtime.
