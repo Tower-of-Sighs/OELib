@@ -16,19 +16,35 @@ import java.util.function.Consumer;
  */
 public class DelayedTaskManager {
 
-    private static final ScheduledExecutorService SCHEDULER = Executors.newScheduledThreadPool(
-            2, // 使用2个线程处理延迟任务
-            r -> {
-                Thread thread = new Thread(r, "OELib-DelayedTask");
-                thread.setDaemon(true); // 设置为守护线程，避免阻止JVM关闭
-                return thread;
-            }
-    );
+    private static volatile ScheduledExecutorService SCHEDULER;
+    private static final Object LOCK = new Object();
 
     /**
      * 默认延迟时间（秒）
      */
     public static final int DEFAULT_DELAY_SECONDS = 5;
+
+    /**
+     * 获取或创建线程池实例
+     */
+    private static ScheduledExecutorService getScheduler() {
+        if (SCHEDULER == null || SCHEDULER.isShutdown()) {
+            synchronized (LOCK) {
+                if (SCHEDULER == null || SCHEDULER.isShutdown()) {
+                    SCHEDULER = Executors.newScheduledThreadPool(
+                            2, // 使用2个线程处理延迟任务
+                            r -> {
+                                Thread thread = new Thread(r, "OELib-DelayedTask");
+                                thread.setDaemon(true); // 设置为守护线程，避免阻止JVM关闭
+                                return thread;
+                            }
+                    );
+                    OElib.LOGGER.debug("Created new DelayedTaskManager scheduler");
+                }
+            }
+        }
+        return SCHEDULER;
+    }
 
     /**
      * 在指定延迟后在服务器主线程中执行任务
@@ -43,14 +59,18 @@ public class DelayedTaskManager {
             return;
         }
 
-        SCHEDULER.schedule(() -> {
-            try {
-                // 确保任务在服务器主线程中执行
-                server.execute(task);
-            } catch (Exception e) {
-                OElib.LOGGER.error("Error executing delayed server task", e);
-            }
-        }, delaySeconds, TimeUnit.SECONDS);
+        try {
+            getScheduler().schedule(() -> {
+                try {
+                    // 确保任务在服务器主线程中执行
+                    server.execute(task);
+                } catch (Exception e) {
+                    OElib.LOGGER.error("Error executing delayed server task", e);
+                }
+            }, delaySeconds, TimeUnit.SECONDS);
+        } catch (RejectedExecutionException e) {
+            OElib.LOGGER.error("Failed to schedule server task - scheduler may be shutting down", e);
+        }
     }
 
     /**
@@ -78,24 +98,27 @@ public class DelayedTaskManager {
             return;
         }
 
-        SCHEDULER.schedule(() -> {
-            try {
-                server.execute(() -> {
-                    // 检查玩家是否仍然在线
-                    if (server.getPlayerList().getPlayer(player.getUUID()) != null) {
-                        playerTask.accept(player);
-                    } else {
-                        OElib.LOGGER.debug("Skipping delayed task for offline player: {}",
-                                player.getName().getString());
-                    }
-
-
-                });
-            } catch (Exception e) {
-                OElib.LOGGER.error("Error executing delayed player task for {}",
-                        player.getName().getString(), e);
-            }
-        }, delaySeconds, TimeUnit.SECONDS);
+        try {
+            getScheduler().schedule(() -> {
+                try {
+                    server.execute(() -> {
+                        // 检查玩家是否仍然在线
+                        if (server.getPlayerList().getPlayer(player.getUUID()) != null) {
+                            playerTask.accept(player);
+                        } else {
+                            OElib.LOGGER.debug("Skipping delayed task for offline player: {}",
+                                    player.getName().getString());
+                        }
+                    });
+                } catch (Exception e) {
+                    OElib.LOGGER.error("Error executing delayed player task for {}",
+                            player.getName().getString(), e);
+                }
+            }, delaySeconds, TimeUnit.SECONDS);
+        } catch (RejectedExecutionException e) {
+            OElib.LOGGER.error("Failed to schedule player task for {} - scheduler may be shutting down",
+                    player.getName().getString(), e);
+        }
     }
 
     /**
@@ -140,7 +163,8 @@ public class DelayedTaskManager {
      * @return 活跃任务数量
      */
     public static int getActiveTaskCount() {
-        if (SCHEDULER instanceof ThreadPoolExecutor executor) {
+        ScheduledExecutorService scheduler = SCHEDULER;
+        if (scheduler instanceof ThreadPoolExecutor executor && !scheduler.isShutdown()) {
             return executor.getActiveCount();
         }
         return -1; // 无法获取
@@ -152,7 +176,8 @@ public class DelayedTaskManager {
      * @return 等待任务数量
      */
     public static int getQueuedTaskCount() {
-        if (SCHEDULER instanceof ThreadPoolExecutor executor) {
+        ScheduledExecutorService scheduler = SCHEDULER;
+        if (scheduler instanceof ThreadPoolExecutor executor && !scheduler.isShutdown()) {
             return executor.getQueue().size();
         }
         return -1; // 无法获取
@@ -160,20 +185,24 @@ public class DelayedTaskManager {
 
     /**
      * 关闭任务管理器（通常在模组卸载时调用）
-     * 注意：一旦关闭就无法再使用
+     * 注意：关闭后可以重新创建新的实例
      */
     public static void shutdown() {
-        OElib.LOGGER.info("Shutting down DelayedTaskManager...");
-        SCHEDULER.shutdown();
-        try {
-            if (!SCHEDULER.awaitTermination(10, TimeUnit.SECONDS)) {
-                OElib.LOGGER.warn("DelayedTaskManager did not terminate gracefully, forcing shutdown");
-                SCHEDULER.shutdownNow();
+        synchronized (LOCK) {
+            if (SCHEDULER != null && !SCHEDULER.isShutdown()) {
+                OElib.LOGGER.info("Shutting down DelayedTaskManager...");
+                SCHEDULER.shutdown();
+                try {
+                    if (!SCHEDULER.awaitTermination(10, TimeUnit.SECONDS)) {
+                        OElib.LOGGER.warn("DelayedTaskManager did not terminate gracefully, forcing shutdown");
+                        SCHEDULER.shutdownNow();
+                    }
+                } catch (InterruptedException e) {
+                    OElib.LOGGER.warn("Interrupted while waiting for DelayedTaskManager shutdown");
+                    SCHEDULER.shutdownNow();
+                    Thread.currentThread().interrupt();
+                }
             }
-        } catch (InterruptedException e) {
-            OElib.LOGGER.warn("Interrupted while waiting for DelayedTaskManager shutdown");
-            SCHEDULER.shutdownNow();
-            Thread.currentThread().interrupt();
         }
     }
 
@@ -183,6 +212,7 @@ public class DelayedTaskManager {
      * @return 是否已关闭
      */
     public static boolean isShutdown() {
-        return SCHEDULER.isShutdown();
+        ScheduledExecutorService scheduler = SCHEDULER;
+        return scheduler == null || scheduler.isShutdown();
     }
 }
