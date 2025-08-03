@@ -55,13 +55,13 @@ public interface DataValidator<T> {
     /**
      * 验证结果。
      */
-    record ValidationResult(boolean valid, String message) {
+    record ValidationResult(boolean valid, String message, boolean deferrable) {
 
         /**
          * 创建成功的验证结果。
          */
         public static ValidationResult success() {
-            return new ValidationResult(true, null);
+            return new ValidationResult(true, null, false);
         }
 
         /**
@@ -70,7 +70,20 @@ public interface DataValidator<T> {
          * @param message 错误消息
          */
         public static ValidationResult failure(String message) {
-            return new ValidationResult(false, message);
+            return new ValidationResult(false, message, false);
+        }
+
+        /**
+         * 创建可延迟验证的结果。
+         * <p>
+         * 用于处理依赖于运行时状态（如tag系统）的验证。
+         * 数据会被加载，但标记为需要延迟验证。
+         * </p>
+         *
+         * @param message 延迟原因消息
+         */
+        public static ValidationResult deferred(String message) {
+            return new ValidationResult(true, message, true);
         }
     }
 

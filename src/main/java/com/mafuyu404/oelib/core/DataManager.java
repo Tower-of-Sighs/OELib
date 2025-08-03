@@ -47,6 +47,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
     private final Codec<T> codec;
     private final DataValidator<T> validator;
     private final Map<ResourceLocation, T> loadedData = new ConcurrentHashMap<>();
+    private final Map<ResourceLocation, T> deferredData = new ConcurrentHashMap<>();
     private final Map<String, Set<T>> cache = new ConcurrentHashMap<>();
 
     private DataManager(Class<T> dataClass) {
@@ -110,7 +111,9 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
      * @return 数据列表
      */
     public List<T> getDataList() {
-        return new ArrayList<>(loadedData.values());
+        List<T> result = new ArrayList<>(loadedData.values());
+        result.addAll(deferredData.values());
+        return result;
     }
 
     /**
@@ -176,14 +179,34 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
     @Override
     protected void apply(Map<ResourceLocation, JsonElement> object, ResourceManager resourceManager, ProfilerFiller profiler) {
         loadedData.clear();
+        deferredData.clear();
         clearCache();
 
-        OElib.LOGGER.info("Loading {} data from {} files", dataClass.getSimpleName(), object.size());
+        // 过滤资源：如果注解指定了modid，只处理该modid命名空间下的资源
+        Map<ResourceLocation, JsonElement> filteredObject = new HashMap<>();
+        String targetModid = annotation.modid();
+
+        if (!targetModid.isEmpty()) {
+            // 只处理指定modid命名空间下的资源
+            for (Map.Entry<ResourceLocation, JsonElement> entry : object.entrySet()) {
+                if (targetModid.equals(entry.getKey().getNamespace())) {
+                    filteredObject.put(entry.getKey(), entry.getValue());
+                }
+            }
+            OElib.LOGGER.debug("Filtered {} resources for modid '{}' from {} total resources",
+                    filteredObject.size(), targetModid, object.size());
+        } else {
+            // 如果没有指定modid，处理所有资源
+            filteredObject = object;
+        }
+
+        OElib.LOGGER.info("Loading {} data from {} files", dataClass.getSimpleName(), filteredObject.size());
 
         int validCount = 0;
+        int deferredCount = 0;
         int invalidCount = 0;
 
-        for (Map.Entry<ResourceLocation, JsonElement> entry : object.entrySet()) {
+        for (Map.Entry<ResourceLocation, JsonElement> entry : filteredObject.entrySet()) {
             ResourceLocation location = entry.getKey();
             JsonElement json = entry.getValue();
 
@@ -205,17 +228,26 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
                             T data = result.result().get();
 
                             // 验证数据
-                            var validationResult = validateData(data, elementLocation);
+                            var validationResult = validator.validate(data, elementLocation);
                             if (validationResult.valid()) {
-                                loadedData.put(elementLocation, data);
+                                if (validationResult.deferrable()) {
+                                    // 延迟验证的数据
+                                    deferredData.put(elementLocation, data);
+                                    deferredCount++;
+                                    OElib.LOGGER.debug("Deferred {} from array[{}]: {} ({})",
+                                            dataClass.getSimpleName(), i, elementLocation, validationResult.message());
+                                } else {
+                                    // 正常验证通过的数据
+                                    loadedData.put(elementLocation, data);
 
-                                // 构建缓存
-                                if (annotation.enableCache()) {
-                                    buildCache(data);
+                                    // 构建缓存
+                                    if (annotation.enableCache()) {
+                                        buildCache(data);
+                                    }
+
+                                    validCount++;
+                                    OElib.LOGGER.debug("Loaded {} from array[{}]: {}", dataClass.getSimpleName(), i, elementLocation);
                                 }
-
-                                validCount++;
-                                OElib.LOGGER.debug("Loaded {} from array[{}]: {}", dataClass.getSimpleName(), i, elementLocation);
                             } else {
                                 invalidCount++;
                                 OElib.LOGGER.warn("Invalid {} data in array[{}] of {}: {}",
@@ -236,15 +268,24 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
                         // 验证数据
                         var validationResult = validator.validate(data, location);
                         if (validationResult.valid()) {
-                            loadedData.put(location, data);
+                            if (validationResult.deferrable()) {
+                                // 延迟验证的数据
+                                deferredData.put(location, data);
+                                deferredCount++;
+                                OElib.LOGGER.debug("Deferred {}: {} ({})",
+                                        dataClass.getSimpleName(), location, validationResult.message());
+                            } else {
+                                // 正常验证通过的数据
+                                loadedData.put(location, data);
 
-                            // 构建缓存
-                            if (annotation.enableCache()) {
-                                buildCache(data);
+                                // 构建缓存
+                                if (annotation.enableCache()) {
+                                    buildCache(data);
+                                }
+
+                                validCount++;
+                                OElib.LOGGER.debug("Loaded {}: {}", dataClass.getSimpleName(), location);
                             }
-
-                            validCount++;
-                            OElib.LOGGER.debug("Loaded {}: {}", dataClass.getSimpleName(), location);
                         } else {
                             invalidCount++;
                             OElib.LOGGER.warn("Invalid {} data in {}: {}", dataClass.getSimpleName(), location, validationResult.message());
@@ -260,8 +301,8 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
             }
         }
 
-        OElib.LOGGER.info("Loaded {} valid {} entries, {} invalid entries were skipped",
-                validCount, dataClass.getSimpleName(), invalidCount);
+        OElib.LOGGER.info("Loaded {} valid {} entries, {} deferred entries, {} invalid entries were skipped",
+                validCount, dataClass.getSimpleName(), deferredCount, invalidCount);
 
         if (annotation.syncToClient() && serverStarted) {
             syncToAllPlayers();
@@ -297,8 +338,10 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
     private void syncToAllPlayers() {
         try {
             MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-            if (server != null && !loadedData.isEmpty()) {
-                DataSyncPacket<T> packet = new DataSyncPacket<>(dataClass, new HashMap<>(loadedData));
+            if (server != null && (!loadedData.isEmpty() || !deferredData.isEmpty())) {
+                Map<ResourceLocation, T> allData = new HashMap<>(loadedData);
+                allData.putAll(deferredData);
+                DataSyncPacket<T> packet = new DataSyncPacket<>(dataClass, allData);
                 packet.sendToAll();
                 OElib.LOGGER.debug("Synced {} data to all players", dataClass.getSimpleName());
             }
@@ -313,9 +356,11 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
      * @param player 玩家
      */
     public void syncToPlayer(ServerPlayer player) {
-        if (annotation.syncToClient() && !loadedData.isEmpty()) {
+        if (annotation.syncToClient() && (!loadedData.isEmpty() || !deferredData.isEmpty())) {
             try {
-                DataSyncPacket<T> packet = new DataSyncPacket<>(dataClass, new HashMap<>(loadedData));
+                Map<ResourceLocation, T> allData = new HashMap<>(loadedData);
+                allData.putAll(deferredData);
+                DataSyncPacket<T> packet = new DataSyncPacket<>(dataClass, allData);
                 packet.sendTo(player);
                 OElib.LOGGER.debug("Synced {} data to player: {}", dataClass.getSimpleName(), player.getName().getString());
             } catch (Exception e) {
@@ -332,49 +377,18 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
     @SubscribeEvent
     public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            MinecraftServer server = player.getServer();
-            if (server != null) {
-                scheduleDelayedSync(server, player, 100);
-            }
-        }
-    }
-
-    private static void scheduleDelayedSync(MinecraftServer server, ServerPlayer player, int delayTicks) {
-        final int ticks = Math.max(delayTicks, 0);
-        Runnable[] task = new Runnable[1];
-        task[0] = () -> {
-            if (ticks <= 0) {
-                executeDataSync(server, player);
-            } else {
-                server.execute(() -> scheduleDelayedSync(server, player, ticks - 1));
-            }
-        };
-        server.execute(task[0]);
-    }
-
-    private static void executeDataSync(MinecraftServer server, ServerPlayer player) {
-        if (server.getPlayerList().getPlayer(player.getUUID()) != null) {
             for (DataManager<?> manager : managers.values()) {
                 if (manager.annotation.syncToClient()) {
                     manager.syncToPlayer(player);
                 }
             }
-            OElib.LOGGER.debug("Executed data sync for player: {}", player.getName().getString());
         }
     }
 
-
     private static String getFolder(Class<?> dataClass) {
         DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
-        String folder = annotation.folder();
-        String modid = annotation.modid();
 
-        // 如果指定了modid，则在文件夹路径前加上modid
-        if (!modid.isEmpty()) {
-            return modid + "/" + folder;
-        }
-
-        return folder;
+        return annotation.folder();
     }
 
     @SuppressWarnings("unchecked")
