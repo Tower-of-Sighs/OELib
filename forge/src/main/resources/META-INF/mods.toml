@@ -7,11 +7,10 @@ license = "MIT"
 modId = "oelib"
 version = "${version}"
 displayName = "OELib"
-authors = ""
-description = '''
+authors = "Flechazo"
+description = "Mafuyu never like you:("
 
-'''
-#logoFile = ""
+logoFile = "assets/oelib/icon.png"
 
 [[dependencies.oelib]]
 modId = "forge"
