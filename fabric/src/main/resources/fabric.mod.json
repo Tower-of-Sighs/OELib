@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "oelib",
+  "version": "${version}",
+  "name": "OELib",
+  "description": "",
+  "authors": [
+    ""
+  ],
+  "contact": {
+    "homepage": ""
+  },
+  "license": "MIT",
+  "icon": "assets/oelib/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.mafuyu404.oelib.fabric.OELibFabric"
+    ],
+    "client": [
+      "com.mafuyu404.oelib.fabric.OELibFabricClient"
+    ]
+  },
+  "mixins": [
+    "oelib.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.20.1",
+    "java": ">=17",
+    "architectury": ">=9.2.14",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "another-mod": "*"
+  }
+}
