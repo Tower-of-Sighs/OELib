@@ -23,9 +23,9 @@ public class FunctionUsageAnalyzer {
     /**
      * 分析数据包中使用的所有函数。
      *
-     * @param dataPackData 数据包数据
+     * @param dataPackData  数据包数据
      * @param dataExtractor 数据提取器，用于从数据对象中提取表达式
-     * @param <T> 数据类型
+     * @param <T>           数据类型
      * @return 使用的函数名集合
      */
     public static <T> Set<String> analyzeUsedFunctions(Map<ResourceLocation, T> dataPackData,

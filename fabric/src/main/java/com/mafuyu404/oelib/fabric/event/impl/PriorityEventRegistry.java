@@ -1,6 +1,7 @@
-package com.mafuyu404.oelib.fabric.api.event;
+package com.mafuyu404.oelib.fabric.event.impl;
 
 import com.mafuyu404.oelib.OELib;
+import com.mafuyu404.oelib.fabric.event.EventPriority;
 import net.fabricmc.fabric.api.event.Event;
 import net.minecraft.resources.ResourceLocation;
 
@@ -39,10 +40,10 @@ public class PriorityEventRegistry {
 
         Method[] methods = listenerClass.getDeclaredMethods();
         for (Method method : methods) {
-            if (method.isAnnotationPresent(EventPriority.class) && 
-                Modifier.isStatic(method.getModifiers()) && 
-                Modifier.isPublic(method.getModifiers())) {
-                
+            if (method.isAnnotationPresent(EventPriority.class) &&
+                    Modifier.isStatic(method.getModifiers()) &&
+                    Modifier.isPublic(method.getModifiers())) {
+
                 registerMethod(method);
             }
         }
@@ -69,7 +70,7 @@ public class PriorityEventRegistry {
 
         PriorityEventHandler<T> handler = (PriorityEventHandler<T>) eventHandlers.computeIfAbsent(
                 event, e -> new PriorityEventHandler<>((Event<T>) e));
-        
+
         handler.register(listener, priority);
 
         OELib.LOGGER.debug("Registered priority listener for event {} with priority {}",
@@ -86,7 +87,7 @@ public class PriorityEventRegistry {
     public static <T> void register(Event<T> event, T listener) {
         Class<?> listenerClass = listener.getClass();
         EventPriority annotation = listenerClass.getAnnotation(EventPriority.class);
-        
+
         int priority = annotation != null ? annotation.priority() : EventPriority.NORMAL;
         register(event, listener, priority);
     }
@@ -103,7 +104,7 @@ public class PriorityEventRegistry {
     public static <T> void registerToPhase(Event<T> event, ResourceLocation phase, T listener, int priority) {
         // 对于支持阶段的事件，我们可以结合阶段和优先级
         register(event, listener, priority);
-        
+
         // 如果事件支持阶段，也注册到指定阶段
         try {
             event.register(phase, listener);
@@ -159,7 +160,7 @@ public class PriorityEventRegistry {
         int totalListeners = eventHandlers.values().stream()
                 .mapToInt(PriorityEventHandler::getListenerCount)
                 .sum();
-        
+
         return String.format("Priority Event Registry: %d events, %d listeners", totalEvents, totalListeners);
     }
 
@@ -174,7 +175,7 @@ public class PriorityEventRegistry {
         // 这里需要根据方法签名推断事件类型
         // 由于 Java 的类型擦除，我们需要一些额外的机制来处理这个问题
         // 暂时将方法信息存储起来，等待具体的事件注册时再处理
-        
+
         Class<?> declaringClass = method.getDeclaringClass();
         pendingRegistrations.computeIfAbsent(declaringClass, k -> new HashSet<>())
                 .add(new RegisteredListener(method, priority, description));
@@ -183,9 +184,9 @@ public class PriorityEventRegistry {
                 method.getName(), priority, description.isEmpty() ? "no description" : description);
     }
 
-        /**
-         * 已注册的监听器信息。
-         */
-        private record RegisteredListener(Method method, int priority, String description) {
+    /**
+     * 已注册的监听器信息。
+     */
+    private record RegisteredListener(Method method, int priority, String description) {
     }
 }

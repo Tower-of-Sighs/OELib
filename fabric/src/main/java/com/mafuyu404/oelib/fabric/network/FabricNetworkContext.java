@@ -1,6 +1,7 @@
 package com.mafuyu404.oelib.fabric.network;
 
 import com.mafuyu404.oelib.api.net.INetworkContext;
+import net.minecraft.client.Minecraft;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
@@ -11,5 +12,13 @@ public record FabricNetworkContext(ServerPlayer sender, boolean isServerSide) im
     @Override
     public boolean isClientSide() {
         return !isServerSide;
+    }
+
+    @Override
+    public Minecraft client() {
+        if (isClientSide()) {
+            return Minecraft.getInstance();
+        }
+        return null;
     }
 }

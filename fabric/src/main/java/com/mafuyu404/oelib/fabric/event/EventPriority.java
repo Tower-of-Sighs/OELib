@@ -1,4 +1,4 @@
-package com.mafuyu404.oelib.fabric.api.event;
+package com.mafuyu404.oelib.fabric.event;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -15,13 +15,13 @@ import java.lang.annotation.Target;
  * <h3>使用示例：</h3>
  * <pre>{@code
  * public class MyEventHandlers {
- *     
+ *
  *     @EventPriority(priority = EventPriority.HIGHEST)
  *     public static void onFunctionRegistry(FunctionRegistryEvent event) {
  *         // 最高优先级处理
  *         event.registerFunctionClass(CoreFunctions.class, "mymod");
  *     }
- *     
+ *
  *     @EventPriority(priority = EventPriority.LOW)
  *     public static void onServerStarted(MinecraftServer server) {
  *         // 低优先级处理

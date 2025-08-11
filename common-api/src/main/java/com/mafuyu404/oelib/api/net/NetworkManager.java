@@ -10,9 +10,9 @@ import net.minecraft.server.level.ServerPlayer;
  * </p>
  */
 public class NetworkManager {
-    
+
     private static INetworkManager instance;
-    
+
     /**
      * 设置网络管理器实例。
      * <p>
@@ -24,7 +24,7 @@ public class NetworkManager {
     public static void setInstance(INetworkManager manager) {
         instance = manager;
     }
-    
+
     /**
      * 发送网络包到指定玩家。
      *
@@ -37,7 +37,7 @@ public class NetworkManager {
             instance.sendToPlayer(packet, player);
         }
     }
-    
+
     /**
      * 发送网络包到所有玩家。
      *
@@ -49,7 +49,7 @@ public class NetworkManager {
             instance.sendToAll(packet);
         }
     }
-    
+
     /**
      * 发送网络包到服务器。
      *
@@ -61,7 +61,7 @@ public class NetworkManager {
             instance.sendToServer(packet);
         }
     }
-    
+
     /**
      * 发送网络包到指定玩家（支持自动分片）。
      *
@@ -74,7 +74,7 @@ public class NetworkManager {
             instance.sendToPlayerWithChunking(packet, player);
         }
     }
-    
+
     /**
      * 发送网络包到所有玩家（支持自动分片）。
      *
@@ -86,7 +86,7 @@ public class NetworkManager {
             instance.sendToAllWithChunking(packet);
         }
     }
-    
+
     /**
      * 注册网络包。
      *

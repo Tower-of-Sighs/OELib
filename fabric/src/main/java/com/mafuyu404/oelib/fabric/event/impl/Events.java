@@ -1,5 +1,6 @@
-package com.mafuyu404.oelib.fabric.api.event;
+package com.mafuyu404.oelib.fabric.event.impl;
 
+import com.mafuyu404.oelib.fabric.event.EventPriority;
 import net.fabricmc.fabric.api.event.Event;
 import net.minecraft.resources.ResourceLocation;
 
@@ -11,7 +12,8 @@ import net.minecraft.resources.ResourceLocation;
  */
 public final class Events {
 
-    private Events() {}
+    private Events() {
+    }
 
     /**
      * 开始事件注册流程。

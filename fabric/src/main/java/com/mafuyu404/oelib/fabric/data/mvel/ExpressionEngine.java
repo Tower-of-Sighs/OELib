@@ -2,7 +2,7 @@ package com.mafuyu404.oelib.fabric.data.mvel;
 
 import com.mafuyu404.oelib.OELib;
 import com.mafuyu404.oelib.api.data.ExpressionFunction;
-import com.mafuyu404.oelib.fabric.api.event.FunctionRegistryEvent;
+import com.mafuyu404.oelib.fabric.event.FunctionRegistryEvent;
 import org.mvel2.MVEL;
 import org.mvel2.ParserContext;
 

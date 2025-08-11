@@ -8,7 +8,6 @@ import net.minecraftforge.eventbus.api.Event;
  * 当数据驱动类型的数据重载完成时触发此事件。
  * 外部模组可以监听此事件来更新自己的缓存或执行其他操作。
  * </p>
- *
  */
 public class DataReloadEvent extends Event {
 

@@ -1,4 +1,4 @@
-package com.mafuyu404.oelib.fabric.api.event;
+package com.mafuyu404.oelib.fabric.event.impl;
 
 import net.fabricmc.fabric.api.event.Event;
 
@@ -161,12 +161,12 @@ public class PriorityEventHandler<T> {
      */
     public List<T> getSortedListeners() {
         List<T> result = new ArrayList<>();
-        
+
         // 按优先级排序（数值越小优先级越高）
         listenersByPriority.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .forEach(entry -> result.addAll(entry.getValue()));
-        
+
         return result;
     }
 
@@ -190,12 +190,12 @@ public class PriorityEventHandler<T> {
     private void updateEvent() {
         // 由于 Fabric 事件系统的限制，我们无法直接修改已注册的监听器顺序
         // 但我们可以通过创建一个包装监听器来实现优先级功能
-        
+
         List<T> sortedListeners = getSortedListeners();
         if (!sortedListeners.isEmpty()) {
             // 创建一个复合监听器，按优先级顺序执行所有监听器
             T compositeListener = createCompositeListener(sortedListeners);
-            
+
             // 注意：这里需要根据具体的事件类型来实现
             // 由于泛型擦除，我们需要使用反射或其他机制
             registerCompositeListener(compositeListener);
@@ -217,7 +217,7 @@ public class PriorityEventHandler<T> {
 
         // 使用动态代理创建复合监听器
         Class<?> listenerInterface = findListenerInterface(listeners.get(0));
-        
+
         return (T) Proxy.newProxyInstance(
                 listenerInterface.getClassLoader(),
                 new Class<?>[]{listenerInterface},
@@ -241,21 +241,21 @@ public class PriorityEventHandler<T> {
      */
     private Class<?> findListenerInterface(T listener) {
         Class<?> clazz = listener.getClass();
-        
+
         // 查找函数式接口
         for (Class<?> iface : clazz.getInterfaces()) {
-            if (iface.isAnnotationPresent(FunctionalInterface.class) || 
-                iface.getMethods().length == 1) {
+            if (iface.isAnnotationPresent(FunctionalInterface.class) ||
+                    iface.getMethods().length == 1) {
                 return iface;
             }
         }
-        
+
         // 如果没找到，返回第一个接口
         Class<?>[] interfaces = clazz.getInterfaces();
         if (interfaces.length > 0) {
             return interfaces[0];
         }
-        
+
         // 最后返回 Object 类
         return Object.class;
     }

@@ -1,3 +1,5 @@
+import net.fabricmc.loom.task.RemapJarTask
+
 plugins {
     id 'com.github.johnrengelman.shadow'
 }
@@ -50,4 +52,17 @@ shadowJar {
 
 remapJar {
     input.set shadowJar.archiveFile
+}
+
+// 新增：不带 common-api 的 jar
+tasks.register("plainJar", Jar) {
+    from sourceSets.main.output
+    archiveClassifier = 'dev' // 区分一下文件名，比如 xxx-dev.jar
+}
+
+// remap 后的不带 API 版本
+tasks.register("remapPlainJar", RemapJarTask) {
+    dependsOn tasks.named("plainJar")
+    input.set tasks.named("plainJar").get().archiveFile
+    archiveClassifier.set("dev-noshadow") // 文件名区分
 }

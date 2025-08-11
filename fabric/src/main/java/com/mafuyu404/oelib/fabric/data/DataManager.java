@@ -6,8 +6,8 @@ import com.google.gson.JsonElement;
 import com.mafuyu404.oelib.OELib;
 import com.mafuyu404.oelib.api.data.DataDriven;
 import com.mafuyu404.oelib.api.data.DataValidator;
-import com.mafuyu404.oelib.fabric.api.event.DataReloadEvent;
 import com.mafuyu404.oelib.fabric.data.net.DataSyncPacket;
+import com.mafuyu404.oelib.fabric.event.DataReloadEvent;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -429,7 +429,6 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
         DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
         return annotation.modid();
     }
-
 
 
     @SuppressWarnings("unchecked")

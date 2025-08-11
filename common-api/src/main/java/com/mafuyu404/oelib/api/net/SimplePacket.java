@@ -1,5 +1,6 @@
 package com.mafuyu404.oelib.api.net;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
@@ -12,7 +13,7 @@ import net.minecraft.server.level.ServerPlayer;
  * @param <T> 网络包类型
  */
 public abstract class SimplePacket<T extends SimplePacket<T>> implements INetworkPacket<T> {
-    
+
     /**
      * 检查是否在客户端。
      *
@@ -22,7 +23,7 @@ public abstract class SimplePacket<T extends SimplePacket<T>> implements INetwor
     protected boolean isClientSide(INetworkContext context) {
         return context.isClientSide();
     }
-    
+
     /**
      * 检查是否在服务端。
      *
@@ -32,7 +33,7 @@ public abstract class SimplePacket<T extends SimplePacket<T>> implements INetwor
     protected boolean isServerSide(INetworkContext context) {
         return context.isServerSide();
     }
-    
+
     /**
      * 获取发送者玩家。
      * <p>
@@ -45,7 +46,20 @@ public abstract class SimplePacket<T extends SimplePacket<T>> implements INetwor
     protected ServerPlayer getSender(INetworkContext context) {
         return context.sender();
     }
-    
+
+    /**
+     * 获取客户端实例。
+     * <p>
+     * 仅在客户端有效。
+     * </p>
+     *
+     * @param context 网络上下文
+     * @return 客户端实例，如果在服务端或无法获取则返回 null
+     */
+    protected Minecraft getClient(INetworkContext context) {
+        return context.client();
+    }
+
     /**
      * 在客户端处理网络包。
      * <p>
@@ -57,7 +71,7 @@ public abstract class SimplePacket<T extends SimplePacket<T>> implements INetwor
     protected void handleClient(INetworkContext context) {
         // 默认空实现
     }
-    
+
     /**
      * 在服务端处理网络包。
      * <p>
@@ -69,7 +83,7 @@ public abstract class SimplePacket<T extends SimplePacket<T>> implements INetwor
     protected void handleServer(INetworkContext context) {
         // 默认空实现
     }
-    
+
     @Override
     public final void handle(INetworkContext context) {
         if (isClientSide(context)) {

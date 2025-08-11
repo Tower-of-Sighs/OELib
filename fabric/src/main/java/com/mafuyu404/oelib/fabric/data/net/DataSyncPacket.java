@@ -1,11 +1,8 @@
 package com.mafuyu404.oelib.fabric.data.net;
 
 import com.mafuyu404.oelib.OELib;
-import com.mafuyu404.oelib.fabric.network.NetworkHandler;
 import com.mafuyu404.oelib.util.CodecUtils;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
-import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -26,7 +23,7 @@ import java.util.UUID;
 public class DataSyncPacket<T> {
 
     private static final int MAX_CHUNK_SIZE = 30000; // 30KB
-    private static MinecraftServer currentServer = null;
+    private static final MinecraftServer currentServer = null;
 
     private final Class<T> dataClass;
     private final Map<ResourceLocation, T> data;

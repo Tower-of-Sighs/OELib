@@ -1,4 +1,4 @@
-package com.mafuyu404.oelib.fabric.api.event;
+package com.mafuyu404.oelib.fabric.event;
 
 import net.fabricmc.fabric.api.event.Event;
 import net.fabricmc.fabric.api.event.EventFactory;

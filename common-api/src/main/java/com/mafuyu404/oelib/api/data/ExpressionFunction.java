@@ -20,7 +20,6 @@ import java.lang.annotation.Target;
  *     return false;
  * }
  * }</pre>
- *
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)

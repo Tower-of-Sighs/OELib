@@ -15,6 +15,7 @@ public final class OELibForge {
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::commonSetup);
         MinecraftForge.EVENT_BUS.register(this);
     }
+
     public void commonSetup(FMLCommonSetupEvent event) {
         DataRegistry.initialize();
         NetworkManager.initialize();

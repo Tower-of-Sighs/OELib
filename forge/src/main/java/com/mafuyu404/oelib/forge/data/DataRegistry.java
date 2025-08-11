@@ -16,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>
  * 负责管理所有数据驱动类型的注册和初始化。
  * </p>
- *
  */
 @Mod.EventBusSubscriber(modid = OELib.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class DataRegistry {

@@ -1,4 +1,4 @@
-package com.mafuyu404.oelib.fabric.api.event;
+package com.mafuyu404.oelib.fabric.event;
 
 import net.fabricmc.fabric.api.event.Event;
 import net.fabricmc.fabric.api.event.EventFactory;
@@ -96,7 +96,7 @@ public class FunctionRegistryEvent {
     }
 
     /**
-     * 注册包含 {@link com.mafuyu404.oelib.api.ExpressionFunction} 注解方法的类。
+     * 注册包含 {@link com.mafuyu404.oelib.api.data.ExpressionFunction} 注解方法的类。
      * <p>
      * 全量注册模式：注册类中的所有函数。
      * </p>
