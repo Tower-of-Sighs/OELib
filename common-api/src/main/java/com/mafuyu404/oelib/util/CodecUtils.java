@@ -13,12 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * 编解码工具类。
- * <p>
- * 提供通用的针对数据包序列化和反序列化功能。
- * </p>
- */
+
 public class CodecUtils {
 
     private static final Map<Class<?>, Codec<?>> codecCache = new ConcurrentHashMap<>();

@@ -1,36 +1,42 @@
-package com.mafuyu404.oelib.fabric.network;
+package com.mafuyu404.oelib.neoforge.network;
 
 import com.mafuyu404.oelib.OELib;
 import com.mafuyu404.oelib.api.net.INetworkManager;
 import com.mafuyu404.oelib.api.net.INetworkPacket;
 import com.mafuyu404.oelib.api.net.NetworkPacket;
 import com.mafuyu404.oelib.api.net.SimplePacket;
-import com.mafuyu404.oelib.fabric.data.DataManager;
-import com.mafuyu404.oelib.fabric.data.net.DataSyncChunkPacket;
+import com.mafuyu404.oelib.neoforge.data.DataManager;
+import com.mafuyu404.oelib.neoforge.data.net.DataSyncChunkPacket;
 import io.netty.buffer.Unpooled;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
-import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Fabric网络管理器。
+ * NeoForge网络管理器。
  * <p>
  * 提供统一的网络包注册和发送功能。
  * </p>
  */
+@EventBusSubscriber(modid = OELib.MODID)
 public class NetworkManager implements INetworkManager {
 
+    private static final String PROTOCOL_VERSION = "1";
     private static final Map<CustomPacketPayload.Type<?>, PacketInfo<?>> registeredPackets = new ConcurrentHashMap<>();
+    private static PayloadRegistrar registrar;
     private static NetworkManager instance;
 
     /**
@@ -39,7 +45,10 @@ public class NetworkManager implements INetworkManager {
      * 此方法应该在模组初始化时调用。
      * </p>
      */
-    public static void initialize() {
+    @SubscribeEvent
+    public static void initialize(RegisterPayloadHandlersEvent event) {
+        registrar = event.registrar(OELib.MODID).versioned(PROTOCOL_VERSION);
+
         instance = new NetworkManager();
         com.mafuyu404.oelib.api.net.NetworkManager.setInstance(instance);
 
@@ -54,6 +63,10 @@ public class NetworkManager implements INetworkManager {
             Class<T> packetClass,
             StreamCodec<? super RegistryFriendlyByteBuf, T> codec
     ) {
+        if (registrar == null) {
+            throw new IllegalStateException("Network manager not initialized");
+        }
+
         try {
             // 通过类名生成类型信息，避免创建临时实例
             CustomPacketPayload.Type<T> type = createPacketType(packetClass);
@@ -66,12 +79,10 @@ public class NetworkManager implements INetworkManager {
             PacketInfo<T> info = new PacketInfo<>(type, codec);
             registeredPackets.put(type, info);
 
-            PayloadTypeRegistry.playC2S().register(type, codec);
-
-            // 注册服务端接收器
-            ServerPlayNetworking.registerGlobalReceiver(type, (packet, context) -> {
-                context.server().execute(() -> {
-                    FabricNetworkContext networkContext = new FabricNetworkContext(context.player(), true);
+            // 注册双向网络包
+            registrar.playBidirectional(type, codec, (packet, context) -> {
+                context.enqueueWork(() -> {
+                    NeoForgeNetworkContext networkContext = new NeoForgeNetworkContext(context);
                     packet.handle(networkContext);
                 });
             });
@@ -96,16 +107,21 @@ public class NetworkManager implements INetworkManager {
             Class<T> packetClass,
             StreamCodec<? super RegistryFriendlyByteBuf, T> codec
     ) {
+        if (registrar == null) {
+            throw new IllegalStateException("Network manager not initialized");
+        }
+
         try {
             // 通过类名生成类型信息，避免创建临时实例
             CustomPacketPayload.Type<T> type = createPacketType(packetClass);
 
-            PayloadTypeRegistry.playS2C().register(type, codec);
-
-            ClientPlayNetworking.registerGlobalReceiver(type, (packet, context) -> context.client().execute(() -> {
-                FabricNetworkContext networkContext = new FabricNetworkContext(null, false);
-                packet.handle(networkContext);
-            }));
+            // 注册客户端网络包
+            registrar.playToClient(type, codec, (packet, context) -> {
+                context.enqueueWork(() -> {
+                    NeoForgeNetworkContext networkContext = new NeoForgeNetworkContext(context);
+                    packet.handle(networkContext);
+                });
+            });
 
             OELib.LOGGER.info("Registered client network packet: {} (ID: {})",
                     type.id().getPath(), type.id());
@@ -158,6 +174,42 @@ public class NetworkManager implements INetworkManager {
         return "oelib";
     }
 
+
+    /**
+     * 注册服务端网络包。
+     *
+     * @param packetClass 网络包类
+     * @param codec       编解码器
+     * @param <T>         网络包类型
+     */
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void registerServerPacket(
+            Class<T> packetClass,
+            StreamCodec<? super RegistryFriendlyByteBuf, T> codec
+    ) {
+        if (registrar == null) {
+            throw new IllegalStateException("Network manager not initialized");
+        }
+
+        try {
+            // 通过类名生成类型信息，避免创建临时实例
+            CustomPacketPayload.Type<T> type = createPacketType(packetClass);
+
+            // 注册服务端网络包
+            registrar.playToServer(type, codec, (packet, context) -> {
+                context.enqueueWork(() -> {
+                    NeoForgeNetworkContext networkContext = new NeoForgeNetworkContext(context);
+                    packet.handle(networkContext);
+                });
+            });
+
+            OELib.LOGGER.info("Registered server network packet: {} (ID: {})",
+                    type.id().getPath(), type.id());
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to register server packet " + packetClass.getSimpleName(), e);
+        }
+    }
+
     /**
      * 注册单个网络包（无类型检查版本）。
      */
@@ -180,7 +232,6 @@ public class NetworkManager implements INetworkManager {
         registerClientPacket((Class<T>) packetClass, (StreamCodec<? super RegistryFriendlyByteBuf, T>) codec);
     }
 
-    // ... existing code ...
     @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToPlayer(T packet, ServerPlayer player) {
         if (player == null) {
@@ -189,7 +240,7 @@ public class NetworkManager implements INetworkManager {
         }
 
         try {
-            ServerPlayNetworking.send(player, packet);
+            PacketDistributor.sendToPlayer(player, packet);
             OELib.LOGGER.debug("Sent packet {} to player {}",
                     packet.type().id(), player.getName().getString());
         } catch (Exception e) {
@@ -201,12 +252,7 @@ public class NetworkManager implements INetworkManager {
     @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToAll(T packet) {
         try {
-            MinecraftServer server = DataManager.getCurrentServer();
-            if (server != null) {
-                for (ServerPlayer player : PlayerLookup.all(server)) {
-                    ServerPlayNetworking.send(player, packet);
-                }
-            }
+            PacketDistributor.sendToAllPlayers(packet);
             OELib.LOGGER.debug("Sent packet {} to all players", packet.type().id());
         } catch (Exception e) {
             OELib.LOGGER.error("Failed to send packet {} to all players: {}",
@@ -217,7 +263,7 @@ public class NetworkManager implements INetworkManager {
     @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToServer(T packet) {
         try {
-            ClientPlayNetworking.send(packet);
+            PacketDistributor.sendToServer(packet);
             OELib.LOGGER.debug("Sent packet {} to server", packet.type().id());
         } catch (Exception e) {
             OELib.LOGGER.error("Failed to send packet {} to server: {}",
@@ -254,7 +300,7 @@ public class NetworkManager implements INetworkManager {
             if (annotation.chunkThreshold() > 0) {
                 MinecraftServer server = DataManager.getCurrentServer();
                 if (server != null) {
-                    List<ServerPlayer> players = new ArrayList<>(PlayerLookup.all(server));
+                    List<ServerPlayer> players = server.getPlayerList().getPlayers();
                     sendWithChunking(packet, players, annotation.chunkThreshold());
                     return;
                 }
@@ -267,7 +313,6 @@ public class NetworkManager implements INetworkManager {
     /**
      * 使用分片发送网络包。
      */
-    @SuppressWarnings("unchecked")
     private <T extends INetworkPacket<T> & CustomPacketPayload> void sendWithChunking(
             T packet, Iterable<ServerPlayer> players, int chunkThreshold) {
         try {
@@ -326,7 +371,7 @@ public class NetworkManager implements INetworkManager {
                         sessionId, i, totalChunks, packetClassName, chunkData);
 
                 for (ServerPlayer player : players) {
-                    ServerPlayNetworking.send(player, chunk);
+                    PacketDistributor.sendToPlayer(player, chunk);
                 }
 
                 OELib.LOGGER.debug("Sent chunk {}/{} ({} bytes) for {} session {}",

@@ -1,25 +1,18 @@
 package com.mafuyu404.oelib.api.net;
 
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
  * 通用网络包接口。
  * <p>
- * 所有自定义网络包都应该实现此接口。
+ * 所有自定义网络包都应该实现此接口和 {@link CustomPacketPayload}。
  * 这是一个跨平台的接口，可以在common模块中使用。
  * </p>
  *
  * @param <T> 网络包类型
  */
-public interface INetworkPacket<T extends INetworkPacket<T>> {
-
-    /**
-     * 将数据包编码到缓冲区。
-     *
-     * @param buf 缓冲区
-     */
-    void encode(FriendlyByteBuf buf);
+public interface INetworkPacket<T extends INetworkPacket<T> & CustomPacketPayload> extends CustomPacketPayload {
 
     /**
      * 处理网络包。

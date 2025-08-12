@@ -1,5 +1,8 @@
 package com.mafuyu404.oelib.api.net;
 
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
@@ -32,7 +35,7 @@ public class NetworkManager {
      * @param player 目标玩家
      * @param <T>    网络包类型
      */
-    public static <T extends INetworkPacket<T>> void sendToPlayer(T packet, ServerPlayer player) {
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToPlayer(T packet, ServerPlayer player) {
         if (instance != null) {
             instance.sendToPlayer(packet, player);
         }
@@ -44,7 +47,7 @@ public class NetworkManager {
      * @param packet 网络包
      * @param <T>    网络包类型
      */
-    public static <T extends INetworkPacket<T>> void sendToAll(T packet) {
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToAll(T packet) {
         if (instance != null) {
             instance.sendToAll(packet);
         }
@@ -56,7 +59,7 @@ public class NetworkManager {
      * @param packet 网络包
      * @param <T>    网络包类型
      */
-    public static <T extends INetworkPacket<T>> void sendToServer(T packet) {
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToServer(T packet) {
         if (instance != null) {
             instance.sendToServer(packet);
         }
@@ -69,7 +72,7 @@ public class NetworkManager {
      * @param player 目标玩家
      * @param <T>    网络包类型
      */
-    public static <T extends INetworkPacket<T>> void sendToPlayerWithChunking(T packet, ServerPlayer player) {
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToPlayerWithChunking(T packet, ServerPlayer player) {
         if (instance != null) {
             instance.sendToPlayerWithChunking(packet, player);
         }
@@ -81,7 +84,7 @@ public class NetworkManager {
      * @param packet 网络包
      * @param <T>    网络包类型
      */
-    public static <T extends INetworkPacket<T>> void sendToAllWithChunking(T packet) {
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToAllWithChunking(T packet) {
         if (instance != null) {
             instance.sendToAllWithChunking(packet);
         }
@@ -90,12 +93,54 @@ public class NetworkManager {
     /**
      * 注册网络包。
      *
-     * @param packetClasses 要注册的网络包类
+     * @param packetClass 网络包类
+     * @param codec       编解码器
+     * @param <T>         网络包类型
      */
-    @SafeVarargs
-    public static void registerPackets(Class<? extends INetworkPacket<?>>... packetClasses) {
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void registerPacket(
+            Class<T> packetClass,
+            StreamCodec<? super RegistryFriendlyByteBuf, T> codec
+    ) {
         if (instance != null) {
-            instance.registerPackets(packetClasses);
+            instance.registerPacket(packetClass, codec);
+        }
+    }
+
+    /**
+     * 批量注册网络包。
+     *
+     * @param packets 网络包注册信息
+     */
+    public static void registerPackets(INetworkManager.PacketRegistration<?>... packets) {
+        if (instance != null) {
+            instance.registerPackets(packets);
+        }
+    }
+
+    /**
+     * 注册客户端网络包。
+     *
+     * @param packetClass 网络包类
+     * @param codec       编解码器
+     * @param <T>         网络包类型
+     */
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void registerClientPacket(
+            Class<T> packetClass,
+            StreamCodec<? super RegistryFriendlyByteBuf, T> codec
+    ) {
+        if (instance != null) {
+            instance.registerClientPacket(packetClass, codec);
+        }
+    }
+
+    /**
+     * 批量注册客户端网络包。
+     *
+     * @param packets 网络包注册信息
+     */
+    public static void registerClientPackets(INetworkManager.PacketRegistration<?>... packets) {
+        if (instance != null) {
+            instance.registerClientPackets(packets);
         }
     }
 }

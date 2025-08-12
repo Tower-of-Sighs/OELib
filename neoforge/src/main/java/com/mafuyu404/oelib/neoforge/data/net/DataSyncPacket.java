@@ -1,4 +1,4 @@
-package com.mafuyu404.oelib.fabric.data.net;
+package com.mafuyu404.oelib.neoforge.data.net;
 
 import com.mafuyu404.oelib.OELib;
 import com.mafuyu404.oelib.util.CodecUtils;
@@ -47,7 +47,6 @@ public class DataSyncPacket<T> {
             OELib.LOGGER.error("Failed to send {} sync packet: {}", dataClass.getSimpleName(), e.getMessage(), e);
         }
     }
-
 
     public void sendToAll() {
         try {

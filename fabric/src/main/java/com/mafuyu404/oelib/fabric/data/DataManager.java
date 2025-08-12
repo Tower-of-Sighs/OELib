@@ -11,6 +11,7 @@ import com.mafuyu404.oelib.fabric.event.DataReloadEvent;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.resource.SimpleResourceReloadListener;
 import net.minecraft.resources.ResourceLocation;
@@ -110,7 +111,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
 
     @Override
     public ResourceLocation getFabricId() {
-        return new ResourceLocation(OELib.MODID, "data_manager_" + dataClass.getSimpleName().toLowerCase());
+        return ResourceLocation.fromNamespaceAndPath(OELib.MODID, "data_manager_" + dataClass.getSimpleName().toLowerCase());
     }
 
     @Override
@@ -182,7 +183,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
 
                         for (int i = 0; i < jsonArray.size(); i++) {
                             JsonElement element = jsonArray.get(i);
-                            ResourceLocation elementLocation = new ResourceLocation(
+                            ResourceLocation elementLocation = ResourceLocation.fromNamespaceAndPath(
                                     location.getNamespace(),
                                     location.getPath() + "_" + i
                             );
@@ -275,6 +276,17 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
             // 触发数据重载事件
             DataReloadEvent.EVENT.invoker().onDataReload(dataClass, validCount + deferredCount, invalidCount);
         }, executor);
+    }
+
+    /**
+     * 验证数据，如果验证器支持服务器上下文则使用上下文验证。
+     */
+    private DataValidator.ValidationResult validateData(T data, ResourceLocation source) {
+        if (validator instanceof DataValidator.ServerContextAware<T> contextAwareValidator) {
+            return contextAwareValidator.validateWithContext(data, source, getCurrentServer());
+        } else {
+            return validator.validate(data, source);
+        }
     }
 
     /**
@@ -383,8 +395,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
 
     private void syncToAllPlayers() {
         try {
-            MinecraftServer server = getCurrentServer();
-            if (server != null && (!loadedData.isEmpty() || !deferredData.isEmpty())) {
+            if (!loadedData.isEmpty() || !deferredData.isEmpty()) {
                 Map<ResourceLocation, T> allData = new HashMap<>(loadedData);
                 allData.putAll(deferredData);
                 DataSyncPacket<T> packet = new DataSyncPacket<>(dataClass, allData);
@@ -396,14 +407,13 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
         }
     }
 
-
     /**
      * 同步数据到指定玩家。
      *
      * @param player 玩家
      */
     public void syncToPlayer(ServerPlayer player) {
-        if (annotation.syncToClient() && (!loadedData.isEmpty() || !deferredData.isEmpty())) {
+        if (player != null && annotation.syncToClient() && (!loadedData.isEmpty() || !deferredData.isEmpty())) {
             try {
                 Map<ResourceLocation, T> allData = new HashMap<>(loadedData);
                 allData.putAll(deferredData);
@@ -429,6 +439,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
         DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
         return annotation.modid();
     }
+
 
 
     @SuppressWarnings("unchecked")
