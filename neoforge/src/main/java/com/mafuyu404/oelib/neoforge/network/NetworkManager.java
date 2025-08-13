@@ -14,10 +14,8 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
@@ -59,7 +57,7 @@ public class NetworkManager implements INetworkManager {
     }
 
     @Override
-    public <T extends INetworkPacket<T> & CustomPacketPayload> void registerPacket(
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void registerBidirectionalPacket(
             Class<T> packetClass,
             StreamCodec<? super RegistryFriendlyByteBuf, T> codec
     ) {
@@ -96,9 +94,9 @@ public class NetworkManager implements INetworkManager {
     }
 
     @Override
-    public void registerPackets(PacketRegistration<?>... packets) {
+    public void registerBidirectionalPackets(PacketRegistration<?>... packets) {
         for (PacketRegistration<?> packet : packets) {
-            registerPacketUnchecked(packet.packetClass(), packet.codec());
+            registerBidirectionalPacketUnchecked(packet.packetClass(), packet.codec());
         }
     }
 
@@ -138,6 +136,52 @@ public class NetworkManager implements INetworkManager {
         }
     }
 
+
+    /**
+     * 注册服务端网络包。
+     *
+     * @param packetClass 网络包类
+     * @param codec       编解码器
+     * @param <T>         网络包类型
+     */
+    @Override
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void registerServerPacket(
+            Class<T> packetClass,
+            StreamCodec<? super RegistryFriendlyByteBuf, T> codec
+    ) {
+        if (registrar == null) {
+            throw new IllegalStateException("Network manager not initialized");
+        }
+
+        try {
+            // 通过类名生成类型信息，避免创建临时实例
+            CustomPacketPayload.Type<T> type = createPacketType(packetClass);
+
+            // 注册服务端网络包
+            registrar.playToServer(type, codec, (packet, context) -> {
+                context.enqueueWork(() -> {
+                    NeoForgeNetworkContext networkContext = new NeoForgeNetworkContext(context);
+                    packet.handle(networkContext);
+                });
+            });
+
+            OELib.LOGGER.info("Registered server network packet: {} (ID: {})",
+                    type.id().getPath(), type.id());
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to register server packet " + packetClass.getSimpleName(), e);
+        }
+    }
+
+
+    @Override
+    public void registerServerPackets(PacketRegistration<?>... packets) {
+        for (PacketRegistration<?> packet : packets) {
+            registerServerPacketUnchecked(packet.packetClass(), packet.codec());
+        }
+    }
+
+
     /**
      * 通过类名创建网络包类型。
      */
@@ -176,49 +220,14 @@ public class NetworkManager implements INetworkManager {
 
 
     /**
-     * 注册服务端网络包。
-     *
-     * @param packetClass 网络包类
-     * @param codec       编解码器
-     * @param <T>         网络包类型
-     */
-    public <T extends INetworkPacket<T> & CustomPacketPayload> void registerServerPacket(
-            Class<T> packetClass,
-            StreamCodec<? super RegistryFriendlyByteBuf, T> codec
-    ) {
-        if (registrar == null) {
-            throw new IllegalStateException("Network manager not initialized");
-        }
-
-        try {
-            // 通过类名生成类型信息，避免创建临时实例
-            CustomPacketPayload.Type<T> type = createPacketType(packetClass);
-
-            // 注册服务端网络包
-            registrar.playToServer(type, codec, (packet, context) -> {
-                context.enqueueWork(() -> {
-                    NeoForgeNetworkContext networkContext = new NeoForgeNetworkContext(context);
-                    packet.handle(networkContext);
-                });
-            });
-
-            OELib.LOGGER.info("Registered server network packet: {} (ID: {})",
-                    type.id().getPath(), type.id());
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to register server packet " + packetClass.getSimpleName(), e);
-        }
-    }
-
-    /**
-     * 注册单个网络包（无类型检查版本）。
+     * 注册单个双端网络包（无类型检查版本）。
      */
     @SuppressWarnings("unchecked")
-    private <T extends INetworkPacket<T> & CustomPacketPayload> void registerPacketUnchecked(
+    private <T extends INetworkPacket<T> & CustomPacketPayload> void registerBidirectionalPacketUnchecked(
             Class<?> packetClass,
             StreamCodec<? super RegistryFriendlyByteBuf, ?> codec
     ) {
-        registerPacket((Class<T>) packetClass, (StreamCodec<? super RegistryFriendlyByteBuf, T>) codec);
+        registerBidirectionalPacket((Class<T>) packetClass, (StreamCodec<? super RegistryFriendlyByteBuf, T>) codec);
     }
 
     /**
@@ -230,6 +239,17 @@ public class NetworkManager implements INetworkManager {
             StreamCodec<? super RegistryFriendlyByteBuf, ?> codec
     ) {
         registerClientPacket((Class<T>) packetClass, (StreamCodec<? super RegistryFriendlyByteBuf, T>) codec);
+    }
+
+    /**
+     * 注册单个服务端端网络包（无类型检查版本）。
+     */
+    @SuppressWarnings("unchecked")
+    private <T extends INetworkPacket<T> & CustomPacketPayload> void registerServerPacketUnchecked(
+            Class<?> packetClass,
+            StreamCodec<? super RegistryFriendlyByteBuf, ?> codec
+    ) {
+        registerServerPacket((Class<T>) packetClass, (StreamCodec<? super RegistryFriendlyByteBuf, T>) codec);
     }
 
     @Override
@@ -401,7 +421,7 @@ public class NetworkManager implements INetworkManager {
     }
 
     private static void registerBuiltinPackets() {
-        instance.registerPacket(DataSyncChunkPacket.class, DataSyncChunkPacket.STREAM_CODEC);
+        instance.registerBidirectionalPacket(DataSyncChunkPacket.class, DataSyncChunkPacket.STREAM_CODEC);
 
         OELib.LOGGER.info("Registered builtin data sync packets");
     }

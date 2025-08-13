@@ -91,29 +91,56 @@ public class NetworkManager {
     }
 
     /**
-     * 注册网络包。
+     * 注册双端网络包。
      *
      * @param packetClass 网络包类
      * @param codec       编解码器
      * @param <T>         网络包类型
      */
-    public static <T extends INetworkPacket<T> & CustomPacketPayload> void registerPacket(
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void registerBidirectionalPacket(
             Class<T> packetClass,
             StreamCodec<? super RegistryFriendlyByteBuf, T> codec
     ) {
         if (instance != null) {
-            instance.registerPacket(packetClass, codec);
+            instance.registerBidirectionalPacket(packetClass, codec);
         }
     }
 
     /**
-     * 批量注册网络包。
+     * 批量双端注册网络包。
      *
      * @param packets 网络包注册信息
      */
-    public static void registerPackets(INetworkManager.PacketRegistration<?>... packets) {
+    public static void registerBidirectionalPackets(INetworkManager.PacketRegistration<?>... packets) {
         if (instance != null) {
-            instance.registerPackets(packets);
+            instance.registerBidirectionalPackets(packets);
+        }
+    }
+
+    /**
+     * 注册服务端网络包。
+     *
+     * @param packetClass 网络包类
+     * @param codec       编解码器
+     * @param <T>         网络包类型
+     */
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void registerServerPacket(
+            Class<T> packetClass,
+            StreamCodec<? super RegistryFriendlyByteBuf, T> codec
+    ) {
+        if (instance != null) {
+            instance.registerServerPacket(packetClass, codec);
+        }
+    }
+
+    /**
+     * 批量服务端注册网络包。
+     *
+     * @param packets 网络包注册信息
+     */
+    public static void registerServerPackets(INetworkManager.PacketRegistration<?>... packets) {
+        if (instance != null) {
+            instance.registerServerPackets(packets);
         }
     }
 

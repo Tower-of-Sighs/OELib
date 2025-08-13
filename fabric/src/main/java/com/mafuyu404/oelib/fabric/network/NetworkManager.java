@@ -50,44 +50,17 @@ public class NetworkManager implements INetworkManager {
     }
 
     @Override
-    public <T extends INetworkPacket<T> & CustomPacketPayload> void registerPacket(
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void registerBidirectionalPacket(
             Class<T> packetClass,
             StreamCodec<? super RegistryFriendlyByteBuf, T> codec
     ) {
-        try {
-            // 通过类名生成类型信息，避免创建临时实例
-            CustomPacketPayload.Type<T> type = createPacketType(packetClass);
-
-            if (registeredPackets.containsKey(type)) {
-                OELib.LOGGER.warn("Packet {} is already registered, skipping", type.id());
-                return;
-            }
-
-            PacketInfo<T> info = new PacketInfo<>(type, codec);
-            registeredPackets.put(type, info);
-
-            PayloadTypeRegistry.playC2S().register(type, codec);
-
-            // 注册服务端接收器
-            ServerPlayNetworking.registerGlobalReceiver(type, (packet, context) -> {
-                context.server().execute(() -> {
-                    FabricNetworkContext networkContext = new FabricNetworkContext(context.player(), true);
-                    packet.handle(networkContext);
-                });
-            });
-
-            OELib.LOGGER.info("Registered network packet: {} (ID: {})",
-                    type.id().getPath(), type.id());
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to register packet " + packetClass.getSimpleName(), e);
-        }
+        registerServerOrBidirectionalPacket(packetClass, codec);
     }
 
     @Override
-    public void registerPackets(PacketRegistration<?>... packets) {
+    public void registerBidirectionalPackets(PacketRegistration<?>... packets) {
         for (PacketRegistration<?> packet : packets) {
-            registerPacketUnchecked(packet.packetClass(), packet.codec());
+            registerBidirectionalPacketUnchecked(packet.packetClass(), packet.codec());
         }
     }
 
@@ -119,6 +92,19 @@ public class NetworkManager implements INetworkManager {
     public void registerClientPackets(PacketRegistration<?>... packets) {
         for (PacketRegistration<?> packet : packets) {
             registerClientPacketUnchecked(packet.packetClass(), packet.codec());
+        }
+    }
+
+
+    @Override
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void registerServerPacket(Class<T> packetClass, StreamCodec<? super RegistryFriendlyByteBuf, T> codec) {
+        registerServerOrBidirectionalPacket(packetClass, codec);
+    }
+
+    @Override
+    public void registerServerPackets(PacketRegistration<?>... packets) {
+        for (PacketRegistration<?> packet : packets) {
+            registerServerPacketUnchecked(packet.packetClass(), packet.codec());
         }
     }
 
@@ -158,15 +144,49 @@ public class NetworkManager implements INetworkManager {
         return "oelib";
     }
 
+    private  <T extends INetworkPacket<T> & CustomPacketPayload> void registerServerOrBidirectionalPacket(
+            Class<T> packetClass,
+            StreamCodec<? super RegistryFriendlyByteBuf, T> codec
+    ) {
+        try {
+            // 通过类名生成类型信息，避免创建临时实例
+            CustomPacketPayload.Type<T> type = createPacketType(packetClass);
+
+            if (registeredPackets.containsKey(type)) {
+                OELib.LOGGER.warn("Packet {} is already registered, skipping", type.id());
+                return;
+            }
+
+            PacketInfo<T> info = new PacketInfo<>(type, codec);
+            registeredPackets.put(type, info);
+
+            PayloadTypeRegistry.playC2S().register(type, codec);
+
+            // 注册服务端接收器
+            ServerPlayNetworking.registerGlobalReceiver(type, (packet, context) -> {
+                context.server().execute(() -> {
+                    FabricNetworkContext networkContext = new FabricNetworkContext(context.player(), true);
+                    packet.handle(networkContext);
+                });
+            });
+
+            OELib.LOGGER.info("Registered network packet: {} (ID: {})",
+                    type.id().getPath(), type.id());
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to register packet " + packetClass.getSimpleName(), e);
+        }
+    }
+
     /**
-     * 注册单个网络包（无类型检查版本）。
+     * 注册单个双端网络包（无类型检查版本）。
      */
     @SuppressWarnings("unchecked")
-    private <T extends INetworkPacket<T> & CustomPacketPayload> void registerPacketUnchecked(
+    private <T extends INetworkPacket<T> & CustomPacketPayload> void registerBidirectionalPacketUnchecked(
             Class<?> packetClass,
             StreamCodec<? super RegistryFriendlyByteBuf, ?> codec
     ) {
-        registerPacket((Class<T>) packetClass, (StreamCodec<? super RegistryFriendlyByteBuf, T>) codec);
+        registerBidirectionalPacket((Class<T>) packetClass, (StreamCodec<? super RegistryFriendlyByteBuf, T>) codec);
     }
 
     /**
@@ -180,7 +200,17 @@ public class NetworkManager implements INetworkManager {
         registerClientPacket((Class<T>) packetClass, (StreamCodec<? super RegistryFriendlyByteBuf, T>) codec);
     }
 
-    // ... existing code ...
+    /**
+     * 注册单个服务端端网络包（无类型检查版本）。
+     */
+    @SuppressWarnings("unchecked")
+    private <T extends INetworkPacket<T> & CustomPacketPayload> void registerServerPacketUnchecked(
+            Class<?> packetClass,
+            StreamCodec<? super RegistryFriendlyByteBuf, ?> codec
+    ) {
+        registerServerPacket((Class<T>) packetClass, (StreamCodec<? super RegistryFriendlyByteBuf, T>) codec);
+    }
+
     @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToPlayer(T packet, ServerPlayer player) {
         if (player == null) {
@@ -356,7 +386,7 @@ public class NetworkManager implements INetworkManager {
     }
 
     private static void registerBuiltinPackets() {
-        instance.registerPacket(DataSyncChunkPacket.class, DataSyncChunkPacket.STREAM_CODEC);
+        instance.registerServerPacket(DataSyncChunkPacket.class, DataSyncChunkPacket.STREAM_CODEC);
 
         OELib.LOGGER.info("Registered builtin data sync packets");
     }

@@ -56,23 +56,42 @@ public interface INetworkManager {
     <T extends INetworkPacket<T> & CustomPacketPayload> void sendToAllWithChunking(T packet);
 
     /**
-     * 注册网络包。
+     * 注册双端网络包。
      *
      * @param packetClass 网络包类
      * @param codec       编解码器
      * @param <T>         网络包类型
      */
-    <T extends INetworkPacket<T> & CustomPacketPayload> void registerPacket(
+    <T extends INetworkPacket<T> & CustomPacketPayload> void registerBidirectionalPacket(
             Class<T> packetClass,
             StreamCodec<? super RegistryFriendlyByteBuf, T> codec
     );
 
     /**
-     * 批量注册网络包。
+     * 批量双端注册网络包。
      *
      * @param packets 网络包注册信息
      */
-    void registerPackets(PacketRegistration<?>... packets);
+    void registerBidirectionalPackets(PacketRegistration<?>... packets);
+
+    /**
+     * 注册服务端网络包。
+     *
+     * @param packetClass 网络包类
+     * @param codec       编解码器
+     * @param <T>         网络包类型
+     */
+    <T extends INetworkPacket<T> & CustomPacketPayload> void registerServerPacket(
+            Class<T> packetClass,
+            StreamCodec<? super RegistryFriendlyByteBuf, T> codec
+    );
+
+    /**
+     * 批量服务端注册网络包。
+     *
+     * @param packets 网络包注册信息
+     */
+    void registerServerPackets(PacketRegistration<?>... packets);
 
     /**
      * 注册客户端网络包。
