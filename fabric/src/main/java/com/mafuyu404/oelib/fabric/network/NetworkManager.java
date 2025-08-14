@@ -73,8 +73,6 @@ public class NetworkManager implements INetworkManager {
             // 通过类名生成类型信息，避免创建临时实例
             CustomPacketPayload.Type<T> type = createPacketType(packetClass);
 
-            PayloadTypeRegistry.playS2C().register(type, codec);
-
             ClientPlayNetworking.registerGlobalReceiver(type, (packet, context) -> context.client().execute(() -> {
                 FabricNetworkContext networkContext = new FabricNetworkContext(null, false);
                 packet.handle(networkContext);
@@ -161,6 +159,7 @@ public class NetworkManager implements INetworkManager {
             registeredPackets.put(type, info);
 
             PayloadTypeRegistry.playC2S().register(type, codec);
+            PayloadTypeRegistry.playS2C().register(type, codec);
 
             // 注册服务端接收器
             ServerPlayNetworking.registerGlobalReceiver(type, (packet, context) -> {
