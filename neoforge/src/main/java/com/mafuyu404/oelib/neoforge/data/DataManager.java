@@ -10,6 +10,7 @@ import com.mafuyu404.oelib.neoforge.data.net.DataSyncPacket;
 import com.mafuyu404.oelib.neoforge.event.DataReloadEvent;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
+import net.minecraft.resources.FileToIdConverter;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -37,27 +38,24 @@ import java.util.concurrent.ConcurrentHashMap;
  * @param <T> 数据类型
  */
 @EventBusSubscriber(modid = OELib.MODID)
-public class DataManager<T> extends SimpleJsonResourceReloadListener {
+public class DataManager<T> extends SimpleJsonResourceReloadListener<T> {
 
     private static final Gson GSON = new GsonBuilder().setLenient().create();
     private static final Map<Class<?>, DataManager<?>> managers = new ConcurrentHashMap<>();
     private static boolean serverStarted = false;
     private final Class<T> dataClass;
     private final DataDriven annotation;
-    private final Codec<T> codec;
     private final DataValidator<T> validator;
     private final Map<ResourceLocation, T> loadedData = new ConcurrentHashMap<>();
     private final Map<ResourceLocation, T> deferredData = new ConcurrentHashMap<>();
     private final Map<String, Set<T>> cache = new ConcurrentHashMap<>();
 
     private DataManager(Class<T> dataClass) {
-        super(GSON, getFolder(dataClass));
+        super(getCodec(dataClass), FileToIdConverter.json(getFolder(dataClass)));
         this.dataClass = dataClass;
         this.annotation = dataClass.getAnnotation(DataDriven.class);
-        this.codec = getCodec(dataClass);
         this.validator = createValidator(annotation.validator());
     }
-
     /**
      * 注册数据驱动类型。
      *
@@ -177,18 +175,18 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
     }
 
     @Override
-    protected void apply(Map<ResourceLocation, JsonElement> object, ResourceManager resourceManager, ProfilerFiller profiler) {
+    protected void apply(Map<ResourceLocation, T> object, ResourceManager resourceManager, ProfilerFiller profiler) {
         loadedData.clear();
         deferredData.clear();
         clearCache();
 
         // 过滤资源：如果注解指定了modid，只处理该modid命名空间下的资源
-        Map<ResourceLocation, JsonElement> filteredObject = new HashMap<>();
+        Map<ResourceLocation, T> filteredObject = new HashMap<>();
         String targetModid = annotation.modid();
 
         if (!targetModid.isEmpty()) {
             // 只处理指定modid命名空间下的资源
-            for (Map.Entry<ResourceLocation, JsonElement> entry : object.entrySet()) {
+            for (Map.Entry<ResourceLocation, T> entry : object.entrySet()) {
                 if (targetModid.equals(entry.getKey().getNamespace())) {
                     filteredObject.put(entry.getKey(), entry.getValue());
                 }
@@ -206,94 +204,35 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         int deferredCount = 0;
         int invalidCount = 0;
 
-        for (Map.Entry<ResourceLocation, JsonElement> entry : filteredObject.entrySet()) {
+        for (Map.Entry<ResourceLocation, T> entry : filteredObject.entrySet()) {
             ResourceLocation location = entry.getKey();
-            JsonElement json = entry.getValue();
+            T data = entry.getValue();
 
             try {
-                if (annotation.supportArray() && json.isJsonArray()) {
-                    // 处理数组格式
-                    var jsonArray = json.getAsJsonArray();
-                    OELib.LOGGER.debug("Processing array with {} elements from {}", jsonArray.size(), location);
+                // 验证数据
+                var validationResult = validator.validate(data, location);
+                if (validationResult.valid()) {
+                    if (validationResult.deferrable()) {
+                        // 延迟验证的数据
+                        deferredData.put(location, data);
+                        deferredCount++;
+                        OELib.LOGGER.debug("Deferred {}: {} ({})",
+                                dataClass.getSimpleName(), location, validationResult.message());
+                    } else {
+                        // 正常验证通过的数据
+                        loadedData.put(location, data);
 
-                    for (int i = 0; i < jsonArray.size(); i++) {
-                        JsonElement element = jsonArray.get(i);
-                        ResourceLocation elementLocation = ResourceLocation.fromNamespaceAndPath(
-                                location.getNamespace(),
-                                location.getPath() + "_" + i
-                        );
-
-                        var result = codec.parse(JsonOps.INSTANCE, element);
-                        if (result.result().isPresent()) {
-                            T data = result.result().get();
-
-                            // 验证数据
-                            var validationResult = validator.validate(data, elementLocation);
-                            if (validationResult.valid()) {
-                                if (validationResult.deferrable()) {
-                                    // 延迟验证的数据
-                                    deferredData.put(elementLocation, data);
-                                    deferredCount++;
-                                    OELib.LOGGER.debug("Deferred {} from array[{}]: {} ({})",
-                                            dataClass.getSimpleName(), i, elementLocation, validationResult.message());
-                                } else {
-                                    // 正常验证通过的数据
-                                    loadedData.put(elementLocation, data);
-
-                                    // 构建缓存
-                                    if (annotation.enableCache()) {
-                                        buildCache(data);
-                                    }
-
-                                    validCount++;
-                                    OELib.LOGGER.debug("Loaded {} from array[{}]: {}", dataClass.getSimpleName(), i, elementLocation);
-                                }
-                            } else {
-                                invalidCount++;
-                                OELib.LOGGER.warn("Invalid {} data in array[{}] of {}: {}",
-                                        dataClass.getSimpleName(), i, location, validationResult.message());
-                            }
-                        } else {
-                            invalidCount++;
-                            OELib.LOGGER.error("Failed to parse {} data from array[{}] of {}: {}",
-                                    dataClass.getSimpleName(), i, location, result.error().orElse(null));
+                        // 构建缓存
+                        if (annotation.enableCache()) {
+                            buildCache(data);
                         }
+
+                        validCount++;
+                        OELib.LOGGER.debug("Loaded {}: {}", dataClass.getSimpleName(), location);
                     }
                 } else {
-                    // 处理单个对象格式
-                    var result = codec.parse(JsonOps.INSTANCE, json);
-                    if (result.result().isPresent()) {
-                        T data = result.result().get();
-
-                        // 验证数据
-                        var validationResult = validator.validate(data, location);
-                        if (validationResult.valid()) {
-                            if (validationResult.deferrable()) {
-                                // 延迟验证的数据
-                                deferredData.put(location, data);
-                                deferredCount++;
-                                OELib.LOGGER.debug("Deferred {}: {} ({})",
-                                        dataClass.getSimpleName(), location, validationResult.message());
-                            } else {
-                                // 正常验证通过的数据
-                                loadedData.put(location, data);
-
-                                // 构建缓存
-                                if (annotation.enableCache()) {
-                                    buildCache(data);
-                                }
-
-                                validCount++;
-                                OELib.LOGGER.debug("Loaded {}: {}", dataClass.getSimpleName(), location);
-                            }
-                        } else {
-                            invalidCount++;
-                            OELib.LOGGER.warn("Invalid {} data in {}: {}", dataClass.getSimpleName(), location, validationResult.message());
-                        }
-                    } else {
-                        invalidCount++;
-                        OELib.LOGGER.error("Failed to parse {} data from {}: {}", dataClass.getSimpleName(), location, result.error().orElse(null));
-                    }
+                    invalidCount++;
+                    OELib.LOGGER.warn("Invalid {} data in {}: {}", dataClass.getSimpleName(), location, validationResult.message());
                 }
             } catch (Exception e) {
                 invalidCount++;
@@ -309,7 +248,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         }
 
         NeoForge.EVENT_BUS.post(new DataReloadEvent(dataClass, validCount, invalidCount));
-    }
+}
 
     /**
      * 验证数据，如果验证器支持服务器上下文则使用上下文验证。
@@ -418,4 +357,5 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
             return (DataValidator<T>) new DataValidator.NoValidator();
         }
     }
+
 }

@@ -37,7 +37,6 @@ import java.util.concurrent.Executor;
  */
 public class DataManager<T> implements SimpleResourceReloadListener<Map<ResourceLocation, JsonElement>> {
 
-    private static final Gson GSON = new GsonBuilder().setLenient().create();
     private static final Map<Class<?>, DataManager<?>> managers = new ConcurrentHashMap<>();
     private static boolean serverStarted = false;
     private static MinecraftServer currentServer = null;
@@ -115,32 +114,13 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
     }
 
     @Override
-    public CompletableFuture<Map<ResourceLocation, JsonElement>> load(ResourceManager manager, ProfilerFiller profiler, Executor executor) {
-        return CompletableFuture.supplyAsync(() -> {
-            Map<ResourceLocation, JsonElement> data = new HashMap<>();
-            String folder = getFolder(dataClass);
-            String expectedNamespace = getModId(dataClass);
-
-            manager.listResources(folder, path -> path.getPath().endsWith(".json")).forEach((rl, resource) -> {
-                if (!expectedNamespace.isEmpty() && !rl.getNamespace().equals(expectedNamespace)) {
-                    return;
-                }
-
-                try {
-                    JsonElement json = GSON.fromJson(resource.openAsReader(), JsonElement.class);
-                    data.put(rl, json);
-                } catch (Exception e) {
-                    OELib.LOGGER.error("Failed to load JSON from {}", rl, e);
-                }
-            });
-
-            return data;
-        }, executor);
+    public CompletableFuture<Map<ResourceLocation, JsonElement>> load(ResourceManager manager, Executor executor) {
+        return CompletableFuture.supplyAsync(HashMap::new, executor);
     }
 
 
     @Override
-    public CompletableFuture<Void> apply(Map<ResourceLocation, JsonElement> data, ResourceManager manager, ProfilerFiller profiler, Executor executor) {
+    public CompletableFuture<Void> apply(Map<ResourceLocation, JsonElement> data, ResourceManager manager, Executor executor) {
         return CompletableFuture.runAsync(() -> {
             loadedData.clear();
             deferredData.clear();

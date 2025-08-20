@@ -2,6 +2,7 @@ package com.mafuyu404.oelib.neoforge;
 
 import com.mafuyu404.oelib.OELib;
 import com.mafuyu404.oelib.neoforge.data.DataRegistry;
+import com.mafuyu404.oelib.neoforge.network.NetworkManager;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
@@ -11,6 +12,7 @@ public final class OELibNeoForge {
     public OELibNeoForge(IEventBus modEventBus) {
         OELib.init();
         modEventBus.addListener(this::commonSetup);
+        modEventBus.addListener(NetworkManager::initialize);
     }
 
     public void commonSetup(FMLCommonSetupEvent event) {

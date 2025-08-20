@@ -14,8 +14,6 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
@@ -29,7 +27,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * 提供统一的网络包注册和发送功能。
  * </p>
  */
-@EventBusSubscriber(modid = OELib.MODID)
 public class NetworkManager implements INetworkManager {
 
     private static final String PROTOCOL_VERSION = "1";
@@ -43,7 +40,6 @@ public class NetworkManager implements INetworkManager {
      * 此方法应该在模组初始化时调用。
      * </p>
      */
-    @SubscribeEvent
     public static void initialize(RegisterPayloadHandlersEvent event) {
         registrar = event.registrar(OELib.MODID).versioned(PROTOCOL_VERSION);
 

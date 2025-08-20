@@ -4,9 +4,11 @@ import com.mafuyu404.oelib.OELib;
 import com.mafuyu404.oelib.api.data.DataDriven;
 import com.mafuyu404.oelib.neoforge.data.mvel.ExpressionEngine;
 import com.mafuyu404.oelib.neoforge.data.mvel.FunctionUsageAnalyzer;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.AddReloadListenerEvent;
+import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
+import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -109,7 +111,7 @@ public class DataRegistry {
     }
 
     @SubscribeEvent
-    public static void onAddReloadListener(AddReloadListenerEvent event) {
+    public static void onAddServerReloadListener(AddServerReloadListenersEvent event) {
         // 按优先级排序注册数据管理器
         List<Class<?>> sortedTypes = new ArrayList<>(registeredTypes);
         sortedTypes.sort(Comparator.comparingInt(clazz -> clazz.getAnnotation(DataDriven.class).priority()));
@@ -117,8 +119,27 @@ public class DataRegistry {
         for (Class<?> dataClass : sortedTypes) {
             DataManager<?> manager = DataManager.get(dataClass);
             if (manager != null) {
-                event.addListener(manager);
-                OELib.LOGGER.debug("Added reload listener for: {}", dataClass.getSimpleName());
+                ResourceLocation key = ResourceLocation.fromNamespaceAndPath(OELib.MODID,
+                        "data_manager_" + dataClass.getSimpleName().toLowerCase());
+                event.addListener(key, manager);
+                OELib.LOGGER.debug("Added server reload listener for: {}", dataClass.getSimpleName());
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public static void onAddClientReloadListener(AddClientReloadListenersEvent event) {
+        // 按优先级排序注册数据管理器
+        List<Class<?>> sortedTypes = new ArrayList<>(registeredTypes);
+        sortedTypes.sort(Comparator.comparingInt(clazz -> clazz.getAnnotation(DataDriven.class).priority()));
+
+        for (Class<?> dataClass : sortedTypes) {
+            DataManager<?> manager = DataManager.get(dataClass);
+            if (manager != null) {
+                ResourceLocation key = ResourceLocation.fromNamespaceAndPath(OELib.MODID,
+                        "data_manager_" + dataClass.getSimpleName().toLowerCase());
+                event.addListener(key, manager);
+                OELib.LOGGER.debug("Added client reload listener for: {}", dataClass.getSimpleName());
             }
         }
     }
