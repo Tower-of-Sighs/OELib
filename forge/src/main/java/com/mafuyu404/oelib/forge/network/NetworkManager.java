@@ -10,6 +10,7 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
@@ -30,9 +31,21 @@ public class NetworkManager implements INetworkManager {
 
     private static final String PROTOCOL_VERSION = "1";
     private static final Map<Class<?>, PacketInfo<?>> registeredPackets = new ConcurrentHashMap<>();
-    private static SimpleChannel channel;
-    private static int nextPacketId = 0;
+    private static final Map<String, ChannelContext> channels = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, String> packetOwnerMod = new ConcurrentHashMap<>();
     private static NetworkManager instance;
+
+    // 每个 mod 的通道上下文
+    private static final class ChannelContext {
+        final SimpleChannel channel;
+        int nextPacketId = 0;
+        final Map<Class<?>, PacketInfo<?>> packets = new ConcurrentHashMap<>();
+
+        ChannelContext(SimpleChannel channel) {
+            this.channel = channel;
+        }
+    }
+
 
     /**
      * 初始化网络管理器。
@@ -41,20 +54,51 @@ public class NetworkManager implements INetworkManager {
      * </p>
      */
     public static void initialize() {
-        channel = NetworkRegistry.newSimpleChannel(
-                new ResourceLocation(OELib.MODID, "main"),
-                () -> PROTOCOL_VERSION,
-                PROTOCOL_VERSION::equals,
-                PROTOCOL_VERSION::equals
-        );
+        // 确保创建 OELib 的默认 channel
+        ensureChannel(OELib.MODID);
 
         instance = new NetworkManager();
         com.mafuyu404.oelib.api.net.NetworkManager.setInstance(instance);
 
-        // 注册内置的数据同步包
+        // 注册内置的数据同步包到 OELib 默认通道
         registerBuiltinPackets();
 
         OELib.LOGGER.info("Network manager initialized");
+    }
+
+    // 创建或获取指定 modid 的 channel，并在首次创建时注册内置分片包
+    private static ChannelContext ensureChannel(String modid) {
+        return channels.computeIfAbsent(modid, id -> {
+            SimpleChannel ch = NetworkRegistry.newSimpleChannel(
+                    new ResourceLocation(id, "main"),
+                    () -> PROTOCOL_VERSION,
+                    PROTOCOL_VERSION::equals,
+                    PROTOCOL_VERSION::equals
+            );
+            ChannelContext ctx = new ChannelContext(ch);
+
+            // 确保每个通道都具备分片能力
+            // 注意：这里不走外部排序，直接在该通道内先注册 DataSyncChunkPacket
+            internalRegisterPacket(ctx, id, DataSyncChunkPacket.class);
+
+            OELib.LOGGER.info("Created SimpleChannel for mod {}: {}", id, new ResourceLocation(id, "main"));
+            return ctx;
+        });
+    }
+
+    // 获取当前调用方的 modid，若不可用则回退到 OELib.MODID
+    private static String currentModIdOrDefault() {
+        try {
+            var container = ModLoadingContext.get().getActiveContainer();
+            if (container != null) {
+                String id = container.getModId();
+                if (id != null && !id.isBlank()) {
+                    return id;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return OELib.MODID;
     }
 
     @Override
@@ -73,8 +117,12 @@ public class NetworkManager implements INetworkManager {
             return Integer.compare(priorityA, priorityB);
         });
 
+        // 自动根据当前 active container 分配到对应的通道
+        String modid = currentModIdOrDefault();
+        ChannelContext ctx = ensureChannel(modid);
+
         for (Class<? extends INetworkPacket<?>> packetClass : sortedClasses) {
-            registerPacketUnchecked(packetClass);
+            registerPacketUnchecked(ctx, modid, packetClass);
         }
     }
 
@@ -83,9 +131,9 @@ public class NetworkManager implements INetworkManager {
      *
      * @param packetClass 网络包类
      */
-    @SuppressWarnings("unchecked")
-    private static void registerPacketUnchecked(Class<? extends INetworkPacket<?>> packetClass) {
-        registerPacket((Class<? extends INetworkPacket>) packetClass);
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void registerPacketUnchecked(ChannelContext ctx, String modid, Class<? extends INetworkPacket<?>> packetClass) {
+        internalRegisterPacket(ctx, modid, (Class<? extends INetworkPacket>) packetClass);
     }
 
     /**
@@ -94,14 +142,20 @@ public class NetworkManager implements INetworkManager {
      * @param packetClass 网络包类
      * @param <T>         网络包类型
      */
-    @SuppressWarnings("unchecked")
     public static <T extends INetworkPacket<T>> void registerPacket(Class<T> packetClass) {
+        ChannelContext ctx = ensureChannel(OELib.MODID);
+        internalRegisterPacket(ctx, OELib.MODID, packetClass);
+    }
+
+    // 在指定 ctx/modid 的通道里注册
+    @SuppressWarnings("unchecked")
+    private static <T extends INetworkPacket<T>> void internalRegisterPacket(ChannelContext ctx, String modid, Class<T> packetClass) {
         if (!packetClass.isAnnotationPresent(NetworkPacket.class)) {
             throw new IllegalArgumentException("Class " + packetClass.getSimpleName() + " must be annotated with @NetworkPacket");
         }
 
-        if (registeredPackets.containsKey(packetClass)) {
-            OELib.LOGGER.warn("Packet {} is already registered, skipping", packetClass.getSimpleName());
+        if (ctx.packets.containsKey(packetClass)) {
+            OELib.LOGGER.warn("Packet {} is already registered for mod {}, skipping", packetClass.getSimpleName(), modid);
             return;
         }
 
@@ -119,7 +173,9 @@ public class NetworkManager implements INetworkManager {
             };
 
             PacketInfo<T> info = new PacketInfo<>(packetClass, decoder);
+            ctx.packets.put(packetClass, info);
             registeredPackets.put(packetClass, info);
+            packetOwnerMod.put(packetClass, modid);
 
             NetworkPacket annotation = packetClass.getAnnotation(NetworkPacket.class);
             Side side = annotation.side();
@@ -127,30 +183,30 @@ public class NetworkManager implements INetworkManager {
             // 根据 Side 枚举确定 NetworkDirection
             Optional<NetworkDirection> networkDirection = getNetworkDirection(side);
 
-            channel.registerMessage(
-                    nextPacketId++,
+            ctx.channel.registerMessage(
+                    ctx.nextPacketId++,
                     packetClass,
                     INetworkPacket::encode,
                     decoder,
-                    (packet, ctx) -> {
-                        ctx.get().enqueueWork(() -> {
-                            ForgeNetworkContext context = new ForgeNetworkContext(ctx.get());
+                    (packet, c) -> {
+                        c.get().enqueueWork(() -> {
+                            ForgeNetworkContext context = new ForgeNetworkContext(c.get());
                             packet.handle(context);
                         });
-                        ctx.get().setPacketHandled(true);
+                        c.get().setPacketHandled(true);
                     },
                     networkDirection
             );
 
             int chunkThreshold = annotation.chunkThreshold();
 
-            OELib.LOGGER.info("Registered network packet: {} (ID: {}, Side: {}, NetworkDirection: {}, Chunk Threshold: {} bytes)",
-                    packetClass.getSimpleName(), nextPacketId - 1, side,
+            OELib.LOGGER.info("Registered network packet: {} (mod: {}, ID: {}, Side: {}, NetworkDirection: {}, Chunk Threshold: {} bytes)",
+                    packetClass.getSimpleName(), modid, ctx.nextPacketId - 1, side,
                     networkDirection.map(Enum::name).orElse("BOTH"),
                     chunkThreshold > 0 ? chunkThreshold : "No chunking");
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to register packet " + packetClass.getSimpleName(), e);
+            throw new RuntimeException("Failed to register packet " + packetClass.getSimpleName() + " for mod " + modid, e);
         }
     }
 
@@ -168,9 +224,22 @@ public class NetworkManager implements INetworkManager {
         };
     }
 
+    // 根据包类定位对应通道；若找不到则回退到 OELib 通道并警告
+    private static SimpleChannel resolveChannelForPacket(Class<?> packetClass) {
+        String modid = packetOwnerMod.get(packetClass);
+        if (modid != null) {
+            ChannelContext ctx = channels.get(modid);
+            if (ctx != null) return ctx.channel;
+        }
+        OELib.LOGGER.warn("Packet {} has no owner channel, fallback to OELib default channel", packetClass.getSimpleName());
+        return ensureChannel(OELib.MODID).channel;
+    }
+
+
     @Override
     public <T extends INetworkPacket<T>> void sendToPlayer(T packet, ServerPlayer player) {
-        if (channel == null) {
+        SimpleChannel ch = resolveChannelForPacket(packet.getClass());
+        if (ch == null) {
             throw new IllegalStateException("Network manager not initialized");
         }
 
@@ -180,7 +249,7 @@ public class NetworkManager implements INetworkManager {
         }
 
         try {
-            channel.send(PacketDistributor.PLAYER.with(() -> player), packet);
+            ch.send(PacketDistributor.PLAYER.with(() -> player), packet);
             OELib.LOGGER.debug("Sent packet {} to player {}",
                     packet.getClass().getSimpleName(), player.getName().getString());
         } catch (Exception e) {
@@ -191,12 +260,13 @@ public class NetworkManager implements INetworkManager {
 
     @Override
     public <T extends INetworkPacket<T>> void sendToAll(T packet) {
-        if (channel == null) {
+        SimpleChannel ch = resolveChannelForPacket(packet.getClass());
+        if (ch == null) {
             throw new IllegalStateException("Network manager not initialized");
         }
 
         try {
-            channel.send(PacketDistributor.ALL.noArg(), packet);
+            ch.send(PacketDistributor.ALL.noArg(), packet);
             OELib.LOGGER.debug("Sent packet {} to all players", packet.getClass().getSimpleName());
         } catch (Exception e) {
             OELib.LOGGER.error("Failed to send packet {} to all players: {}",
@@ -206,12 +276,13 @@ public class NetworkManager implements INetworkManager {
 
     @Override
     public <T extends INetworkPacket<T>> void sendToServer(T packet) {
-        if (channel == null) {
+        SimpleChannel ch = resolveChannelForPacket(packet.getClass());
+        if (ch == null) {
             throw new IllegalStateException("Network manager not initialized");
         }
 
         try {
-            channel.sendToServer(packet);
+            ch.sendToServer(packet);
             OELib.LOGGER.debug("Sent packet {} to server", packet.getClass().getSimpleName());
         } catch (Exception e) {
             OELib.LOGGER.error("Failed to send packet {} to server: {}",
@@ -221,7 +292,8 @@ public class NetworkManager implements INetworkManager {
 
     @Override
     public <T extends INetworkPacket<T>> void sendToPlayerWithChunking(T packet, ServerPlayer player) {
-        if (channel == null) {
+        SimpleChannel ch = resolveChannelForPacket(packet.getClass());
+        if (ch == null) {
             throw new IllegalStateException("Network manager not initialized");
         }
 
@@ -232,7 +304,7 @@ public class NetworkManager implements INetworkManager {
 
         NetworkPacket annotation = packet.getClass().getAnnotation(NetworkPacket.class);
         if (annotation != null && annotation.chunkThreshold() > 0) {
-            sendWithChunking(packet, PacketDistributor.PLAYER.with(() -> player), annotation.chunkThreshold());
+            sendWithChunking(ch, packet, PacketDistributor.PLAYER.with(() -> player), annotation.chunkThreshold());
         } else {
             sendToPlayer(packet, player);
         }
@@ -240,13 +312,14 @@ public class NetworkManager implements INetworkManager {
 
     @Override
     public <T extends INetworkPacket<T>> void sendToAllWithChunking(T packet) {
-        if (channel == null) {
+        SimpleChannel ch = resolveChannelForPacket(packet.getClass());
+        if (ch == null) {
             throw new IllegalStateException("Network manager not initialized");
         }
 
         NetworkPacket annotation = packet.getClass().getAnnotation(NetworkPacket.class);
         if (annotation != null && annotation.chunkThreshold() > 0) {
-            sendWithChunking(packet, PacketDistributor.ALL.noArg(), annotation.chunkThreshold());
+            sendWithChunking(ch, packet, PacketDistributor.ALL.noArg(), annotation.chunkThreshold());
         } else {
             sendToAll(packet);
         }
@@ -255,7 +328,7 @@ public class NetworkManager implements INetworkManager {
     /**
      * 使用分片发送网络包。
      */
-    private static <T extends INetworkPacket<T>> void sendWithChunking(T packet, PacketDistributor.PacketTarget target, int chunkThreshold) {
+    private static <T extends INetworkPacket<T>> void sendWithChunking(SimpleChannel ch, T packet, PacketDistributor.PacketTarget target, int chunkThreshold) {
         try {
             // 将包编码为字节数组
             FriendlyByteBuf tempBuf = new FriendlyByteBuf(Unpooled.buffer());
@@ -266,12 +339,12 @@ public class NetworkManager implements INetworkManager {
 
             if (packetData.length <= chunkThreshold) {
                 // 不需要分片，直接发送
-                channel.send(target, packet);
+                ch.send(target, packet);
                 OELib.LOGGER.debug("Sent packet {} without chunking ({} bytes)",
                         packet.getClass().getSimpleName(), packetData.length);
             } else {
-                // 需要分片发送
-                sendChunkedPacket(packetData, packet.getClass().getName(), target, chunkThreshold);
+                // 需要分片发送（在同一 channel 上发送分片包）
+                sendChunkedPacket(ch, packetData, packet.getClass().getName(), target, chunkThreshold);
             }
         } catch (Exception e) {
             OELib.LOGGER.error("Failed to send packet {} with chunking: {}",
@@ -280,9 +353,9 @@ public class NetworkManager implements INetworkManager {
     }
 
     /**
-     * 发送分片数据包。
+     * 发送分片数据包（通过对应的 channel）。
      */
-    private static void sendChunkedPacket(byte[] data, String packetClassName, PacketDistributor.PacketTarget target, int chunkSize) {
+    private static void sendChunkedPacket(SimpleChannel ch, byte[] data, String packetClassName, PacketDistributor.PacketTarget target, int chunkSize) {
         try {
             UUID sessionId = UUID.randomUUID();
             int totalChunks = (int) Math.ceil((double) data.length / chunkSize);
@@ -300,7 +373,7 @@ public class NetworkManager implements INetworkManager {
 
                 DataSyncChunkPacket chunk = new DataSyncChunkPacket(
                         sessionId, i, totalChunks, packetClassName, chunkData);
-                channel.send(target, chunk);
+                ch.send(target, chunk);
 
                 OELib.LOGGER.debug("Sent chunk {}/{} ({} bytes) for {} session {}",
                         i + 1, totalChunks, currentChunkSize, packetClassName, sessionId);
@@ -311,7 +384,7 @@ public class NetworkManager implements INetworkManager {
     }
 
     /**
-     * 获取已注册的网络包数量。
+     * 获取已注册的网络包数量（所有通道总计）。
      *
      * @return 已注册的网络包数量
      */
@@ -320,7 +393,7 @@ public class NetworkManager implements INetworkManager {
     }
 
     /**
-     * 获取已注册的网络包类列表。
+     * 获取已注册的网络包类列表（所有通道总计）。
      *
      * @return 已注册的网络包类列表
      */
@@ -329,19 +402,20 @@ public class NetworkManager implements INetworkManager {
     }
 
     /**
-     * 获取网络通道实例。
+     * 获取网络通道实例（OELib 默认通道）。
      * <p>
      * 此方法主要用于内部使用和高级用户。
      * </p>
      *
-     * @return 网络通道实例
+     * @return OELib 默认通道实例
      */
     public static SimpleChannel getChannel() {
-        return channel;
+        return ensureChannel(OELib.MODID).channel;
     }
 
     private static void registerBuiltinPackets() {
-        registerPacket(DataSyncChunkPacket.class);
+        // 仅在 OELib 通道注册一次；其他通道在 ensureChannel 时已自动注册
+        internalRegisterPacket(ensureChannel(OELib.MODID), OELib.MODID, DataSyncChunkPacket.class);
 
         OELib.LOGGER.info("Registered builtin data sync packets");
     }

@@ -182,12 +182,24 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         deferredData.clear();
         clearCache();
 
-        // 过滤资源：如果注解指定了modid，只处理该modid命名空间下的资源
+        // 过滤资源：支持 modids（多个命名空间）或单一 modid
         Map<ResourceLocation, JsonElement> filteredObject = new HashMap<>();
         String targetModid = annotation.modid();
+        String[] targetModids = annotation.modids();
 
-        if (!targetModid.isEmpty()) {
-            // 只处理指定modid命名空间下的资源
+        if (targetModids != null && targetModids.length > 0) {
+            Set<String> allow = new HashSet<>();
+            for (String s : targetModids) {
+                if (s != null && !s.isBlank()) allow.add(s);
+            }
+            for (Map.Entry<ResourceLocation, JsonElement> entry : object.entrySet()) {
+                if (allow.contains(entry.getKey().getNamespace())) {
+                    filteredObject.put(entry.getKey(), entry.getValue());
+                }
+            }
+            OELib.LOGGER.debug("Filtered {} resources for modids {} from {} total resources",
+                    filteredObject.size(), allow, object.size());
+        } else if (!targetModid.isEmpty()) {
             for (Map.Entry<ResourceLocation, JsonElement> entry : object.entrySet()) {
                 if (targetModid.equals(entry.getKey().getNamespace())) {
                     filteredObject.put(entry.getKey(), entry.getValue());
@@ -196,7 +208,6 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
             OELib.LOGGER.debug("Filtered {} resources for modid '{}' from {} total resources",
                     filteredObject.size(), targetModid, object.size());
         } else {
-            // 如果没有指定modid，处理所有资源
             filteredObject = object;
         }
 
