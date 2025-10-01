@@ -47,17 +47,6 @@ public @interface DataDriven {
     String modid() default "";
 
     /**
-     * 指定多个命名空间（modid）。
-     * <p>
-     * 如果不为空，数据管理器将仅处理这些命名空间下的资源；
-     * 如果为空且 {@link #modid()} 也为空，则处理所有命名空间。
-     * </p>
-     *
-     * @return 命名空间列表
-     */
-    String[] modids() default {};
-
-    /**
      * 数据包文件夹名称。
      * <p>
      * 数据文件将从 {@code data/<modid>/<folder>/} 目录加载。

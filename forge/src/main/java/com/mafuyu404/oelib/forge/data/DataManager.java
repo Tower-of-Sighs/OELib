@@ -26,6 +26,7 @@ import net.minecraftforge.server.ServerLifecycleHooks;
 import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * 通用数据管理器。
@@ -42,6 +43,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
     private static final Gson GSON = new GsonBuilder().setLenient().create();
     private static final Map<Class<?>, DataManager<?>> managers = new ConcurrentHashMap<>();
     private static boolean serverStarted = false;
+    private static final Map<Class<?>, Set<String>> runtimeRegisteredNamespaces = new ConcurrentHashMap<>();
     private final Class<T> dataClass;
     private final DataDriven annotation;
     private final Codec<T> codec;
@@ -72,6 +74,15 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         }
 
         return (DataManager<T>) managers.computeIfAbsent(dataClass, DataManager::new);
+    }
+
+    /**
+     * 运行时注册命名空间（允许附属 mod 在父 mod 数据结构下增加自己的 namespace）
+     */
+    public static <T> void registerNamespace(Class<T> dataClass, String namespace) {
+        runtimeRegisteredNamespaces
+                .computeIfAbsent(dataClass, k -> ConcurrentHashMap.newKeySet())
+                .add(namespace);
     }
 
     /**
@@ -182,36 +193,17 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         deferredData.clear();
         clearCache();
 
-        // 过滤资源：支持 modids（多个命名空间）或单一 modid
-        Map<ResourceLocation, JsonElement> filteredObject = new HashMap<>();
-        String targetModid = annotation.modid();
-        String[] targetModids = annotation.modids();
+        Set<String> allowNamespaces = new HashSet<>();
+        if (!annotation.modid().isEmpty()) allowNamespaces.add(annotation.modid());
+        Set<String> runtimeSet = runtimeRegisteredNamespaces.getOrDefault(dataClass, Collections.emptySet());
+        allowNamespaces.addAll(runtimeSet);
 
-        if (targetModids != null && targetModids.length > 0) {
-            Set<String> allow = new HashSet<>();
-            for (String s : targetModids) {
-                if (s != null && !s.isBlank()) allow.add(s);
-            }
-            for (Map.Entry<ResourceLocation, JsonElement> entry : object.entrySet()) {
-                if (allow.contains(entry.getKey().getNamespace())) {
-                    filteredObject.put(entry.getKey(), entry.getValue());
-                }
-            }
-            OELib.LOGGER.debug("Filtered {} resources for modids {} from {} total resources",
-                    filteredObject.size(), allow, object.size());
-        } else if (!targetModid.isEmpty()) {
-            for (Map.Entry<ResourceLocation, JsonElement> entry : object.entrySet()) {
-                if (targetModid.equals(entry.getKey().getNamespace())) {
-                    filteredObject.put(entry.getKey(), entry.getValue());
-                }
-            }
-            OELib.LOGGER.debug("Filtered {} resources for modid '{}' from {} total resources",
-                    filteredObject.size(), targetModid, object.size());
-        } else {
-            filteredObject = object;
-        }
+        Map<ResourceLocation, JsonElement> filteredObject = object.entrySet().stream()
+                .filter(entry -> allowNamespaces.isEmpty() || allowNamespaces.contains(entry.getKey().getNamespace()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-        OELib.LOGGER.info("Loading {} data from {} files", dataClass.getSimpleName(), filteredObject.size());
+        OELib.LOGGER.info("Loading {} data from {} files (namespaces: {})",
+                dataClass.getSimpleName(), filteredObject.size(), allowNamespaces);
 
         int validCount = 0;
         int deferredCount = 0;
@@ -223,10 +215,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
 
             try {
                 if (annotation.supportArray() && json.isJsonArray()) {
-                    // 处理数组格式
                     var jsonArray = json.getAsJsonArray();
-                    OELib.LOGGER.debug("Processing array with {} elements from {}", jsonArray.size(), location);
-
                     for (int i = 0; i < jsonArray.size(); i++) {
                         JsonElement element = jsonArray.get(i);
                         ResourceLocation elementLocation = new ResourceLocation(
@@ -237,65 +226,38 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
                         var result = codec.parse(JsonOps.INSTANCE, element);
                         if (result.result().isPresent()) {
                             T data = result.result().get();
-
-                            // 验证数据
                             var validationResult = validator.validate(data, elementLocation);
                             if (validationResult.valid()) {
                                 if (validationResult.deferrable()) {
-                                    // 延迟验证的数据
                                     deferredData.put(elementLocation, data);
                                     deferredCount++;
-                                    OELib.LOGGER.debug("Deferred {} from array[{}]: {} ({})",
-                                            dataClass.getSimpleName(), i, elementLocation, validationResult.message());
                                 } else {
-                                    // 正常验证通过的数据
                                     loadedData.put(elementLocation, data);
-
-                                    // 构建缓存
-                                    if (annotation.enableCache()) {
-                                        buildCache(data);
-                                    }
-
+                                    if (annotation.enableCache()) buildCache(data);
                                     validCount++;
-                                    OELib.LOGGER.debug("Loaded {} from array[{}]: {}", dataClass.getSimpleName(), i, elementLocation);
                                 }
                             } else {
                                 invalidCount++;
-                                OELib.LOGGER.warn("Invalid {} data in array[{}] of {}: {}",
-                                        dataClass.getSimpleName(), i, location, validationResult.message());
+                                OELib.LOGGER.warn("Invalid {} data in array[{}] of {}: {}", dataClass.getSimpleName(), i, location, validationResult.message());
                             }
                         } else {
                             invalidCount++;
-                            OELib.LOGGER.error("Failed to parse {} data from array[{}] of {}: {}",
-                                    dataClass.getSimpleName(), i, location, result.error().orElse(null));
+                            OELib.LOGGER.error("Failed to parse {} data from array[{}] of {}: {}", dataClass.getSimpleName(), i, location, result.error().orElse(null));
                         }
                     }
                 } else {
-                    // 处理单个对象格式
                     var result = codec.parse(JsonOps.INSTANCE, json);
                     if (result.result().isPresent()) {
                         T data = result.result().get();
-
-                        // 验证数据
                         var validationResult = validator.validate(data, location);
                         if (validationResult.valid()) {
                             if (validationResult.deferrable()) {
-                                // 延迟验证的数据
                                 deferredData.put(location, data);
                                 deferredCount++;
-                                OELib.LOGGER.debug("Deferred {}: {} ({})",
-                                        dataClass.getSimpleName(), location, validationResult.message());
                             } else {
-                                // 正常验证通过的数据
                                 loadedData.put(location, data);
-
-                                // 构建缓存
-                                if (annotation.enableCache()) {
-                                    buildCache(data);
-                                }
-
+                                if (annotation.enableCache()) buildCache(data);
                                 validCount++;
-                                OELib.LOGGER.debug("Loaded {}: {}", dataClass.getSimpleName(), location);
                             }
                         } else {
                             invalidCount++;

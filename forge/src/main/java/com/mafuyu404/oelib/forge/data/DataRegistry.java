@@ -43,6 +43,26 @@ public class DataRegistry {
     }
 
     /**
+     * 注册数据驱动类型并附加运行时命名空间。
+     *
+     * @param dataClass 数据类型
+     * @param namespaces 要附加的命名空间
+     * @param <T> 数据类型泛型
+     */
+    public static <T> void registerWithNamespaces(Class<T> dataClass, String... namespaces) {
+        // 先注册数据类型
+        register(dataClass);
+
+        // 注册运行时命名空间
+        for (String ns : namespaces) {
+            if (ns != null && !ns.isBlank()) {
+                DataManager.registerNamespace(dataClass, ns);
+                OELib.LOGGER.debug("Registered runtime namespace '{}' for data type {}", ns, dataClass.getSimpleName());
+            }
+        }
+    }
+
+    /**
      * 注册数据表达式提取器。
      *
      * @param dataClass 数据类型

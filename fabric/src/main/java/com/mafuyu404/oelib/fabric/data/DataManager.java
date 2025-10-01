@@ -24,6 +24,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.stream.Collectors;
 
 /**
  * 通用数据管理器。
@@ -39,8 +40,8 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
     private static final Gson GSON = new GsonBuilder().setLenient().create();
     private static final Map<Class<?>, DataManager<?>> managers = new ConcurrentHashMap<>();
     private static boolean serverStarted = false;
+    private static final Map<Class<?>, Set<String>> runtimeRegisteredNamespaces = new ConcurrentHashMap<>();
     private static MinecraftServer currentServer = null;
-
     private final Class<T> dataClass;
     private final DataDriven annotation;
     private final Codec<T> codec;
@@ -97,6 +98,15 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
     }
 
     /**
+     * 运行时注册命名空间（允许附属 mod 在父 mod 数据结构下增加自己的 namespace）
+     */
+    public static <T> void registerNamespace(Class<T> dataClass, String namespace) {
+        runtimeRegisteredNamespaces
+                .computeIfAbsent(dataClass, k -> ConcurrentHashMap.newKeySet())
+                .add(namespace);
+    }
+
+    /**
      * 获取数据管理器实例。
      *
      * @param dataClass 数据类型
@@ -145,40 +155,17 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
             deferredData.clear();
             clearCache();
 
-            // 过滤资源：如果注解指定了modid，只处理该modid命名空间下的资源
-            Map<ResourceLocation, JsonElement> filteredObject = new HashMap<>();
-            String targetModid = annotation.modid();
-            String[] targetModids = annotation.modids();
+            Set<String> allowNamespaces = new HashSet<>();
+            if (!annotation.modid().isEmpty()) allowNamespaces.add(annotation.modid());
+            Set<String> runtimeSet = runtimeRegisteredNamespaces.getOrDefault(dataClass, Collections.emptySet());
+            allowNamespaces.addAll(runtimeSet);
 
-            if (targetModids != null && targetModids.length > 0) {
-                Set<String> allow = new HashSet<>();
-                for (String s : targetModids) {
-                    if (s != null && !s.isBlank())
-                        allow.add(s);
-                }
-                // 只处理指定modid命名空间下的资源
-                for (Map.Entry<ResourceLocation, JsonElement> entry : data.entrySet()) {
-                    if (allow.contains(entry.getKey().getNamespace())) {
-                        filteredObject.put(entry.getKey(), entry.getValue());
-                    }
-                }
-                OELib.LOGGER.debug("Filtered {} resources for modids {} from {} total resources",
-                        filteredObject.size(), allow, data.size());
-            } else if (!targetModid.isEmpty()) {
-                for (Map.Entry<ResourceLocation, JsonElement> entry : data.entrySet()) {
-                    if (targetModid.equals(entry.getKey().getNamespace())) {
-                        filteredObject.put(entry.getKey(), entry.getValue());
-                        OELib.LOGGER.debug("Filtered {} resources for modid '{}' from {} total resources",
-                                filteredObject.size(), targetModid, data.size());
-                    }
-                }
-            } else {
-                // 如果没有指定modid，处理所有资源
-                filteredObject = data;
-            }
+            Map<ResourceLocation, JsonElement> filteredObject = data.entrySet().stream()
+                    .filter(entry -> allowNamespaces.isEmpty() || allowNamespaces.contains(entry.getKey().getNamespace()))
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-
-            OELib.LOGGER.info("Loading {} data from {} files", dataClass.getSimpleName(), filteredObject.size());
+            OELib.LOGGER.info("Loading {} data from {} files (namespaces: {})",
+                    dataClass.getSimpleName(), filteredObject.size(), allowNamespaces);
 
             int validCount = 0;
             int deferredCount = 0;
