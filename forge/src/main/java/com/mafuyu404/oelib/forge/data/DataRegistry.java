@@ -2,6 +2,7 @@ package com.mafuyu404.oelib.forge.data;
 
 import com.mafuyu404.oelib.OELib;
 import com.mafuyu404.oelib.api.data.DataDriven;
+import com.mafuyu404.oelib.api.data.DataValidator;
 import com.mafuyu404.oelib.forge.data.mvel.ExpressionEngine;
 import com.mafuyu404.oelib.forge.data.mvel.FunctionUsageAnalyzer;
 import net.minecraftforge.event.AddReloadListenerEvent;
@@ -60,6 +61,15 @@ public class DataRegistry {
                 OELib.LOGGER.debug("Registered runtime namespace '{}' for data type {}", ns, dataClass.getSimpleName());
             }
         }
+    }
+    
+    /**
+     * 为数据类型注册命名空间验证器。
+     * 子模组可以在各自初始化阶段调用，实现解耦。
+     */
+    public static <T> void registerNamespaceValidator(Class<T> dataClass, String namespace, Class<? extends DataValidator<?>> validatorClass) {
+        DataManager.registerNamespaceValidator(dataClass, namespace, validatorClass);
+        OELib.LOGGER.debug("Registered namespace validator '{}' -> {} for {}", namespace, validatorClass.getSimpleName(), dataClass.getSimpleName());
     }
 
     /**

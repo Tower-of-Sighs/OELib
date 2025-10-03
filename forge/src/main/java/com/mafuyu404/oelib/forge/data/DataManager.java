@@ -47,17 +47,51 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
     private final Class<T> dataClass;
     private final DataDriven annotation;
     private final Codec<T> codec;
-    private final DataValidator<T> validator;
     private final Map<ResourceLocation, T> loadedData = new ConcurrentHashMap<>();
     private final Map<ResourceLocation, T> deferredData = new ConcurrentHashMap<>();
     private final Map<String, Set<T>> cache = new ConcurrentHashMap<>();
+    private final Map<String, Class<? extends DataValidator<?>>> namespaceValidatorClasses = new ConcurrentHashMap<>();
+    private final Map<String, DataValidator<T>> namespaceValidators = new ConcurrentHashMap<>();
+    private final DataValidator<T> defaultValidator;
 
     private DataManager(Class<T> dataClass) {
         super(GSON, getFolder(dataClass));
         this.dataClass = dataClass;
         this.annotation = dataClass.getAnnotation(DataDriven.class);
         this.codec = getCodec(dataClass);
-        this.validator = createValidator(annotation.validator());
+        this.defaultValidator = createValidator(annotation.validator());
+
+        // 注解声明的 namespace 绑定
+        for (DataDriven.ValidatorBinding binding : annotation.namespaceValidators()) {
+            if (binding != null && binding.namespace() != null && !binding.namespace().isBlank() && binding.validator() != null) {
+                namespaceValidatorClasses.put(binding.namespace(), binding.validator());
+            }
+        }
+    }
+
+    /**
+     * 运行时注册命名空间验证器（解耦合子模组引用）。
+     */
+    public static <T> void registerNamespaceValidator(Class<T> dataClass, String namespace, Class<? extends DataValidator<?>> validatorClass) {
+        DataManager<T> mgr = get(dataClass);
+        if (mgr != null && namespace != null && !namespace.isBlank() && validatorClass != null) {
+            mgr.namespaceValidatorClasses.put(namespace, validatorClass);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private DataValidator<T> getValidatorForNamespace(String namespace) {
+        if (namespace == null) return defaultValidator;
+        return namespaceValidators.computeIfAbsent(namespace, ns -> {
+            Class<? extends DataValidator<?>> cls = namespaceValidatorClasses.get(ns);
+            if (cls == null) return defaultValidator;
+            try {
+                return (DataValidator<T>) cls.getDeclaredConstructor().newInstance();
+            } catch (Exception e) {
+                OELib.LOGGER.warn("Failed to instantiate validator for namespace '{}', fallback to default", ns, e);
+                return defaultValidator;
+            }
+        });
     }
 
     /**
@@ -226,9 +260,10 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
                         var result = codec.parse(JsonOps.INSTANCE, element);
                         if (result.result().isPresent()) {
                             T data = result.result().get();
-                            var validationResult = validator.validate(data, elementLocation);
-                            if (validationResult.valid()) {
-                                if (validationResult.deferrable()) {
+                            var v = getValidatorForNamespace(location.getNamespace());
+                            var vr = v.validate(data, elementLocation);
+                            if (vr.valid()) {
+                                if (vr.deferrable()) {
                                     deferredData.put(elementLocation, data);
                                     deferredCount++;
                                 } else {
@@ -238,7 +273,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
                                 }
                             } else {
                                 invalidCount++;
-                                OELib.LOGGER.warn("Invalid {} data in array[{}] of {}: {}", dataClass.getSimpleName(), i, location, validationResult.message());
+                                OELib.LOGGER.warn("Invalid {} data in array[{}] of {}: {}", dataClass.getSimpleName(), i, location, vr.message());
                             }
                         } else {
                             invalidCount++;
@@ -249,9 +284,10 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
                     var result = codec.parse(JsonOps.INSTANCE, json);
                     if (result.result().isPresent()) {
                         T data = result.result().get();
-                        var validationResult = validator.validate(data, location);
-                        if (validationResult.valid()) {
-                            if (validationResult.deferrable()) {
+                        var v = getValidatorForNamespace(location.getNamespace());
+                        var vr = v.validate(data, location);
+                        if (vr.valid()) {
+                            if (vr.deferrable()) {
                                 deferredData.put(location, data);
                                 deferredCount++;
                             } else {
@@ -261,7 +297,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
                             }
                         } else {
                             invalidCount++;
-                            OELib.LOGGER.warn("Invalid {} data in {}: {}", dataClass.getSimpleName(), location, validationResult.message());
+                            OELib.LOGGER.warn("Invalid {} data in {}: {}", dataClass.getSimpleName(), location, vr.message());
                         }
                     } else {
                         invalidCount++;
