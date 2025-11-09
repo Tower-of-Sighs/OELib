@@ -8,6 +8,7 @@ import com.mafuyu404.oelib.api.data.DataDriven;
 import com.mafuyu404.oelib.api.data.DataValidator;
 import com.mafuyu404.oelib.forge.data.net.DataSyncPacket;
 import com.mafuyu404.oelib.forge.event.DataReloadEvent;
+import com.mafuyu404.oelib.util.CodecUtils;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.resources.ResourceLocation;
@@ -39,7 +40,6 @@ import java.util.stream.Collectors;
  */
 @Mod.EventBusSubscriber(modid = OELib.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class DataManager<T> extends SimpleJsonResourceReloadListener {
-
     private static final Gson GSON = new GsonBuilder().setLenient().create();
     private static final Map<Class<?>, DataManager<?>> managers = new ConcurrentHashMap<>();
     private static boolean serverStarted = false;
@@ -58,7 +58,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         super(GSON, getFolder(dataClass));
         this.dataClass = dataClass;
         this.annotation = dataClass.getAnnotation(DataDriven.class);
-        this.codec = getCodec(dataClass);
+        this.codec = CodecUtils.getCodec(dataClass);
         this.defaultValidator = createValidator(annotation.validator());
 
         // 注解声明的 namespace 绑定
@@ -77,21 +77,6 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         if (mgr != null && namespace != null && !namespace.isBlank() && validatorClass != null) {
             mgr.namespaceValidatorClasses.put(namespace, validatorClass);
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private DataValidator<T> getValidatorForNamespace(String namespace) {
-        if (namespace == null) return defaultValidator;
-        return namespaceValidators.computeIfAbsent(namespace, ns -> {
-            Class<? extends DataValidator<?>> cls = namespaceValidatorClasses.get(ns);
-            if (cls == null) return defaultValidator;
-            try {
-                return (DataValidator<T>) cls.getDeclaredConstructor().newInstance();
-            } catch (Exception e) {
-                OELib.LOGGER.warn("Failed to instantiate validator for namespace '{}', fallback to default", ns, e);
-                return defaultValidator;
-            }
-        });
     }
 
     /**
@@ -130,6 +115,12 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
     public static <T> DataManager<T> get(Class<T> dataClass) {
         return (DataManager<T>) managers.get(dataClass);
     }
+
+    private static String getFolder(Class<?> dataClass) {
+        DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
+        return annotation.folder();
+    }
+
 
     /**
      * 获取所有已加载的数据。
@@ -220,6 +211,26 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
 
         MinecraftForge.EVENT_BUS.post(new DataReloadEvent(dataClass, data.size(), 0));
     }
+
+    /**
+     * 同步数据到指定玩家。
+     *
+     * @param player 玩家
+     */
+    public void syncToPlayer(ServerPlayer player) {
+        if (annotation.syncToClient() && (!loadedData.isEmpty() || !deferredData.isEmpty())) {
+            try {
+                Map<ResourceLocation, T> allData = new HashMap<>(loadedData);
+                allData.putAll(deferredData);
+                DataSyncPacket<T> packet = new DataSyncPacket<>(dataClass, allData);
+                packet.sendTo(player);
+                OELib.LOGGER.debug("Synced {} data to player: {}", dataClass.getSimpleName(), player.getName().getString());
+            } catch (Exception e) {
+                OELib.LOGGER.error("Failed to sync {} data to player {}", dataClass.getSimpleName(), player.getName().getString(), e);
+            }
+        }
+    }
+
 
     @Override
     protected void apply(Map<ResourceLocation, JsonElement> object, ResourceManager resourceManager, ProfilerFiller profiler) {
@@ -333,6 +344,21 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         addToCache("all", data);
     }
 
+    @SuppressWarnings("unchecked")
+    private DataValidator<T> getValidatorForNamespace(String namespace) {
+        if (namespace == null) return defaultValidator;
+        return namespaceValidators.computeIfAbsent(namespace, ns -> {
+            Class<? extends DataValidator<?>> cls = namespaceValidatorClasses.get(ns);
+            if (cls == null) return defaultValidator;
+            try {
+                return (DataValidator<T>) cls.getDeclaredConstructor().newInstance();
+            } catch (Exception e) {
+                OELib.LOGGER.warn("Failed to instantiate validator for namespace '{}', fallback to default", ns, e);
+                return defaultValidator;
+            }
+        });
+    }
+
     private void syncToAllPlayers() {
         try {
             MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
@@ -348,24 +374,20 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         }
     }
 
-    /**
-     * 同步数据到指定玩家。
-     *
-     * @param player 玩家
-     */
-    public void syncToPlayer(ServerPlayer player) {
-        if (annotation.syncToClient() && (!loadedData.isEmpty() || !deferredData.isEmpty())) {
-            try {
-                Map<ResourceLocation, T> allData = new HashMap<>(loadedData);
-                allData.putAll(deferredData);
-                DataSyncPacket<T> packet = new DataSyncPacket<>(dataClass, allData);
-                packet.sendTo(player);
-                OELib.LOGGER.debug("Synced {} data to player: {}", dataClass.getSimpleName(), player.getName().getString());
-            } catch (Exception e) {
-                OELib.LOGGER.error("Failed to sync {} data to player {}", dataClass.getSimpleName(), player.getName().getString(), e);
-            }
+    @SuppressWarnings("unchecked")
+    private DataValidator<T> createValidator(Class<? extends DataValidator<?>> validatorClass) {
+        if (validatorClass == DataValidator.NoValidator.class) {
+            return (DataValidator<T>) new DataValidator.NoValidator();
+        }
+
+        try {
+            return (DataValidator<T>) validatorClass.getDeclaredConstructor().newInstance();
+        } catch (Exception e) {
+            OELib.LOGGER.warn("Failed to create validator {}, using no validator", validatorClass.getSimpleName(), e);
+            return (DataValidator<T>) new DataValidator.NoValidator();
         }
     }
+
 
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
@@ -380,37 +402,6 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
                     manager.syncToPlayer(player);
                 }
             }
-        }
-    }
-
-    private static String getFolder(Class<?> dataClass) {
-        DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
-
-        return annotation.folder();
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <T> Codec<T> getCodec(Class<T> dataClass) {
-        try {
-            Field codecField = dataClass.getDeclaredField("CODEC");
-            codecField.setAccessible(true);
-            return (Codec<T>) codecField.get(null);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to get CODEC field from " + dataClass.getSimpleName(), e);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private DataValidator<T> createValidator(Class<? extends DataValidator<?>> validatorClass) {
-        if (validatorClass == DataValidator.NoValidator.class) {
-            return (DataValidator<T>) new DataValidator.NoValidator();
-        }
-
-        try {
-            return (DataValidator<T>) validatorClass.getDeclaredConstructor().newInstance();
-        } catch (Exception e) {
-            OELib.LOGGER.warn("Failed to create validator {}, using no validator", validatorClass.getSimpleName(), e);
-            return (DataValidator<T>) new DataValidator.NoValidator();
         }
     }
 }

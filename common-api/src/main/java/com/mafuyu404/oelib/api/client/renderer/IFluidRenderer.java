@@ -1,12 +1,15 @@
 package com.mafuyu404.oelib.api.client.renderer;
 
+import com.mafuyu404.oelib.client.renderer.FluidRenderers;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 
 /**
- * 跨平台流体渲染器接口。
+ * @deprecated
+ * See {@link FluidRenderers}
  * <p>
- * 该接口将平台特定的流体渲染逻辑（Fabric/Forge）抽象为统一的 API，
+ * 流体渲染器接口。
+ * <p>
  * 可使用平铺的纹理 Sprite 将流体内容渲染到任意矩形区域内。
  * </p>
  *
@@ -77,10 +80,6 @@ public interface IFluidRenderer<T> {
      * @return 缩放后的像素高度，范围限制在 [minHeight..fullHeight] 之间
      */
     default int computeScaledHeight(long amount, long capacity, int fullHeight, int minHeight) {
-        if (capacity <= 0 || fullHeight <= 0) return 0;
-        long scaled = (amount * (long) fullHeight) / capacity;
-        if (amount > 0 && scaled < minHeight) scaled = minHeight;
-        if (scaled > fullHeight) scaled = fullHeight;
-        return (int) scaled;
+        return FluidRenderers.computeScaledHeight(amount, capacity, fullHeight, minHeight);
     }
 }

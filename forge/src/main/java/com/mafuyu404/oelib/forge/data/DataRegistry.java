@@ -1,16 +1,8 @@
 package com.mafuyu404.oelib.forge.data;
 
-import com.mafuyu404.oelib.OELib;
-import com.mafuyu404.oelib.api.data.DataDriven;
-import com.mafuyu404.oelib.api.data.DataValidator;
-import com.mafuyu404.oelib.forge.data.mvel.ExpressionEngine;
-import com.mafuyu404.oelib.forge.data.mvel.FunctionUsageAnalyzer;
-import net.minecraftforge.event.AddReloadListenerEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import com.mafuyu404.oelib.data.mvel.FunctionUsageAnalyzer;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 数据注册表。
@@ -18,13 +10,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * 负责管理所有数据驱动类型的注册和初始化。
  * </p>
  */
-@Mod.EventBusSubscriber(modid = OELib.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+/**
+ * 数据注册表。
+ * <p>
+ * 负责管理所有数据驱动类型的注册和初始化。
+ * </p>
+ */
 public class DataRegistry {
-
-    private static final Set<Class<?>> registeredTypes = ConcurrentHashMap.newKeySet();
-    private static final Map<Class<?>, FunctionUsageAnalyzer.DataExpressionExtractor<?>> extractors = new ConcurrentHashMap<>();
-    private static boolean initialized = false;
-    private static boolean expressionEngineInitialized = false;
 
     /**
      * 注册数据驱动类型。
@@ -33,15 +25,9 @@ public class DataRegistry {
      * @param <T>       数据类型泛型
      */
     public static <T> void register(Class<T> dataClass) {
-        if (!dataClass.isAnnotationPresent(DataDriven.class)) {
-            throw new IllegalArgumentException("Class " + dataClass.getSimpleName() + " must be annotated with @DataDriven");
-        }
-
-        registeredTypes.add(dataClass);
-        DataManager.register(dataClass);
-
-        OELib.LOGGER.debug("Registered data-driven type: {}", dataClass.getSimpleName());
+        com.mafuyu404.oelib.data.DataRegistry.register(dataClass);
     }
+
 
     /**
      * 注册数据驱动类型并附加运行时命名空间。
@@ -51,25 +37,7 @@ public class DataRegistry {
      * @param <T> 数据类型泛型
      */
     public static <T> void registerWithNamespaces(Class<T> dataClass, String... namespaces) {
-        // 先注册数据类型
-        register(dataClass);
-
-        // 注册运行时命名空间
-        for (String ns : namespaces) {
-            if (ns != null && !ns.isBlank()) {
-                DataManager.registerNamespace(dataClass, ns);
-                OELib.LOGGER.debug("Registered runtime namespace '{}' for data type {}", ns, dataClass.getSimpleName());
-            }
-        }
-    }
-    
-    /**
-     * 为数据类型注册命名空间验证器。
-     * 子模组可以在各自初始化阶段调用，实现解耦。
-     */
-    public static <T> void registerNamespaceValidator(Class<T> dataClass, String namespace, Class<? extends DataValidator<?>> validatorClass) {
-        DataManager.registerNamespaceValidator(dataClass, namespace, validatorClass);
-        OELib.LOGGER.debug("Registered namespace validator '{}' -> {} for {}", namespace, validatorClass.getSimpleName(), dataClass.getSimpleName());
+        com.mafuyu404.oelib.data.DataRegistry.registerWithNamespaces(dataClass, namespaces);
     }
 
     /**
@@ -80,77 +48,25 @@ public class DataRegistry {
      * @param <T>       数据类型泛型
      */
     public static <T> void registerExtractor(Class<T> dataClass, FunctionUsageAnalyzer.DataExpressionExtractor<T> extractor) {
-        extractors.put(dataClass, extractor);
-        OELib.LOGGER.debug("Registered expression extractor for: {}", dataClass.getSimpleName());
+        com.mafuyu404.oelib.data.DataRegistry.registerExtractor(dataClass, extractor);
     }
 
     /**
      * 初始化数据注册表。
      */
     public static void initialize() {
-        if (initialized) {
-            return;
-        }
-
-        initialized = true;
-        OELib.LOGGER.info("Data registry initialized with {} registered types", registeredTypes.size());
+        com.mafuyu404.oelib.data.DataRegistry.initialize();
     }
 
     /**
      * 智能初始化表达式引擎。
      * <p>
      * 在所有数据包加载完成后调用，分析所有数据包中使用的函数并进行智能注册。
+     * 按照优先级顺序处理数据类型。
      * </p>
      */
-    @SuppressWarnings("unchecked")
     public static void initializeExpressionEngine() {
-        if (expressionEngineInitialized) {
-            return;
-        }
-
-        // 添加核心必需函数
-        Set<String> allUsedFunctions = new HashSet<>(FunctionUsageAnalyzer.getCoreRequiredFunctions());
-
-        // 分析所有已注册数据类型中使用的函数
-        for (Class<?> dataClass : registeredTypes) {
-            FunctionUsageAnalyzer.DataExpressionExtractor<Object> extractor =
-                    (FunctionUsageAnalyzer.DataExpressionExtractor<Object>) extractors.get(dataClass);
-
-            if (extractor != null) {
-                DataManager<Object> manager = (DataManager<Object>) DataManager.get(dataClass);
-                if (manager != null) {
-                    Map<net.minecraft.resources.ResourceLocation, Object> data = manager.getAllData();
-                    Set<String> usedFunctions = FunctionUsageAnalyzer.analyzeUsedFunctions(data, extractor);
-                    allUsedFunctions.addAll(usedFunctions);
-
-                    OELib.LOGGER.debug("Found {} functions in {}: {}",
-                            usedFunctions.size(), dataClass.getSimpleName(), usedFunctions);
-                }
-            }
-        }
-
-        OELib.LOGGER.info("Smart registration: found {} total used functions: {}",
-                allUsedFunctions.size(), allUsedFunctions);
-
-        // 使用智能注册初始化表达式引擎
-        ExpressionEngine.initialize(allUsedFunctions);
-
-        expressionEngineInitialized = true;
-    }
-
-    @SubscribeEvent
-    public static void onAddReloadListener(AddReloadListenerEvent event) {
-        // 按优先级排序注册数据管理器
-        List<Class<?>> sortedTypes = new ArrayList<>(registeredTypes);
-        sortedTypes.sort(Comparator.comparingInt(clazz -> clazz.getAnnotation(DataDriven.class).priority()));
-
-        for (Class<?> dataClass : sortedTypes) {
-            DataManager<?> manager = DataManager.get(dataClass);
-            if (manager != null) {
-                event.addListener(manager);
-                OELib.LOGGER.debug("Added reload listener for: {}", dataClass.getSimpleName());
-            }
-        }
+        com.mafuyu404.oelib.data.DataRegistry.initializeExpressionEngine();
     }
 
     /**
@@ -159,7 +75,26 @@ public class DataRegistry {
      * @return 已注册的数据类型集合
      */
     public static Set<Class<?>> getRegisteredTypes() {
-        return Set.copyOf(registeredTypes);
+        return com.mafuyu404.oelib.data.DataRegistry.getRegisteredTypes();
+    }
+
+    /**
+     * 获取按优先级排序的数据类型列表。
+     *
+     * @return 按优先级排序的数据类型列表（优先级数值越小越靠前）
+     */
+    public static List<Class<?>> getRegisteredTypesByPriority() {
+        return com.mafuyu404.oelib.data.DataRegistry.getRegisteredTypesByPriority();
+    }
+
+    /**
+     * 获取数据类型的优先级。
+     *
+     * @param dataClass 数据类型
+     * @return 优先级，如果未注册则返回 null
+     */
+    public static Integer getPriority(Class<?> dataClass) {
+        return com.mafuyu404.oelib.data.DataRegistry.getPriority(dataClass);
     }
 
     /**
@@ -169,7 +104,7 @@ public class DataRegistry {
      * @return 是否已注册
      */
     public static boolean isRegistered(Class<?> dataClass) {
-        return registeredTypes.contains(dataClass);
+        return com.mafuyu404.oelib.data.DataRegistry.isRegistered(dataClass);
     }
 
     /**
@@ -178,14 +113,13 @@ public class DataRegistry {
      * @return 是否已初始化
      */
     public static boolean isExpressionEngineInitialized() {
-        return expressionEngineInitialized;
+        return com.mafuyu404.oelib.data.DataRegistry.isExpressionEngineInitialized();
     }
 
     /**
      * 重置表达式引擎初始化状态（用于热重载）。
      */
     public static void resetExpressionEngine() {
-        expressionEngineInitialized = false;
-        ExpressionEngine.clear();
+        com.mafuyu404.oelib.data.DataRegistry.resetExpressionEngine();
     }
 }

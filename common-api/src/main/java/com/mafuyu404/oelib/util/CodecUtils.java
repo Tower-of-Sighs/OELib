@@ -12,6 +12,7 @@ import java.lang.reflect.Field;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
  * 编解码工具类。
@@ -24,58 +25,52 @@ public class CodecUtils {
     private static final Map<Class<?>, Codec<?>> codecCache = new ConcurrentHashMap<>();
 
     public static <T> Optional<String> encodeToJson(Class<T> dataClass, Map<ResourceLocation, T> data) {
-        try {
+        return executeWithExceptionHandling(dataClass, "encoding", () -> {
             Codec<Map<ResourceLocation, T>> mapCodec = createMapCodec(dataClass);
             DataResult<JsonElement> result = mapCodec.encodeStart(JsonOps.INSTANCE, data);
 
-            if (result.error().isPresent()) {
-                var error = result.error().get();
-                OELib.LOGGER.error("Failed to encode {} data: {}", dataClass.getSimpleName(), error.message());
-                return Optional.empty();
-            }
-
-            return result.result().map(JsonElement::toString);
-        } catch (Exception e) {
-            OELib.LOGGER.error("Exception during {} encoding: {}", dataClass.getSimpleName(), e.getMessage(), e);
-            return Optional.empty();
-        }
+            return handleDataResult(dataClass, "encode", result)
+                    .map(JsonElement::toString);
+        });
     }
 
     public static <T> Optional<Map<ResourceLocation, T>> decodeFromJson(Class<T> dataClass, String jsonData) {
-        try {
+        return executeWithExceptionHandling(dataClass, "decoding", () -> {
             JsonElement jsonElement = JsonParser.parseString(jsonData);
             Codec<Map<ResourceLocation, T>> mapCodec = createMapCodec(dataClass);
             DataResult<Map<ResourceLocation, T>> result = mapCodec.parse(JsonOps.INSTANCE, jsonElement);
 
-            if (result.error().isPresent()) {
-                var error = result.error().get();
-                OELib.LOGGER.error("Failed to decode {} data: {}", dataClass.getSimpleName(), error.message());
-                return Optional.empty();
-            }
+            return handleDataResult(dataClass, "decode", result);
+        });
+    }
 
-            return result.result();
+    public static <T> Optional<T> decodeSingle(Class<T> dataClass, JsonElement jsonElement) {
+        return executeWithExceptionHandling(dataClass, "decoding", () -> {
+            Codec<T> codec = getCodec(dataClass);
+            DataResult<T> result = codec.parse(JsonOps.INSTANCE, jsonElement);
+
+            return handleDataResult(dataClass, "decode", result);
+        });
+    }
+
+    private static <T, R> Optional<R> executeWithExceptionHandling(Class<T> dataClass, String operationType, Supplier<Optional<R>> action) {
+        try {
+            return action.get();
         } catch (Exception e) {
-            OELib.LOGGER.error("Exception during {} decoding: {}", dataClass.getSimpleName(), e.getMessage(), e);
+            OELib.LOGGER.error("Exception during {} {} for {}: {}",
+                    dataClass.getSimpleName(), operationType, e.getMessage(), e);
             return Optional.empty();
         }
     }
 
-    public static <T> Optional<T> decodeSingle(Class<T> dataClass, JsonElement jsonElement) {
-        try {
-            Codec<T> codec = getCodec(dataClass);
-            DataResult<T> result = codec.parse(JsonOps.INSTANCE, jsonElement);
-
-            if (result.error().isPresent()) {
-                var error = result.error().get();
-                OELib.LOGGER.error("Failed to decode {} data: {}", dataClass.getSimpleName(), error.message());
-                return Optional.empty();
-            }
-
-            return result.result();
-        } catch (Exception e) {
-            OELib.LOGGER.error("Exception during {} decoding: {}", dataClass.getSimpleName(), e.getMessage(), e);
+    private static <T> Optional<T> handleDataResult(Class<?> dataClass, String operation, DataResult<T> result) {
+        if (result.error().isPresent()) {
+            var error = result.error().get();
+            OELib.LOGGER.error("Failed to {} {} data: {}",
+                    operation, dataClass.getSimpleName(), error.message());
             return Optional.empty();
         }
+        return result.result();
     }
 
     private static <T> Codec<Map<ResourceLocation, T>> createMapCodec(Class<T> dataClass) {
@@ -83,8 +78,10 @@ public class CodecUtils {
         return Codec.unboundedMap(ResourceLocation.CODEC, codec);
     }
 
+
+    @Deprecated
     @SuppressWarnings("unchecked")
-    private static <T> Codec<T> getCodec(Class<T> dataClass) {
+    public static <T> Codec<T> getCodec(Class<T> dataClass) {
         return (Codec<T>) codecCache.computeIfAbsent(dataClass, cls -> {
             try {
                 Field codecField = cls.getDeclaredField("CODEC");
@@ -95,5 +92,9 @@ public class CodecUtils {
                         ". Make sure the class has a public static final CODEC field.", e);
             }
         });
+    }
+
+    public static <T> void registerCodec(Class<T> dataClass, Codec<T> codec) {
+        codecCache.put(dataClass, codec);
     }
 }

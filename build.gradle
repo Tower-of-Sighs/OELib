@@ -34,7 +34,9 @@ subprojects {
     dependencies {
         minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
         mappings loom.officialMojangMappings()
-        modApi(include(("org.mvel:mvel2:2.5.0.Final")))
+        if (project.name != "common-api") {
+            annotationProcessor project(path: ':common-api', configuration: 'apProcessor')
+        }
     }
 
     java {
@@ -51,7 +53,6 @@ subprojects {
         it.options.release = 17
     }
 
-    // Configure Maven publishing.
     publishing {
         publications {
             mavenJava(MavenPublication) {
@@ -59,13 +60,26 @@ subprojects {
                 from components.java
             }
         }
-
-        // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
         repositories {
-            // Add repositories to publish to here.
-            // Notice: This block does NOT have the same function as the block in the top level.
-            // The repositories here will be used for publishing your artifact, not for
-            // retrieving dependencies.
+            mavenLocal()
+            maven {
+                name = "localRepo"
+                url = uri("${rootProject.buildDir}/repo")
+            }
+            def publishUrl = findProperty("publishUrl") ?: System.getenv("PUBLISH_URL")
+            if (publishUrl) {
+                maven {
+                    name = "remoteRepo"
+                    url = uri(publishUrl)
+                    credentials {
+                        username = findProperty("publishUser") ?: System.getenv("PUBLISH_USER")
+                        password = findProperty("publishPassword") ?: System.getenv("PUBLISH_PASSWORD")
+                    }
+                    authentication {
+                        basic(BasicAuthentication)
+                    }
+                }
+            }
         }
     }
 }

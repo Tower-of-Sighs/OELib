@@ -26,15 +26,22 @@ configurations {
     }
 }
 
+repositories {
+    maven {
+        name = "Terraformers"
+        url = "https://maven.terraformersmc.com/"
+    }
+}
+
 dependencies {
     modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
-
     modImplementation "net.fabricmc.fabric-api:fabric-api:$rootProject.fabric_api_version"
-
     modImplementation "dev.architectury:architectury-fabric:$rootProject.architectury_api_version"
-
+    modImplementation("com.terraformersmc:modmenu:${rootProject.modmenu_version}")
     common(project(path: ':common-api', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':common-api', configuration: 'transformProductionFabric')
+    implementation(include("org.mvel:mvel2:2.5.0.Final"))
+    annotationProcessor project(path: ':common-api', configuration: 'apProcessor')
 }
 
 processResources {
@@ -54,15 +61,18 @@ remapJar {
     input.set shadowJar.archiveFile
 }
 
-// 新增：不带 common-api 的 jar
 tasks.register("plainJar", Jar) {
     from sourceSets.main.output
-    archiveClassifier = 'dev' // 区分一下文件名，比如 xxx-dev.jar
+    archiveClassifier = 'dev'
 }
 
-// remap 后的不带 API 版本
 tasks.register("remapPlainJar", RemapJarTask) {
     dependsOn tasks.named("plainJar")
     input.set tasks.named("plainJar").get().archiveFile
-    archiveClassifier.set("dev-noshadow") // 文件名区分
+    archiveClassifier.set("dev-noshadow")
+}
+
+// 此开发环境运行时无法识别 MVEL，很神秘
+tasks.named("runClient") {
+    systemProperty "oelib.skipExpressionEngine", "true"
 }

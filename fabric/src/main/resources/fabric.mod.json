@@ -11,7 +11,7 @@
     "homepage": ""
   },
   "license": "MIT",
-  "icon": "assets/oelib/icon.png",
+  "icon": "assets/oelib/icon1.png",
   "environment": "*",
   "entrypoints": {
     "main": [
@@ -22,7 +22,8 @@
     ]
   },
   "mixins": [
-    "oelib.mixins.json"
+    "oelib.mixins.json",
+    "oelib.fabric.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.16.0",

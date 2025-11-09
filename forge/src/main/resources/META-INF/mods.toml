@@ -10,7 +10,7 @@ displayName = "OELib"
 authors = "Flechazo"
 description = "Mafuyu never like you:("
 
-logoFile = "assets/oelib/icon.png"
+logoFile = "icon3.png"
 
 [[dependencies.oelib]]
 modId = "forge"
