@@ -35,7 +35,7 @@ subprojects {
         minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
         mappings loom.officialMojangMappings()
         if (project.name != "common-api") {
-            annotationProcessor project(path: ':common-api', configuration: 'apProcessor')
+            annotationProcessor project(path: ':common-api')
         }
     }
 
@@ -53,6 +53,13 @@ subprojects {
         it.options.release = 17
     }
 
+    tasks.withType(Jar).configureEach {
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    }
+    tasks.named("sourcesJar", Jar).configure {
+        exclude("META-INF/services/**")
+    }
+
     publishing {
         publications {
             mavenJava(MavenPublication) {
@@ -66,14 +73,18 @@ subprojects {
                 name = "localRepo"
                 url = uri("${rootProject.buildDir}/repo")
             }
-            def publishUrl = findProperty("publishUrl") ?: System.getenv("PUBLISH_URL")
+
+            def publishUrl = System.getenv("SIGHS_PUBLISH_URL")
+            def publishUser = System.getenv("SIGHS_PUBLISH_USER")
+            def publishPassword = System.getenv("SIGHS_PUBLISH_PASSWORD")
+
             if (publishUrl) {
                 maven {
                     name = "remoteRepo"
                     url = uri(publishUrl)
                     credentials {
-                        username = findProperty("publishUser") ?: System.getenv("PUBLISH_USER")
-                        password = findProperty("publishPassword") ?: System.getenv("PUBLISH_PASSWORD")
+                        username = publishUser
+                        password = publishPassword
                     }
                     authentication {
                         basic(BasicAuthentication)

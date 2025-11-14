@@ -5,57 +5,16 @@ architectury {
 sourceSets {
     main {
         java {
-            exclude 'com/mafuyu404/oelib/data/mvel/processor/**'
-        }
-    }
-    ap {
-        java {
-            srcDir 'src/main/java'
-            include 'com/mafuyu404/oelib/data/mvel/processor/**'
         }
         resources {
             srcDir 'src/main/resources'
-            include 'META-INF/services/javax.annotation.processing.Processor'
         }
-        compileClasspath += sourceSets.main.output + configurations.compileClasspath
-        runtimeClasspath += sourceSets.main.output + configurations.runtimeClasspath
     }
 }
 
-tasks.register("apJar", Jar) {
-    from sourceSets.ap.output
-    archiveClassifier = 'ap'
-    dependsOn(tasks.named("apClasses"))
-}
-
-configurations {
-    ap
-    apProcessor
-}
-
-artifacts {
-    ap tasks.named("apJar")
-    apProcessor tasks.named("apJar")
-    apProcessor tasks.named("jar")
-}
 
 dependencies {
-    modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
+    modCompileOnly "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
     modImplementation "dev.architectury:architectury:$rootProject.architectury_api_version"
     implementation "org.mvel:mvel2:2.5.0.Final"
-    annotationProcessor files(configurations.apProcessor)
-}
-
-tasks.named("compileApJava") {
-    options.annotationProcessorPath = configurations.ap
-}
-
-publishing {
-    publications {
-        named("mavenJava", MavenPublication) {
-            artifact(tasks.named("apJar")) {
-                classifier = 'ap'
-            }
-        }
-    }
 }

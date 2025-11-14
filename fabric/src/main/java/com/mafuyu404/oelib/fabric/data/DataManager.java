@@ -172,6 +172,8 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
             deferredData.clear();
             clearCache();
 
+            Codec<T> currentCodec = CodecUtils.getCodec(dataClass);
+
             Set<String> allowNamespaces = new HashSet<>();
             if (!annotation.modid().isEmpty()) allowNamespaces.add(annotation.modid());
             Set<String> runtimeSet = runtimeRegisteredNamespaces.getOrDefault(dataClass, Collections.emptySet());
@@ -205,7 +207,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
                                     location.getPath() + "_" + i
                             );
 
-                            var result = codec.parse(JsonOps.INSTANCE, element);
+                            var result = currentCodec.parse(JsonOps.INSTANCE, element);
                             if (result.result().isPresent()) {
                                 T dataObj = result.result().get();
 
@@ -244,7 +246,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
                         }
                     } else {
                         // 处理单个对象格式
-                        var result = codec.parse(JsonOps.INSTANCE, json);
+                        var result = currentCodec.parse(JsonOps.INSTANCE, json);
                         if (result.result().isPresent()) {
                             T dataObj = result.result().get();
 

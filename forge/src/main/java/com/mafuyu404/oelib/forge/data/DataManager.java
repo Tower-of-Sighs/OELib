@@ -237,6 +237,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         loadedData.clear();
         deferredData.clear();
         clearCache();
+        Codec<T> currentCodec = CodecUtils.getCodec(dataClass);
 
         Set<String> allowNamespaces = new HashSet<>();
         if (!annotation.modid().isEmpty()) allowNamespaces.add(annotation.modid());
@@ -268,7 +269,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
                                 location.getPath() + "_" + i
                         );
 
-                        var result = codec.parse(JsonOps.INSTANCE, element);
+                        var result = currentCodec.parse(JsonOps.INSTANCE, element);
                         if (result.result().isPresent()) {
                             T data = result.result().get();
                             var v = getValidatorForNamespace(location.getNamespace());
@@ -292,7 +293,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
                         }
                     }
                 } else {
-                    var result = codec.parse(JsonOps.INSTANCE, json);
+                    var result = currentCodec.parse(JsonOps.INSTANCE, json);
                     if (result.result().isPresent()) {
                         T data = result.result().get();
                         var v = getValidatorForNamespace(location.getNamespace());

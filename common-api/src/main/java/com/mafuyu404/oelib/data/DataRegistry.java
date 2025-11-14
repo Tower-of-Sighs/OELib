@@ -110,11 +110,13 @@ public final class DataRegistry {
         OELib.LOGGER.info("Data registry initialized with {} registered types", registeredTypes.size());
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "ConstantConditions"})
     public static void initializeExpressionEngine() {
-        if (expressionEngineInitialized) return;
+        ExpressionEngine.clear();
+        expressionEngineInitialized = false;
 
         Set<String> allUsedFunctions = new HashSet<>(FunctionUsageAnalyzer.getCoreRequiredFunctions());
+        boolean hasAnyData = false;
 
         List<Class<?>> sortedTypes = getRegisteredTypesByPriority();
         OELib.LOGGER.debug("Processing data types in priority order: {}",
@@ -127,8 +129,10 @@ public final class DataRegistry {
                     (FunctionUsageAnalyzer.DataExpressionExtractor<Object>) extractors.get(dataClass);
 
             if (extractor != null) {
-                Map<ResourceLocation, Object> data = (Map<ResourceLocation, Object>) DataManagerBridge.getAllData(dataClass);
-                if (data != null) {
+                Map<ResourceLocation, Object> data =
+                        (Map<ResourceLocation, Object>) DataManagerBridge.getAllData(dataClass);
+                if (data != null && !data.isEmpty()) {
+                    hasAnyData = true;
                     Set<String> usedFunctions = FunctionUsageAnalyzer.analyzeUsedFunctions(data, extractor);
                     allUsedFunctions.addAll(usedFunctions);
                     OELib.LOGGER.debug("Found {} functions in {} (priority:{}): {}",
@@ -137,8 +141,17 @@ public final class DataRegistry {
             }
         }
 
+        // 数据包尚未加载，延迟初始化
+        if (!hasAnyData) {
+            OELib.LOGGER.info("No datapack data loaded yet; deferring expression engine initialization");
+            return;
+        }
+
         OELib.LOGGER.info("Smart registration: found {} total used functions: {}", allUsedFunctions.size(), allUsedFunctions);
+
+        // 定向注册，仅注册扫描到的函数；若定向结果为空，ExpressionEngine 内部会回退全量
         ExpressionEngine.initialize(allUsedFunctions);
+
         expressionEngineInitialized = true;
     }
 

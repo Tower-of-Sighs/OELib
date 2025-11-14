@@ -53,6 +53,13 @@ public final class ExpressionEngine {
             registrar.register(registry, requiredFunctions);
         }
 
+        // 如果定向注册没有获得任何函数，自动回退到完整注册
+        if (requiredFunctions != null && functionMap.isEmpty()) {
+            OELib.LOGGER.warn("No functions registered for required set {}. Falling back to full registration.", requiredFunctions);
+            initialize(null);
+            return;
+        }
+
         initialized = true;
         OELib.LOGGER.info("Expression engine initialized via generated registrars: {} registrars, {} functions",
                 registrarCount, functionMap.size());
@@ -65,14 +72,7 @@ public final class ExpressionEngine {
     public static Object evaluate(String expression, Map<String, Object> context, boolean logErrors) {
         try {
             if (!initialized) {
-                if (expression != null && expression.contains("isModLoaded")) {
-                    initialize(Set.of("isModLoaded"));
-                } else {
-                    if (logErrors) {
-                        OELib.LOGGER.warn("Expression engine not initialized, skipping expression: {}", expression);
-                    }
-                    return null;
-                }
+                initialize();
             }
             Serializable compiled = compiledExpressions.computeIfAbsent(
                     expression, expr -> MVEL.compileExpression(expr, parserContext)

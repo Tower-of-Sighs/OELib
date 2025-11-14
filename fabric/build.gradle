@@ -41,7 +41,6 @@ dependencies {
     common(project(path: ':common-api', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':common-api', configuration: 'transformProductionFabric')
     implementation(include("org.mvel:mvel2:2.5.0.Final"))
-    annotationProcessor project(path: ':common-api', configuration: 'apProcessor')
 }
 
 processResources {
