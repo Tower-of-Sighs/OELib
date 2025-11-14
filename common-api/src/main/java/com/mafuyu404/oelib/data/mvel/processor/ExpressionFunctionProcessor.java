@@ -19,10 +19,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @SupportedAnnotationTypes("com.mafuyu404.oelib.api.data.ExpressionFunction")
 @SupportedSourceVersion(SourceVersion.RELEASE_17)
@@ -39,7 +36,7 @@ public class ExpressionFunctionProcessor extends AbstractProcessor {
     }
 
     @Override
-    public boolean process(java.util.Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         Map<String, ExecutableElement> functionsByName = new HashMap<>();
         List<ExecutableElement> allMethods = new ArrayList<>();
 
@@ -87,7 +84,10 @@ public class ExpressionFunctionProcessor extends AbstractProcessor {
 
     private void generateRegistrar(Map<String, ExecutableElement> functionsByName, List<ExecutableElement> allMethods) throws IOException {
         String hash = hashSuffix(allMethods);
-        String pkg = "com.mafuyu404.oelib.data.mvel.generated";
+        ExecutableElement sample = allMethods.get(0);
+        TypeElement owner = (TypeElement) sample.getEnclosingElement();
+        PackageElement ownerPkg = processingEnv.getElementUtils().getPackageOf(owner);
+        String pkg = ownerPkg.getQualifiedName().toString() + ".oelib_mvel_gen";
         String cls = "GeneratedExpressionFunctions_" + hash;
 
         JavaFileObject file = filer.createSourceFile(pkg + "." + cls);
@@ -97,8 +97,8 @@ public class ExpressionFunctionProcessor extends AbstractProcessor {
             out.println("import com.mafuyu404.oelib.data.mvel.gen.ExpressionFunctionRegistry;");
             out.println("import com.mafuyu404.oelib.data.mvel.gen.ExpressionFunctionsRegistrar;");
             for (ExecutableElement method : functionsByName.values()) {
-                TypeElement owner = (TypeElement) method.getEnclosingElement();
-                out.println("import " + owner.getQualifiedName().toString() + ";");
+                TypeElement methodOwner = (TypeElement) method.getEnclosingElement();
+                out.println("import " + methodOwner.getQualifiedName().toString() + ";");
             }
             out.println("import java.util.Set;");
             out.println();
@@ -108,10 +108,10 @@ public class ExpressionFunctionProcessor extends AbstractProcessor {
             for (Map.Entry<String, ExecutableElement> e : functionsByName.entrySet()) {
                 String name = e.getKey();
                 ExecutableElement method = e.getValue();
-                TypeElement owner = (TypeElement) method.getEnclosingElement();
+                TypeElement methodOwner = (TypeElement) method.getEnclosingElement();
 
-                String ownerSimple = owner.getQualifiedName().toString().substring(
-                        owner.getQualifiedName().toString().lastIndexOf('.') + 1);
+                String ownerSimple = methodOwner.getQualifiedName().toString().substring(
+                        methodOwner.getQualifiedName().toString().lastIndexOf('.') + 1);
 
                 List<? extends TypeMirror> params = method.getParameters()
                         .stream().map(VariableElement::asType).toList();

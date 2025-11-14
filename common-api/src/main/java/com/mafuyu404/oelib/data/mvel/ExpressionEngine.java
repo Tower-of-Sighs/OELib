@@ -8,11 +8,7 @@ import org.mvel2.ParserContext;
 
 import java.io.Serializable;
 import java.lang.reflect.Method;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.ServiceLoader;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class ExpressionEngine {
@@ -159,7 +155,7 @@ public final class ExpressionEngine {
         return true;
     }
 
-    public static void executeActions(java.util.List<String> actions, Map<String, Object> context) {
+    public static void executeActions(List<String> actions, Map<String, Object> context) {
         if (actions == null) return;
         for (String action : actions) {
             try {
