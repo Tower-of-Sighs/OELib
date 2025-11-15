@@ -5,6 +5,7 @@ import com.mafuyu404.oelib.api.data.DataManagerBridgeSPI;
 import com.mafuyu404.oelib.api.data.DataValidator;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
 
@@ -80,5 +81,10 @@ public final class DataManagerBridgeImpl implements DataManagerBridgeSPI {
         if (manager != null) {
             manager.updateClientData(data);
         }
+    }
+
+    @Override
+    public boolean isModLoaded(String modid) {
+        return ModList.get().isLoaded(modid);
     }
 }

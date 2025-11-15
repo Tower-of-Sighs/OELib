@@ -24,7 +24,6 @@ repositories {
 
 dependencies {
     neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
-    modImplementation "dev.architectury:architectury-neoforge:$rootProject.architectury_api_version"
 
     common(project(path: ':common-api', configuration: 'namedElements')) { transitive false }
     shadowCommon (project(path: ':common-api', configuration: 'transformProductionNeoForge')) { transitive false }

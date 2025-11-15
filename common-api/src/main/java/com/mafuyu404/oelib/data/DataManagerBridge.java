@@ -75,4 +75,8 @@ public final class DataManagerBridge {
     public static <T> void updateClientData(Class<T> dataClass, Map<ResourceLocation, T> data) {
         IMPL.updateClientData(dataClass, data);
     }
+
+    public static boolean isModLoaded(String modid) {
+        return IMPL.isModLoaded(modid);
+    }
 }

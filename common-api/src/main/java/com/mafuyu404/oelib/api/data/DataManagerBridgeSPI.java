@@ -28,4 +28,6 @@ public interface DataManagerBridgeSPI {
     <T> void clearCache(Class<T> dataClass);
 
     <T> void updateClientData(Class<T> dataClass, Map<ResourceLocation, T> data);
+
+    boolean isModLoaded(String modid);
 }

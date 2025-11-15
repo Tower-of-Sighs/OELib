@@ -3,6 +3,7 @@ package com.mafuyu404.oelib.fabric.data;
 import com.mafuyu404.oelib.api.data.DataManagerBridgeSPI;
 import com.mafuyu404.oelib.api.data.DataValidator;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.PackType;
 
@@ -73,5 +74,10 @@ public final class DataManagerBridgeImpl implements DataManagerBridgeSPI {
         if (manager != null) {
             manager.updateClientData(data);
         }
+    }
+
+    @Override
+    public boolean isModLoaded(String modid) {
+        return FabricLoader.getInstance().isModLoaded(modid);
     }
 }
