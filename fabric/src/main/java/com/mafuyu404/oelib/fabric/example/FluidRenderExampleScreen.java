@@ -7,6 +7,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.material.Fluids;
 
+@SuppressWarnings("UnstableApiUsage")
 public class FluidRenderExampleScreen extends Screen {
     public FluidRenderExampleScreen() {
         super(Component.literal("OELib Fluid Render Example"));
@@ -28,10 +29,18 @@ public class FluidRenderExampleScreen extends Screen {
 
         long capacity = 1000;
         long amount = 1000;
+
+        int fluidWidth = 16;
+        int fluidHeight = 64;
+        int gap = 20;
+        int totalWidth = fluidWidth * 2 + gap;
+        int startX = left + (w - totalWidth) / 2;
+        int startY = top + (h - fluidHeight) / 2;
+
         FluidVariant water = FluidVariant.of(Fluids.WATER);
-        FluidRenderers.render(graphics, water, amount, capacity, left + 50, top + 50, 16, 16);
+        FluidRenderers.render(graphics, water, amount, capacity, startX, startY, fluidWidth, fluidHeight);
 
         FluidVariant lava = FluidVariant.of(Fluids.LAVA);
-        FluidRenderers.render(graphics, lava, amount, capacity, left + 1, top + 1, 16, 16);
+        FluidRenderers.render(graphics, lava, amount, capacity, startX + fluidWidth + gap, startY, fluidWidth, fluidHeight);
     }
 }

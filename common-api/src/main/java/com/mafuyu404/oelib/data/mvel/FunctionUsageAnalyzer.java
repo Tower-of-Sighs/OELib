@@ -1,7 +1,7 @@
 package com.mafuyu404.oelib.data.mvel;
 
 import com.mafuyu404.oelib.OELib;
-import dev.architectury.platform.Platform;
+import com.mafuyu404.oelib.data.DataManagerBridge;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.HashSet;
@@ -38,7 +38,7 @@ public final class FunctionUsageAnalyzer {
         try {
             String modId = extractModIdFromExpression(modLoadedExpression);
             if (modId != null) {
-                boolean isLoaded = Platform.isModLoaded(modId);
+                boolean isLoaded = DataManagerBridge.isModLoaded(modId);
                 OELib.LOGGER.debug("Mod '{}' loaded status: {} for datapack {}", modId, isLoaded, location);
                 return isLoaded;
             }

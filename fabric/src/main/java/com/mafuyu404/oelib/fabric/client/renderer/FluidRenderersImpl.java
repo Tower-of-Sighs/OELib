@@ -1,5 +1,6 @@
-package com.mafuyu404.oelib.client.renderer.fabric;
+package com.mafuyu404.oelib.fabric.client.renderer;
 
+import com.mafuyu404.oelib.api.client.renderer.FluidRenderersSPI;
 import com.mafuyu404.oelib.client.renderer.FluidRenderers;
 import net.fabricmc.fabric.api.transfer.v1.client.fluid.FluidVariantRendering;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
@@ -8,9 +9,11 @@ import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 
 @SuppressWarnings("UnstableApiUsage")
-public class FluidRenderersImpl {
-    public static void render(GuiGraphics graphics, Object fluidRef, long amount, long capacity,
-                              int x, int y, int width, int height) {
+public class FluidRenderersImpl implements FluidRenderersSPI {
+
+    @Override
+    public void render(GuiGraphics graphics, Object fluidRef, long amount, long capacity,
+                       int x, int y, int width, int height) {
         FluidVariant variant = fluidRef instanceof FluidVariant fv ? fv : FluidVariant.blank();
         if (variant.isBlank()) return;
 

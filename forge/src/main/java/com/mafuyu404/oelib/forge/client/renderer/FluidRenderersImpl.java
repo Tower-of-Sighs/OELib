@@ -1,5 +1,6 @@
-package com.mafuyu404.oelib.client.renderer.forge;
+package com.mafuyu404.oelib.forge.client.renderer;
 
+import com.mafuyu404.oelib.api.client.renderer.FluidRenderersSPI;
 import com.mafuyu404.oelib.client.renderer.FluidRenderers;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.Minecraft;
@@ -11,9 +12,11 @@ import net.minecraft.world.level.material.Fluids;
 import net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions;
 import net.minecraftforge.fluids.FluidStack;
 
-public final class FluidRenderersImpl {
-    public static void render(GuiGraphics graphics, Object fluidRef, long amount, long capacity,
-                              int x, int y, int width, int height) {
+public final class FluidRenderersImpl implements FluidRenderersSPI {
+
+    @Override
+    public void render(GuiGraphics graphics, Object fluidRef, long amount, long capacity,
+                       int x, int y, int width, int height) {
         if (!(fluidRef instanceof FluidStack stack)) return;
         if (stack.isEmpty() || stack.getFluid() == Fluids.EMPTY) {
             return;
@@ -23,9 +26,6 @@ public final class FluidRenderersImpl {
         int color = props.getTintColor(stack);
 
         ResourceLocation stillTex = props.getStillTexture(stack);
-        if (stillTex == null) {
-            return;
-        }
 
         TextureAtlasSprite sprite = Minecraft.getInstance()
                 .getTextureAtlas(InventoryMenu.BLOCK_ATLAS)

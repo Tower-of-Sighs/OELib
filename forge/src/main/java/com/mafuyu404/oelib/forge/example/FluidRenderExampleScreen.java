@@ -21,6 +21,7 @@ public class FluidRenderExampleScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
+
         int w = 240, h = 140;
         int left = (this.width - w) / 2;
         int top = (this.height - h) / 2;
@@ -29,9 +30,16 @@ public class FluidRenderExampleScreen extends Screen {
 
         long capacity = FluidType.BUCKET_VOLUME;
         FluidStack water = new FluidStack(Fluids.WATER, 1000);
-        FluidRenderers.render(graphics, water, water.getAmount(), capacity, left + 50, top + 50, 16, 16);
-
         FluidStack lava = new FluidStack(Fluids.LAVA, 1000);
-        FluidRenderers.render(graphics, lava, lava.getAmount(), capacity, left + 1, top + 1, 16, 16);
+
+        int fluidWidth = 16;
+        int fluidHeight = 64;
+        int gap = 20;
+        int totalWidth = fluidWidth * 2 + gap;
+        int startX = left + (w - totalWidth) / 2;
+        int startY = top + (h - fluidHeight) / 2;
+
+        FluidRenderers.render(graphics, water, water.getAmount(), capacity, startX, startY, fluidWidth, fluidHeight);
+        FluidRenderers.render(graphics, lava, lava.getAmount(), capacity, startX + fluidWidth + gap, startY, fluidWidth, fluidHeight);
     }
 }

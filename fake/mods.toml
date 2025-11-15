@@ -1,0 +1,10 @@
+modLoader = "javafml"
+loaderVersion = "[47,)"
+license = "MIT"
+showAsResourcePack = false
+
+[[mods]]
+modId = "oelib_common_api"
+version = "${version}"
+displayName = "OELib Common API (Fake)"
+description = "Fake mod marker for common-api to allow nested jars."

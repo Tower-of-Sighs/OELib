@@ -1,16 +1,17 @@
 package com.mafuyu404.oelib.client.renderer;
 
+import com.mafuyu404.oelib.api.client.renderer.FluidRenderersSPI;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import dev.architectury.injectables.annotations.ExpectPlatform;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.world.inventory.InventoryMenu;
 import org.joml.Matrix4f;
+
+import java.util.ServiceLoader;
 
 /**
  * 流体渲染统一入口类。
@@ -31,12 +32,20 @@ public final class FluidRenderers {
     public static final int TEXTURE_SIZE = 16;
     public static final int MIN_FLUID_HEIGHT = 1;
 
-    private FluidRenderers() {}
+    private static final FluidRenderersSPI IMPL;
 
-    @ExpectPlatform
+    static {
+        IMPL = ServiceLoader.load(FluidRenderersSPI.class)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("No FluidRenderersSPI implementation found"));
+    }
+
+    private FluidRenderers() {
+    }
+
     public static void render(GuiGraphics graphics, Object fluidRef, long amount, long capacity,
                               int x, int y, int width, int height) {
-        throw new AssertionError();
+        IMPL.render(graphics, fluidRef, amount, capacity, x, y, width, height);
     }
 
     public static int computeScaledHeight(long amount, long capacity, int fullHeight, int minHeight) {
@@ -49,7 +58,9 @@ public final class FluidRenderers {
 
     public static void renderTiledSprite(GuiGraphics graphics, TextureAtlasSprite sprite, int colorARGB,
                                          int x, int y, int width, int scaledHeight, int fullHeight) {
-        RenderSystem.setShaderTexture(0, InventoryMenu.BLOCK_ATLAS);
+        RenderSystem.setShader(GameRenderer::getPositionTexShader);
+        RenderSystem.enableBlend();
+        RenderSystem.setShaderTexture(0, sprite.atlasLocation());
         RenderSystem.setShaderColor(
                 (colorARGB >> 16 & 0xFF) / 255.0F,
                 (colorARGB >> 8 & 0xFF) / 255.0F,
@@ -84,15 +95,16 @@ public final class FluidRenderers {
 
                 Tesselator tess = Tesselator.getInstance();
                 BufferBuilder buf = tess.getBuilder();
-                RenderSystem.setShader(GameRenderer::getPositionTexShader);
+
                 buf.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
                 buf.vertex(matrix, drawX, drawY + tileHeight, 100).uv(uMin, vMax).endVertex();
                 buf.vertex(matrix, drawX + tileWidth, drawY + tileHeight, 100).uv(uMax, vMax).endVertex();
                 buf.vertex(matrix, drawX + tileWidth, drawY, 100).uv(uMax, vMin).endVertex();
                 buf.vertex(matrix, drawX, drawY, 100).uv(uMin, vMin).endVertex();
                 tess.end();
-                RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
             }
         }
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        RenderSystem.disableBlend();
     }
 }
