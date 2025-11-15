@@ -142,7 +142,7 @@ public class NetworkManager implements INetworkManager {
         return "oelib";
     }
 
-    private  <T extends INetworkPacket<T> & CustomPacketPayload> void registerServerOrBidirectionalPacket(
+    private <T extends INetworkPacket<T> & CustomPacketPayload> void registerServerOrBidirectionalPacket(
             Class<T> packetClass,
             StreamCodec<? super RegistryFriendlyByteBuf, T> codec
     ) {
@@ -393,5 +393,6 @@ public class NetworkManager implements INetworkManager {
     private record PacketInfo<T extends INetworkPacket<T> & CustomPacketPayload>(
             CustomPacketPayload.Type<T> type,
             StreamCodec<? super RegistryFriendlyByteBuf, T> codec
-    ) {}
+    ) {
+    }
 }

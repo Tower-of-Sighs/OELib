@@ -429,5 +429,6 @@ public class NetworkManager implements INetworkManager {
     private record PacketInfo<T extends INetworkPacket<T> & CustomPacketPayload>(
             CustomPacketPayload.Type<T> type,
             StreamCodec<? super RegistryFriendlyByteBuf, T> codec
-    ) {}
+    ) {
+    }
 }

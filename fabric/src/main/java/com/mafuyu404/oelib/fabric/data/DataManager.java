@@ -8,10 +8,10 @@ import com.mafuyu404.oelib.api.data.DataDriven;
 import com.mafuyu404.oelib.api.data.DataValidator;
 import com.mafuyu404.oelib.fabric.data.net.DataSyncPacket;
 import com.mafuyu404.oelib.fabric.event.DataReloadEvent;
+import com.mafuyu404.oelib.util.CodecUtils;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.resource.SimpleResourceReloadListener;
 import net.minecraft.resources.ResourceLocation;
@@ -20,11 +20,11 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.util.profiling.ProfilerFiller;
 
-import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.stream.Collectors;
 
 /**
  * 通用数据管理器。
@@ -36,19 +36,20 @@ import java.util.concurrent.Executor;
  * @param <T> 数据类型
  */
 public class DataManager<T> implements SimpleResourceReloadListener<Map<ResourceLocation, JsonElement>> {
-
     private static final Gson GSON = new GsonBuilder().setLenient().create();
     private static final Map<Class<?>, DataManager<?>> managers = new ConcurrentHashMap<>();
     private static boolean serverStarted = false;
+    private static final Map<Class<?>, Set<String>> runtimeRegisteredNamespaces = new ConcurrentHashMap<>();
     private static MinecraftServer currentServer = null;
-
     private final Class<T> dataClass;
     private final DataDriven annotation;
     private final Codec<T> codec;
-    private final DataValidator<T> validator;
     private final Map<ResourceLocation, T> loadedData = new ConcurrentHashMap<>();
     private final Map<ResourceLocation, T> deferredData = new ConcurrentHashMap<>();
     private final Map<String, Set<T>> cache = new ConcurrentHashMap<>();
+    private final Map<String, Class<? extends DataValidator<?>>> namespaceValidatorClasses = new ConcurrentHashMap<>();
+    private final Map<String, DataValidator<T>> namespaceValidators = new ConcurrentHashMap<>();
+    private final DataValidator<T> defaultValidator;
 
     static {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
@@ -77,8 +78,15 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
     private DataManager(Class<T> dataClass) {
         this.dataClass = dataClass;
         this.annotation = dataClass.getAnnotation(DataDriven.class);
-        this.codec = getCodec(dataClass);
-        this.validator = createValidator(annotation.validator());
+        this.codec = CodecUtils.getCodec(dataClass);
+        this.defaultValidator = createValidator(annotation.validator());
+
+        // 注解声明的 namespace 绑定
+        for (DataDriven.ValidatorBinding binding : annotation.namespaceValidators()) {
+            if (binding != null && binding.namespace() != null && !binding.namespace().isBlank() && binding.validator() != null) {
+                namespaceValidatorClasses.put(binding.namespace(), binding.validator());
+            }
+        }
     }
 
     /**
@@ -107,6 +115,25 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
     @SuppressWarnings("unchecked")
     public static <T> DataManager<T> get(Class<T> dataClass) {
         return (DataManager<T>) managers.get(dataClass);
+    }
+
+    /**
+     * 运行时注册命名空间（允许附属 mod 在父 mod 数据结构下增加自己的 namespace）
+     */
+    public static <T> void registerNamespace(Class<T> dataClass, String namespace) {
+        runtimeRegisteredNamespaces
+                .computeIfAbsent(dataClass, k -> ConcurrentHashMap.newKeySet())
+                .add(namespace);
+    }
+
+    /**
+     * 运行时注册命名空间验证器（解耦合子模组引用）。
+     */
+    public static <T> void registerNamespaceValidator(Class<T> dataClass, String namespace, Class<? extends DataValidator<?>> validatorClass) {
+        DataManager<T> mgr = get(dataClass);
+        if (mgr != null && namespace != null && !namespace.isBlank() && validatorClass != null) {
+            mgr.namespaceValidatorClasses.put(namespace, validatorClass);
+        }
     }
 
     @Override
@@ -138,7 +165,6 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
         }, executor);
     }
 
-
     @Override
     public CompletableFuture<Void> apply(Map<ResourceLocation, JsonElement> data, ResourceManager manager, ProfilerFiller profiler, Executor executor) {
         return CompletableFuture.runAsync(() -> {
@@ -146,26 +172,19 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
             deferredData.clear();
             clearCache();
 
-            // 过滤资源：如果注解指定了modid，只处理该modid命名空间下的资源
-            Map<ResourceLocation, JsonElement> filteredObject = new HashMap<>();
-            String targetModid = annotation.modid();
+            Codec<T> currentCodec = CodecUtils.getCodec(dataClass);
 
-            if (!targetModid.isEmpty()) {
-                // 只处理指定modid命名空间下的资源
-                for (Map.Entry<ResourceLocation, JsonElement> entry : data.entrySet()) {
-                    if (targetModid.equals(entry.getKey().getNamespace())) {
-                        filteredObject.put(entry.getKey(), entry.getValue());
-                    }
-                }
-                OELib.LOGGER.debug("Filtered {} resources for modid '{}' from {} total resources",
-                        filteredObject.size(), targetModid, data.size());
-            } else {
-                // 如果没有指定modid，处理所有资源
-                filteredObject = data;
-            }
+            Set<String> allowNamespaces = new HashSet<>();
+            if (!annotation.modid().isEmpty()) allowNamespaces.add(annotation.modid());
+            Set<String> runtimeSet = runtimeRegisteredNamespaces.getOrDefault(dataClass, Collections.emptySet());
+            allowNamespaces.addAll(runtimeSet);
 
+            Map<ResourceLocation, JsonElement> filteredObject = data.entrySet().stream()
+                    .filter(entry -> allowNamespaces.isEmpty() || allowNamespaces.contains(entry.getKey().getNamespace()))
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-            OELib.LOGGER.info("Loading {} data from {} files", dataClass.getSimpleName(), filteredObject.size());
+            OELib.LOGGER.info("Loading {} data from {} files (namespaces: {})",
+                    dataClass.getSimpleName(), filteredObject.size(), allowNamespaces);
 
             int validCount = 0;
             int deferredCount = 0;
@@ -188,19 +207,19 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
                                     location.getPath() + "_" + i
                             );
 
-                            var result = codec.parse(JsonOps.INSTANCE, element);
+                            var result = currentCodec.parse(JsonOps.INSTANCE, element);
                             if (result.result().isPresent()) {
                                 T dataObj = result.result().get();
 
                                 // 验证数据
-                                var validationResult = validator.validate(dataObj, elementLocation);
-                                if (validationResult.valid()) {
-                                    if (validationResult.deferrable()) {
+                                var vr = validateData(dataObj, elementLocation);
+                                if (vr.valid()) {
+                                    if (vr.deferrable()) {
                                         // 延迟验证的数据
                                         deferredData.put(elementLocation, dataObj);
                                         deferredCount++;
                                         OELib.LOGGER.debug("Deferred {} from array[{}]: {} ({})",
-                                                dataClass.getSimpleName(), i, elementLocation, validationResult.message());
+                                                dataClass.getSimpleName(), i, elementLocation, vr.message());
                                     } else {
                                         // 正常验证通过的数据
                                         loadedData.put(elementLocation, dataObj);
@@ -216,7 +235,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
                                 } else {
                                     invalidCount++;
                                     OELib.LOGGER.warn("Invalid {} data in array[{}] of {}: {}",
-                                            dataClass.getSimpleName(), i, location, validationResult.message());
+                                            dataClass.getSimpleName(), i, location, vr.message());
                                 }
                             } else {
                                 invalidCount++;
@@ -226,19 +245,19 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
                         }
                     } else {
                         // 处理单个对象格式
-                        var result = codec.parse(JsonOps.INSTANCE, json);
+                        var result = currentCodec.parse(JsonOps.INSTANCE, json);
                         if (result.result().isPresent()) {
                             T dataObj = result.result().get();
 
                             // 验证数据
-                            var validationResult = validator.validate(dataObj, location);
-                            if (validationResult.valid()) {
-                                if (validationResult.deferrable()) {
+                            var vr = validateData(dataObj, location);
+                            if (vr.valid()) {
+                                if (vr.deferrable()) {
                                     // 延迟验证的数据
                                     deferredData.put(location, dataObj);
                                     deferredCount++;
                                     OELib.LOGGER.debug("Deferred {}: {} ({})",
-                                            dataClass.getSimpleName(), location, validationResult.message());
+                                            dataClass.getSimpleName(), location, vr.message());
                                 } else {
                                     // 正常验证通过的数据
                                     loadedData.put(location, dataObj);
@@ -253,7 +272,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
                                 }
                             } else {
                                 invalidCount++;
-                                OELib.LOGGER.warn("Invalid {} data in {}: {}", dataClass.getSimpleName(), location, validationResult.message());
+                                OELib.LOGGER.warn("Invalid {} data in {}: {}", dataClass.getSimpleName(), location, vr.message());
                             }
                         } else {
                             invalidCount++;
@@ -273,7 +292,6 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
                 syncToAllPlayers();
             }
 
-            // 触发数据重载事件
             DataReloadEvent.EVENT.invoker().onDataReload(dataClass, validCount + deferredCount, invalidCount);
         }, executor);
     }
@@ -282,6 +300,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
      * 验证数据，如果验证器支持服务器上下文则使用上下文验证。
      */
     private DataValidator.ValidationResult validateData(T data, ResourceLocation source) {
+        var validator = getValidatorForNamespace(source.getNamespace());
         if (validator instanceof DataValidator.ServerContextAware<T> contextAwareValidator) {
             return contextAwareValidator.validateWithContext(data, source, getCurrentServer());
         } else {
@@ -336,25 +355,6 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
     }
 
     /**
-     * 添加数据到缓存。
-     *
-     * @param cacheKey 缓存键
-     * @param data     数据
-     */
-    public void addToCache(String cacheKey, T data) {
-        if (annotation.enableCache()) {
-            cache.computeIfAbsent(cacheKey, k -> ConcurrentHashMap.newKeySet()).add(data);
-        }
-    }
-
-    /**
-     * 清空缓存。
-     */
-    public void clearCache() {
-        cache.clear();
-    }
-
-    /**
      * 更新客户端数据。
      * <p>
      * 此方法仅在客户端调用。
@@ -380,6 +380,25 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
     }
 
     /**
+     * 添加数据到缓存。
+     *
+     * @param cacheKey 缓存键
+     * @param data     数据
+     */
+    public void addToCache(String cacheKey, T data) {
+        if (annotation.enableCache()) {
+            cache.computeIfAbsent(cacheKey, k -> ConcurrentHashMap.newKeySet()).add(data);
+        }
+    }
+
+    /**
+     * 清空缓存。
+     */
+    public void clearCache() {
+        cache.clear();
+    }
+
+    /**
      * 构建缓存。
      * <p>
      * 子类可以重写此方法来实现自定义的缓存逻辑。
@@ -392,6 +411,20 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
         addToCache("all", data);
     }
 
+    @SuppressWarnings("unchecked")
+    private DataValidator<T> getValidatorForNamespace(String namespace) {
+        if (namespace == null) return defaultValidator;
+        return namespaceValidators.computeIfAbsent(namespace, ns -> {
+            Class<? extends DataValidator<?>> cls = namespaceValidatorClasses.get(ns);
+            if (cls == null) return defaultValidator;
+            try {
+                return (DataValidator<T>) cls.getDeclaredConstructor().newInstance();
+            } catch (Exception e) {
+                OELib.LOGGER.warn("Failed to instantiate validator for namespace '{}', fallback to default", ns, e);
+                return defaultValidator;
+            }
+        });
+    }
 
     private void syncToAllPlayers() {
         try {
@@ -440,18 +473,6 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
         return annotation.modid();
     }
 
-
-
-    @SuppressWarnings("unchecked")
-    private static <T> Codec<T> getCodec(Class<T> dataClass) {
-        try {
-            Field codecField = dataClass.getDeclaredField("CODEC");
-            codecField.setAccessible(true);
-            return (Codec<T>) codecField.get(null);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to get CODEC field from " + dataClass.getSimpleName(), e);
-        }
-    }
 
     @SuppressWarnings("unchecked")
     private DataValidator<T> createValidator(Class<? extends DataValidator<?>> validatorClass) {

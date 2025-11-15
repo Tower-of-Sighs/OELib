@@ -3,7 +3,7 @@
   "id": "oelib",
   "version": "${version}",
   "name": "OELib",
-  "description": "",
+  "description": "Mafuyu never like you:(",
   "authors": [
     "Flechazo"
   ],
@@ -11,7 +11,7 @@
     "homepage": ""
   },
   "license": "MIT",
-  "icon": "assets/oelib/icon.png",
+  "icon": "assets/oelib/icon1.png",
   "environment": "*",
   "entrypoints": {
     "main": [
@@ -22,13 +22,13 @@
     ]
   },
   "mixins": [
-    "oelib.mixins.json"
+    "oelib.mixins.json",
+    "oelib.fabric.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.16.0",
     "minecraft": "~1.21.1",
     "java": ">=17",
-    "architectury": ">=9.2.14",
     "fabric-api": "*"
   },
   "suggests": {

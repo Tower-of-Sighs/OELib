@@ -10,7 +10,7 @@ displayName = "OELib"
 authors = "Flechazo"
 description = "Mafuyu never like you:("
 
-logoFile = "assets/oelib/icon.png"
+logoFile = "icon3.png"
 
 [[dependencies.oelib]]
 modId = "neoforge"
@@ -24,11 +24,4 @@ modId = "minecraft"
 mandatory = true
 versionRange = "[1.21,)"
 ordering = "NONE"
-side = "BOTH"
-
-[[dependencies.oelib]]
-modId = "architectury"
-mandatory = true
-versionRange = "[9.2.14,)"
-ordering = "AFTER"
 side = "BOTH"

@@ -9,6 +9,17 @@ architectury {
 }
 
 allprojects {
+    apply plugin: "architectury-plugin"
+
+
+    architectury {
+        compileOnly()
+    }
+
+    tasks.withType(GenerateModuleMetadata) {
+        enabled = false
+    }
+
     group = rootProject.maven_group
     version = rootProject.mod_version
 }
@@ -17,32 +28,36 @@ subprojects {
     apply plugin: 'dev.architectury.loom'
     apply plugin: 'architectury-plugin'
     apply plugin: 'maven-publish'
+    apply plugin: 'java'
 
     base {
-        // Set up a suffixed format for the mod jar names, e.g. `example-fabric`.
-        archivesName = "$rootProject.archives_name-$project.name"
+        archivesName = "${rootProject.archives_name}-${project.name}-${rootProject.minecraft_version}"
     }
 
     repositories {
-        // Add repositories to retrieve artifacts from in here.
-        // You should only use this when depending on other mods because
-        // Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-        // See https://docs.gradle.org/current/userguide/declaring_repositories.html
-        // for more information about repositories.
+        maven {
+            name = "Jared's maven"
+            url = "https://maven.blamejared.com/"
+        }
     }
 
     dependencies {
         minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
         mappings loom.officialMojangMappings()
-        modApi(include(("org.mvel:mvel2:2.5.0.Final")))
+
+        if (project.name == "fabric" || project.name == "neoforge" || project.name == "forge") {
+            implementation(include("org.mvel:mvel2:2.5.0.Final"))
+        } else {
+            implementation "org.mvel:mvel2:2.5.0.Final"
+        }
+
+        if (project.name != "common-api") {
+            annotationProcessor project(path: ':common-api')
+        }
     }
 
     java {
-        // Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-        // if it is present.
-        // If you remove this line, sources will not be generated.
         withSourcesJar()
-
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
@@ -51,21 +66,42 @@ subprojects {
         it.options.release = 21
     }
 
-    // Configure Maven publishing.
+    tasks.withType(Jar).configureEach {
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    }
+    tasks.named("sourcesJar", Jar).configure {
+        exclude("META-INF/services/**")
+    }
+
     publishing {
-        publications {
-            mavenJava(MavenPublication) {
-                artifactId = base.archivesName.get()
-                from components.java
+        repositories {
+            def publishUrl = System.getenv("SIGHS_PUBLISH_URL")
+            def publishUser = System.getenv("SIGHS_PUBLISH_USER")
+            def publishPassword = System.getenv("SIGHS_PUBLISH_PASSWORD")
+
+            if (publishUrl) {
+                maven {
+                    name = "remoteRepo"
+                    url = uri(publishUrl)
+                    credentials {
+                        username = publishUser
+                        password = publishPassword
+                    }
+                }
             }
         }
+    }
+}
 
-        // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-        repositories {
-            // Add repositories to publish to here.
-            // Notice: This block does NOT have the same function as the block in the top level.
-            // The repositories here will be used for publishing your artifact, not for
-            // retrieving dependencies.
+subprojects {
+    if (project.path == ':fabric' || project.path == ':neoforge') {
+        loom {
+            mods {
+                main {
+                    sourceSet project.sourceSets.main
+                    sourceSet project(":common-api").sourceSets.main
+                }
+            }
         }
     }
 }

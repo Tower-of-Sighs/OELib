@@ -122,5 +122,6 @@ public interface INetworkManager {
     record PacketRegistration<T extends INetworkPacket<T> & CustomPacketPayload>(
             Class<T> packetClass,
             StreamCodec<? super RegistryFriendlyByteBuf, T> codec
-    ) {}
+    ) {
+    }
 }

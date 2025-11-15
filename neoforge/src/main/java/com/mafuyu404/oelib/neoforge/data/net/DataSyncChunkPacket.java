@@ -1,7 +1,10 @@
 package com.mafuyu404.oelib.neoforge.data.net;
 
 import com.mafuyu404.oelib.OELib;
-import com.mafuyu404.oelib.api.net.*;
+import com.mafuyu404.oelib.api.net.INetworkContext;
+import com.mafuyu404.oelib.api.net.NetworkPacket;
+import com.mafuyu404.oelib.api.net.Side;
+import com.mafuyu404.oelib.api.net.SimplePacket;
 import com.mafuyu404.oelib.neoforge.network.ChunkAssembler;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.FriendlyByteBuf;

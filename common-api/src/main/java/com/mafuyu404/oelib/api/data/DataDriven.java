@@ -106,4 +106,21 @@ public @interface DataDriven {
      * @return 是否支持数组格式，默认为 false
      */
     boolean supportArray() default false;
+
+    /**
+     * 为不同命名空间绑定特定验证器。
+     * 适用于同一数据类型在多个 namespace 下共享但需要不同的验证逻辑的场景。
+     */
+    ValidatorBinding[] namespaceValidators() default {};
+
+    /**
+     * 命名空间验证器绑定。
+     */
+    @Target({})
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface ValidatorBinding {
+        String namespace();
+
+        Class<? extends DataValidator<?>> validator();
+    }
 }
