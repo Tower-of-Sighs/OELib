@@ -183,8 +183,4 @@ public final class DataRegistry {
         expressionEngineInitialized = false;
         ExpressionEngine.clear();
     }
-
-    public static void attachReloadListeners() {
-        DataManagerBridge.attachReloadListenersSorted(getRegisteredTypesByPriority());
-    }
 }

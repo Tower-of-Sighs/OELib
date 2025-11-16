@@ -10,10 +10,20 @@ import net.minecraft.server.packs.PackType;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class DataManagerBridgeImpl implements DataManagerBridgeSPI {
+    private static final Set<Class<?>> registeredReloadListeners = ConcurrentHashMap.newKeySet();
+
     public <T> void register(Class<T> dataClass) {
         DataManager.register(dataClass);
+        if (registeredReloadListeners.add(dataClass)) {
+            var helper = ResourceManagerHelper.get(PackType.SERVER_DATA);
+            var manager = DataManager.get(dataClass);
+            if (manager != null) {
+                helper.registerReloadListener(manager);
+            }
+        }
     }
 
     public <T> void registerNamespace(Class<T> dataClass, String namespace) {
@@ -28,16 +38,6 @@ public final class DataManagerBridgeImpl implements DataManagerBridgeSPI {
     public <T> Map<ResourceLocation, T> getAllData(Class<T> dataClass) {
         var manager = DataManager.get(dataClass);
         return manager != null ? manager.getAllData() : Map.of();
-    }
-
-    public void attachReloadListenersSorted(List<Class<?>> sortedTypes) {
-        var helper = ResourceManagerHelper.get(PackType.SERVER_DATA);
-        for (Class<?> dataClass : sortedTypes) {
-            var manager = DataManager.get(dataClass);
-            if (manager != null) {
-                helper.registerReloadListener(manager);
-            }
-        }
     }
 
     public <T> T getData(Class<T> dataClass, ResourceLocation location) {

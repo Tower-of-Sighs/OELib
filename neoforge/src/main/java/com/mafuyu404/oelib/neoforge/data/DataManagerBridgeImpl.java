@@ -3,6 +3,7 @@ package com.mafuyu404.oelib.neoforge.data;
 import com.mafuyu404.oelib.OELib;
 import com.mafuyu404.oelib.api.data.DataManagerBridgeSPI;
 import com.mafuyu404.oelib.api.data.DataValidator;
+import com.mafuyu404.oelib.data.DataRegistry;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModList;
@@ -13,7 +14,6 @@ import java.util.*;
 
 @EventBusSubscriber(modid = OELib.MODID)
 public final class DataManagerBridgeImpl implements DataManagerBridgeSPI {
-    private static List<Class<?>> sortedTypes = Collections.emptyList();
 
     public <T> void register(Class<T> dataClass) {
         DataManager.register(dataClass);
@@ -33,13 +33,10 @@ public final class DataManagerBridgeImpl implements DataManagerBridgeSPI {
         return manager != null ? manager.getAllData() : Map.of();
     }
 
-    public void attachReloadListenersSorted(List<Class<?>> types) {
-        sortedTypes = new ArrayList<>(types);
-    }
-
     @SubscribeEvent
     public static void onAddReloadListener(AddReloadListenerEvent event) {
-        for (Class<?> dataClass : sortedTypes) {
+        List<Class<?>> types = DataRegistry.getRegisteredTypesByPriority();
+        for (Class<?> dataClass : types) {
             var manager = DataManager.get(dataClass);
             if (manager != null) {
                 event.addListener(manager);

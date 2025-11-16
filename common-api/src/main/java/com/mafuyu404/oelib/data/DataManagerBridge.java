@@ -42,11 +42,6 @@ public final class DataManagerBridge {
     }
 
 
-    public static void attachReloadListenersSorted(List<Class<?>> sortedTypes) {
-        IMPL.attachReloadListenersSorted(sortedTypes);
-    }
-
-
     public static <T> T getData(Class<T> dataClass, ResourceLocation location) {
         return IMPL.getData(dataClass, location);
     }
