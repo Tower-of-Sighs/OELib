@@ -15,8 +15,6 @@ public interface DataManagerBridgeSPI {
 
     <T> Map<ResourceLocation, T> getAllData(Class<T> dataClass);
 
-    void attachReloadListenersSorted(List<Class<?>> sortedTypes);
-
     <T> T getData(Class<T> dataClass, ResourceLocation location);
 
     <T> List<T> getDataList(Class<T> dataClass);

@@ -18,9 +18,6 @@ public class OELib {
                 .addNameForge("icon4.png", 1)
                 .register();
         DataRegistry.initialize();
-        DataManagerBridge.attachReloadListenersSorted(
-                DataRegistry.getRegisteredTypesByPriority()
-        );
         if (!Boolean.getBoolean("oelib.skipExpressionEngine")) {
             DataRegistry.initializeExpressionEngine();
         }
