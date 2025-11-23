@@ -1,15 +1,10 @@
 package com.mafuyu404.oelib.forge.data;
 
+import com.mafuyu404.oelib.api.data.DataValidator;
 import com.mafuyu404.oelib.data.mvel.FunctionUsageAnalyzer;
 
 import java.util.*;
 
-/**
- * 数据注册表。
- * <p>
- * 负责管理所有数据驱动类型的注册和初始化。
- * </p>
- */
 /**
  * 数据注册表。
  * <p>
@@ -38,6 +33,14 @@ public class DataRegistry {
      */
     public static <T> void registerWithNamespaces(Class<T> dataClass, String... namespaces) {
         com.mafuyu404.oelib.data.DataRegistry.registerWithNamespaces(dataClass, namespaces);
+    }
+
+    /**
+     * 为数据类型注册命名空间验证器。
+     * 子模组可以在各自初始化阶段调用，实现解耦。
+     */
+    public static <T> void registerNamespaceValidator(Class<T> dataClass, String namespace, Class<? extends DataValidator<?>> validatorClass) {
+        com.mafuyu404.oelib.data.DataRegistry.registerNamespaceValidator(dataClass, namespace, validatorClass);
     }
 
     /**
