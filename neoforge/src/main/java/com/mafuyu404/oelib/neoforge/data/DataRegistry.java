@@ -1,5 +1,6 @@
 package com.mafuyu404.oelib.neoforge.data;
 
+import com.mafuyu404.oelib.api.data.DataValidator;
 import com.mafuyu404.oelib.data.mvel.FunctionUsageAnalyzer;
 
 import java.util.List;
@@ -33,6 +34,14 @@ public class DataRegistry {
      */
     public static <T> void registerWithNamespaces(Class<T> dataClass, String... namespaces) {
         com.mafuyu404.oelib.data.DataRegistry.registerWithNamespaces(dataClass, namespaces);
+    }
+
+    /**
+     * 为数据类型注册命名空间验证器。
+     * 子模组可以在各自初始化阶段调用，实现解耦。
+     */
+    public static <T> void registerNamespaceValidator(Class<T> dataClass, String namespace, Class<? extends DataValidator<?>> validatorClass) {
+        com.mafuyu404.oelib.data.DataRegistry.registerNamespaceValidator(dataClass, namespace, validatorClass);
     }
 
     /**
