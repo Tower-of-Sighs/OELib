@@ -15,14 +15,11 @@ import org.lwjgl.glfw.GLFW;
 public final class FluidRenderExampleClient {
     private static KeyMapping openExample;
 
-    @EventBusSubscriber(modid = OELib.MODID, value = Dist.CLIENT)
-    public static class ModBus {
-        @SubscribeEvent
-        public static void onRegisterKeys(RegisterKeyMappingsEvent event) {
+    @SubscribeEvent
+    public static void onRegisterKeys(RegisterKeyMappingsEvent event) {
+        if (!FMLLoader.isProduction()) {
             openExample = new KeyMapping("key.oelib.open_fluid_example", GLFW.GLFW_KEY_G, "key.categories.oelib");
-            if (!FMLLoader.isProduction()) {
-                event.register(openExample);
-            }
+            event.register(openExample);
         }
     }
 
