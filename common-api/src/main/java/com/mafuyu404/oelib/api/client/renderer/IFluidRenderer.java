@@ -34,6 +34,7 @@ import net.minecraft.client.renderer.texture.TextureAtlasSprite;
  * 如需自定义缩放规则，可使用 {@link #computeScaledHeight(long, long, int, int)} 方法。
  * </p>
  */
+@Deprecated
 public interface IFluidRenderer<T> {
 
     /**
