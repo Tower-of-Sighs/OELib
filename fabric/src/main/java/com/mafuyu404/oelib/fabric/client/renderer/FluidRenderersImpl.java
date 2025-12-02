@@ -1,6 +1,6 @@
 package com.mafuyu404.oelib.fabric.client.renderer;
 
-import com.mafuyu404.oelib.api.client.renderer.FluidRenderersSPI;
+import com.mafuyu404.oelib.api.client.renderer.IFluidRenderers;
 import com.mafuyu404.oelib.client.renderer.FluidRenderers;
 import net.fabricmc.fabric.api.transfer.v1.client.fluid.FluidVariantRendering;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
@@ -8,7 +8,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 
-public class FluidRenderersImpl implements FluidRenderersSPI {
+public class FluidRenderersImpl implements IFluidRenderers {
 
     @Override
     public void render(GuiGraphics graphics, Object fluidRef, long amount, long capacity,

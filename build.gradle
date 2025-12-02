@@ -1,5 +1,5 @@
 plugins {
-    id 'dev.architectury.loom' version '1.10-SNAPSHOT' apply false
+    id 'dev.architectury.loom' version '1.11-SNAPSHOT' apply false
     id 'architectury-plugin' version '3.4-SNAPSHOT'
     id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
 }
@@ -35,6 +35,7 @@ subprojects {
     }
 
     repositories {
+        mavenCentral()
         maven {
             name = "Jared's maven"
             url = "https://maven.blamejared.com/"
@@ -44,12 +45,6 @@ subprojects {
     dependencies {
         minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
         mappings loom.officialMojangMappings()
-
-        if (project.name == "fabric" || project.name == "neoforge" || project.name == "forge") {
-            implementation(include("org.mvel:mvel2:2.5.0.Final"))
-        } else {
-            implementation "org.mvel:mvel2:2.5.0.Final"
-        }
 
         if (project.name != "common-api") {
             annotationProcessor project(path: ':common-api')

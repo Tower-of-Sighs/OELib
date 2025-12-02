@@ -1,7 +1,7 @@
 package com.mafuyu404.oelib.data;
 
-import com.mafuyu404.oelib.api.data.DataManagerBridgeSPI;
 import com.mafuyu404.oelib.api.data.DataValidator;
+import com.mafuyu404.oelib.api.data.IDataManager;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
@@ -10,10 +10,10 @@ import java.util.ServiceLoader;
 import java.util.Set;
 
 public final class DataManagerBridge {
-    private static final DataManagerBridgeSPI IMPL;
+    private static final IDataManager IMPL;
 
     static {
-        IMPL = ServiceLoader.load(DataManagerBridgeSPI.class)
+        IMPL = ServiceLoader.load(IDataManager.class)
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("No DataManagerBridgeSPI implementation found"));
     }

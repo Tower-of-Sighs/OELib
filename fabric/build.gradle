@@ -26,9 +26,11 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:$rootProject.fabric_api_version"
     modImplementation("com.terraformersmc:modmenu:${rootProject.modmenu_version}")
     modImplementation("mezz.jei:jei-$rootProject.minecraft_version-fabric:${jei_version}")
+    implementation("org.mvel:mvel2:2.5.0.Final")
 
     common(project(path: ':common-api', configuration: 'namedElements')) { transitive false }
     shadowCommon (project(path: ':common-api', configuration: 'transformProductionFabric')) { transitive false }
+    shadowCommon("org.mvel:mvel2:2.5.0.Final")
 }
 
 processResources {
@@ -55,6 +57,10 @@ java {
 
 shadowJar {
     configurations = [project.configurations.shadowCommon]
+    dependencies {
+        include(dependency("org.mvel:mvel2:2.5.0.Final"))
+        include(project(path: ':common-api', configuration: 'transformProductionFabric'))
+    }
     archiveClassifier = "dev-shadow"
 }
 
@@ -77,9 +83,4 @@ publishing {
             }
         }
     }
-}
-
-// 此开发环境运行时无法识别 MVEL，很神秘
-tasks.named("runClient") {
-    systemProperty "oelib.skipExpressionEngine", "true"
 }

@@ -1,6 +1,6 @@
 package com.mafuyu404.oelib.client.renderer;
 
-import com.mafuyu404.oelib.api.client.renderer.FluidRenderersSPI;
+import com.mafuyu404.oelib.api.client.renderer.IFluidRenderers;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
 import net.minecraft.client.gui.GuiGraphics;
@@ -29,12 +29,12 @@ public final class FluidRenderers {
     public static final int TEXTURE_SIZE = 16;
     public static final int MIN_FLUID_HEIGHT = 1;
 
-    private static final FluidRenderersSPI IMPL;
+    private static final IFluidRenderers IMPL;
 
     static {
-        IMPL = ServiceLoader.load(FluidRenderersSPI.class)
+        IMPL = ServiceLoader.load(IFluidRenderers.class)
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("No FluidRenderersSPI implementation found"));
+                .orElseThrow(() -> new IllegalStateException("No IFluidRenderers implementation found"));
     }
 
     private FluidRenderers() {

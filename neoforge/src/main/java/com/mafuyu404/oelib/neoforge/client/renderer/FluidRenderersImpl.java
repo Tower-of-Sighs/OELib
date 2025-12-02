@@ -1,6 +1,6 @@
 package com.mafuyu404.oelib.neoforge.client.renderer;
 
-import com.mafuyu404.oelib.api.client.renderer.FluidRenderersSPI;
+import com.mafuyu404.oelib.api.client.renderer.IFluidRenderers;
 import com.mafuyu404.oelib.client.renderer.FluidRenderers;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -12,7 +12,7 @@ import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions;
 import net.neoforged.neoforge.fluids.FluidStack;
 
-public final class FluidRenderersImpl implements FluidRenderersSPI {
+public final class FluidRenderersImpl implements IFluidRenderers {
 
     @Override
     public void render(GuiGraphics graphics, Object fluidRef, long amount, long capacity,

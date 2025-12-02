@@ -78,7 +78,7 @@ public class ExpressionFunctionProcessor extends AbstractProcessor {
 
     private void generateRegistrar(Map<String, ExecutableElement> functionsByName, List<ExecutableElement> allMethods) throws IOException {
         String hash = hashSuffix(allMethods);
-        ExecutableElement sample = allMethods.get(0);
+        ExecutableElement sample = allMethods.getFirst();
         TypeElement owner = (TypeElement) sample.getEnclosingElement();
         PackageElement ownerPkg = processingEnv.getElementUtils().getPackageOf(owner);
         String pkg = ownerPkg.getQualifiedName().toString() + ".oelib_mvel_gen";

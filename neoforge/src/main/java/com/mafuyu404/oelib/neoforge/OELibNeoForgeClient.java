@@ -1,5 +1,6 @@
-package com.mafuyu404.oelib;
+package com.mafuyu404.oelib.neoforge;
 
+import com.mafuyu404.oelib.OELib;
 import com.mafuyu404.oelib.neoforge.icon.DynamicIconForgeSubscriber;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;

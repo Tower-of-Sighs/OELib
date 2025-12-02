@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public interface DataManagerBridgeSPI {
+public interface IDataManager {
     <T> void register(Class<T> dataClass);
 
     <T> void registerNamespace(Class<T> dataClass, String namespace);

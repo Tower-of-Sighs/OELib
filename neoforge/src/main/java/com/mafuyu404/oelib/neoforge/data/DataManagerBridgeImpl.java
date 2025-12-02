@@ -1,8 +1,8 @@
 package com.mafuyu404.oelib.neoforge.data;
 
 import com.mafuyu404.oelib.OELib;
-import com.mafuyu404.oelib.api.data.DataManagerBridgeSPI;
 import com.mafuyu404.oelib.api.data.DataValidator;
+import com.mafuyu404.oelib.api.data.IDataManager;
 import com.mafuyu404.oelib.data.DataRegistry;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -10,10 +10,12 @@ import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @EventBusSubscriber(modid = OELib.MODID)
-public final class DataManagerBridgeImpl implements DataManagerBridgeSPI {
+public final class DataManagerBridgeImpl implements IDataManager {
 
     public <T> void register(Class<T> dataClass) {
         DataManager.register(dataClass);

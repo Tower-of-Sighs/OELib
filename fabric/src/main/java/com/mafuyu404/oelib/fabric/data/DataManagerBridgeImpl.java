@@ -1,7 +1,7 @@
 package com.mafuyu404.oelib.fabric.data;
 
-import com.mafuyu404.oelib.api.data.DataManagerBridgeSPI;
 import com.mafuyu404.oelib.api.data.DataValidator;
+import com.mafuyu404.oelib.api.data.IDataManager;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.resources.ResourceLocation;
@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-public final class DataManagerBridgeImpl implements DataManagerBridgeSPI {
+public final class DataManagerBridgeImpl implements IDataManager {
     private static final Set<Class<?>> registeredReloadListeners = ConcurrentHashMap.newKeySet();
 
     public <T> void register(Class<T> dataClass) {
