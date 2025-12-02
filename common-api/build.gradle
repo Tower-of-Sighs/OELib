@@ -9,9 +9,12 @@ sourceSets {
     }
 }
 
+loom {
+    accessWidenerPath = file("src/main/resources/oelib.accesswidener")
+}
+
 dependencies {
     modCompileOnly "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
-    implementation("org.mvel:mvel2:2.5.0.Final")
 }
 
 tasks.named("processResources") {

@@ -7,6 +7,10 @@ architectury {
     neoForge()
 }
 
+loom {
+    accessWidenerPath = project(":common-api").loom.accessWidenerPath
+}
+
 configurations {
     common
     shadowCommon
@@ -25,12 +29,10 @@ repositories {
 dependencies {
     neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
 
+    modImplementation("mezz.jei:jei-$rootProject.minecraft_version-neoforge:${jei_version}")
+
     common(project(path: ':common-api', configuration: 'namedElements')) { transitive false }
     shadowCommon (project(path: ':common-api', configuration: 'transformProductionNeoForge')) { transitive false }
-    shadowCommon("org.mvel:mvel2:2.5.0.Final")
-
-    modImplementation("mezz.jei:jei-$rootProject.minecraft_version-neoforge:${jei_version}")
-    implementation("org.mvel:mvel2:2.5.0.Final")
 }
 
 processResources {
@@ -54,10 +56,6 @@ components.java {
 
 shadowJar {
     configurations = [project.configurations.shadowCommon]
-    dependencies {
-        include(dependency("org.mvel:mvel2:2.5.0.Final"))
-        include(project(path: ':common-api', configuration: 'transformProductionNeoForge'))
-    }
     archiveClassifier = "dev-shadow"
 }
 
@@ -88,9 +86,4 @@ publishing {
             }
         }
     }
-}
-
-// 此开发环境运行时无法识别 MVEL，很神秘
-tasks.named("runClient") {
-    systemProperty "oelib.skipExpressionEngine", "true"
 }

@@ -9,16 +9,20 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.material.Fluid;
 
+import java.util.function.Supplier;
+
 @Environment(EnvType.CLIENT)
 public final class RenderTypeRegister {
     private RenderTypeRegister() {
     }
 
-    public static void register(RenderType type, Block... blocks) {
+    @SafeVarargs
+    public static void registerBlocks(RenderType type, Supplier<? extends Block>... blocks) {
         RegistrationDispatcher.perform(new RenderTypeBlocksAction(type, blocks));
     }
 
-    public static void register(RenderType type, Fluid... fluids) {
+    @SafeVarargs
+    public static void registerFluids(RenderType type, Supplier<? extends Fluid>... fluids) {
         RegistrationDispatcher.perform(new RenderTypeFluidsAction(type, fluids));
     }
 }

@@ -1,5 +1,7 @@
 package com.mafuyu404.oelib.fabric.registry;
 
+import com.mafuyu404.oelib.api.registry.CreativeTabModifyCallback;
+import com.mafuyu404.oelib.api.registry.CreativeTabOutput;
 import com.mafuyu404.oelib.api.registry.IRegistrationDispatcher;
 import com.mafuyu404.oelib.registry.RegisterSupplier;
 import com.mafuyu404.oelib.registry.action.*;
@@ -11,6 +13,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityModelLayerRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.TooltipComponentCallback;
+import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
 import net.fabricmc.fabric.api.object.builder.v1.trade.TradeOfferHelper;
 import net.fabricmc.fabric.api.registry.FuelRegistry;
@@ -24,19 +27,26 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.Registry;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.npc.VillagerProfession;
 import net.minecraft.world.entity.npc.VillagerTrades;
 import net.minecraft.world.inventory.tooltip.TooltipComponent;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ItemLike;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.material.Fluid;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -44,11 +54,44 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
     private static final Map<Class<?>, Function<?, ? extends ClientTooltipComponent>> TOOLTIP_FACTORIES = new ConcurrentHashMap<>();
     private static volatile boolean tooltipCallbackRegistered = false;
 
+    private static final Map<ResourceLocation, List<Supplier<ItemStack>>> TAB_APPENDS = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, List<CreativeTabModifyCallback>> TAB_MODIFIERS = new ConcurrentHashMap<>();
+    private static final Map<RegisterSupplier<?>, List<Consumer<?>>> ENTRY_LISTENERS = new ConcurrentHashMap<>();
+    private static volatile boolean creativeTabEventsInstalled = false;
+
     @SuppressWarnings("unchecked")
     @Override
     public void perform(RegistrationAction action) {
         if (action instanceof RegistryBatchAction<?> batchRaw) {
             performRegistryBatch((RegistryBatchAction<Object>) batchRaw);
+            return;
+        }
+        if (action instanceof ListenAction<?> laRaw) {
+            var la = (ListenAction<Object>) laRaw;
+            var raw = BuiltInRegistries.REGISTRY.get(la.registryKey().location());
+            if (raw != null) {
+                var reg = (Registry<Object>) raw;
+                var present = reg.get(la.supplier().id()) != null;
+                if (present) {
+                    la.callback().accept(la.supplier().get());
+                    return;
+                }
+            }
+            ENTRY_LISTENERS.computeIfAbsent(la.supplier(), k -> new CopyOnWriteArrayList<>()).add(la.callback());
+            return;
+        }
+        if (action instanceof CreativeTabAppendStackAction(
+                ResourceKey<CreativeModeTab> tabKey, Supplier<ItemStack> item
+        )) {
+            ensureCreativeTabEventRegistered();
+            TAB_APPENDS.computeIfAbsent(tabKey.location(), k -> new CopyOnWriteArrayList<>()).add(item);
+            return;
+        }
+        if (action instanceof CreativeTabModifyAction(
+                ResourceKey<CreativeModeTab> tabKey, CreativeTabModifyCallback callback
+        )) {
+            ensureCreativeTabEventRegistered();
+            TAB_MODIFIERS.computeIfAbsent(tabKey.location(), k -> new CopyOnWriteArrayList<>()).add(callback);
             return;
         }
         if (action instanceof KeyMappingAction key) {
@@ -79,15 +122,19 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
                 return;
             }
             if (action instanceof RenderTypeBlocksAction(
-                    RenderType type, Block[] blocks
+                    RenderType type, Supplier<? extends Block>[] blocks
             )) {
-                BlockRenderLayerMap.INSTANCE.putBlocks(type, blocks);
+                var arr = new Block[blocks.length];
+                for (int i = 0; i < blocks.length; i++) arr[i] = Objects.requireNonNull(blocks[i].get());
+                BlockRenderLayerMap.INSTANCE.putBlocks(type, arr);
                 return;
             }
             if (action instanceof RenderTypeFluidsAction(
-                    RenderType type, Fluid[] fluids
+                    RenderType type, Supplier<? extends Fluid>[] fluids
             )) {
-                BlockRenderLayerMap.INSTANCE.putFluids(type, fluids);
+                var arr = new Fluid[fluids.length];
+                for (int i = 0; i < fluids.length; i++) arr[i] = Objects.requireNonNull(fluids[i].get());
+                BlockRenderLayerMap.INSTANCE.putFluids(type, arr);
                 return;
             }
             if (action instanceof EntityRendererAction<?> eraRaw) {
@@ -158,9 +205,13 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
         var registry = (Registry<T>) rawRegistry;
 
         for (RegisterSupplier<? extends T> entry : batch.entries()) {
-            T instance = entry.getCreator().get();
+            T instance = ((RegisterSupplier<T>) entry).get();
             Registry.register(registry, entry.id(), instance);
             ((RegisterSupplier<T>) entry).bindInstance(instance);
+            var ls = ENTRY_LISTENERS.remove(entry);
+            if (ls != null) {
+                for (var c : ls) ((Consumer<T>) c).accept(instance);
+            }
         }
     }
 
@@ -189,6 +240,54 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
                         return fn != null ? fn.apply(component) : null;
                     });
                     tooltipCallbackRegistered = true;
+                }
+            }
+        }
+    }
+
+    private void ensureCreativeTabEventRegistered() {
+        if (!creativeTabEventsInstalled) {
+            synchronized (TAB_APPENDS) {
+                if (!creativeTabEventsInstalled) {
+                    ItemGroupEvents.MODIFY_ENTRIES_ALL.register((tab, entries) -> {
+                        var id = BuiltInRegistries.CREATIVE_MODE_TAB.getKey(tab);
+                        if (id == null) return;
+
+                        var items = TAB_APPENDS.get(id);
+                        if (items != null) {
+                            for (var s : items) {
+                                entries.accept(s.get());
+                            }
+                        }
+
+                        var modifiers = TAB_MODIFIERS.get(id);
+                        if (modifiers != null) {
+                            var out = new CreativeTabOutput() {
+                                @Override
+                                public void acceptAfter(ItemStack after, ItemStack stack, CreativeModeTab.TabVisibility v) {
+                                    entries.addAfter(after, List.of(stack), v);
+                                }
+
+                                @Override
+                                public void acceptBefore(ItemStack before, ItemStack stack, CreativeModeTab.TabVisibility v) {
+                                    entries.addBefore(before, List.of(stack), v);
+                                }
+
+                                @Override
+                                public void accept(ItemStack stack, CreativeModeTab.TabVisibility v) {
+                                    entries.accept(stack, v);
+                                }
+                            };
+                            for (var m : modifiers) {
+                                m.accept(
+                                        entries.getEnabledFeatures(),
+                                        out,
+                                        entries.shouldShowOpRestrictedItems()
+                                );
+                            }
+                        }
+                    });
+                    creativeTabEventsInstalled = true;
                 }
             }
         }

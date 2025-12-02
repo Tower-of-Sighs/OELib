@@ -24,9 +24,11 @@ public final class DeferredRegister<T> {
         return new DeferredRegister<>(registryKey, modid);
     }
 
+    @SuppressWarnings("unchecked")
     public <R extends T> RegisterSupplier<R> register(String name, Supplier<? extends R> supplier) {
         var id = ResourceLocation.fromNamespaceAndPath(modid, name);
-        RegisterSupplier<R> entry = new RegisterSupplier<>(id, supplier);
+        ResourceKey<? extends Registry<R>> castedRegistryKey = (ResourceKey<? extends Registry<R>>) this.registryKey;
+        RegisterSupplier<R> entry = new RegisterSupplier<>(castedRegistryKey, id, supplier);
         entries.add(entry);
         return entry;
     }

@@ -7,5 +7,5 @@ public sealed interface RegistrationAction
         EntityRendererAction, EntityModelLayerAction,
         ParticleProviderAction, FuelAction, EntityAttributeAction,
         SpawnPlacementAction, TradeVillagerAction,
-        TradeWandererAction {
+        TradeWandererAction, ListenAction, CreativeTabModifyAction, CreativeTabAppendStackAction {
 }

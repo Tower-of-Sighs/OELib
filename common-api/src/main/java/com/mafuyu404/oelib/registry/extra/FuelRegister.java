@@ -1,6 +1,6 @@
 package com.mafuyu404.oelib.registry.extra;
 
-import com.mafuyu404.oelib.api.item.FuelApi;
+import com.mafuyu404.oelib.api.item.FuelRegistry;
 import com.mafuyu404.oelib.registry.RegistrationDispatcher;
 import com.mafuyu404.oelib.registry.action.FuelAction;
 import net.minecraft.world.item.ItemStack;
@@ -9,8 +9,8 @@ import net.minecraft.world.level.ItemLike;
 import java.util.ServiceLoader;
 
 public final class FuelRegister {
-    private static final FuelApi IMPL = ServiceLoader
-            .load(FuelApi.class)
+    private static final FuelRegistry IMPL = ServiceLoader
+            .load(FuelRegistry.class)
             .findFirst()
             .orElseThrow(() -> new IllegalStateException("No FuelApi impl found"));
 
