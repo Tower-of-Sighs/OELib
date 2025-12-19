@@ -1,12 +1,12 @@
 package com.sighs.oelib.neoforge.network;
 
 import com.sighs.oelib.OELib;
+import com.sighs.oelib.data.net.DataSyncChunkPacket;
 import com.sighs.oelib.neoforge.data.DataManager;
-import com.sighs.oelib.neoforge.data.net.DataSyncChunkPacket;
-import com.sighs.oelib.network.net.INetworkManager;
-import com.sighs.oelib.network.net.INetworkPacket;
-import com.sighs.oelib.network.net.NetworkPacket;
-import com.sighs.oelib.network.net.SimplePacket;
+import com.sighs.oelib.network.api.INetworkManager;
+import com.sighs.oelib.network.api.INetworkPacket;
+import com.sighs.oelib.network.api.NetworkPacket;
+import com.sighs.oelib.network.api.SimplePacket;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -48,7 +48,7 @@ public class NetworkManager implements INetworkManager {
         registrar = event.registrar(OELib.MODID).versioned(PROTOCOL_VERSION);
 
         instance = new NetworkManager();
-        com.sighs.oelib.network.net.NetworkManager.setInstance(instance);
+        com.sighs.oelib.network.api.NetworkManager.setInstance(instance);
 
         // 注册内置的数据同步包
         registerBuiltinPackets();

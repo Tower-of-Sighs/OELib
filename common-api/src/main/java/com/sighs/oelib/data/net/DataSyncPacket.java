@@ -1,4 +1,4 @@
-package com.sighs.oelib.neoforge.data.net;
+package com.sighs.oelib.data.net;
 
 import com.sighs.oelib.OELib;
 import com.sighs.oelib.util.CodecUtils;

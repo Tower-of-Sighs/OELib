@@ -73,6 +73,10 @@ public final class DataManager {
         IMPL.updateClientData(dataClass, data);
     }
 
+    public static void updateClientDataRaw(Class<?> dataClass, Map<ResourceLocation, ?> data) {
+        IMPL.updateClientDataRaw(dataClass, data);
+    }
+
     @ApiStatus.Internal
     public static boolean isModLoaded(String modid) {
         return IMPL.isModLoaded(modid);

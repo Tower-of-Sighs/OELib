@@ -1,12 +1,12 @@
 package com.sighs.oelib.fabric.network;
 
 import com.sighs.oelib.OELib;
+import com.sighs.oelib.data.net.DataSyncChunkPacket;
 import com.sighs.oelib.fabric.data.DataManager;
-import com.sighs.oelib.fabric.data.net.DataSyncChunkPacket;
-import com.sighs.oelib.network.net.INetworkManager;
-import com.sighs.oelib.network.net.INetworkPacket;
-import com.sighs.oelib.network.net.NetworkPacket;
-import com.sighs.oelib.network.net.SimplePacket;
+import com.sighs.oelib.network.api.INetworkManager;
+import com.sighs.oelib.network.api.INetworkPacket;
+import com.sighs.oelib.network.api.NetworkPacket;
+import com.sighs.oelib.network.api.SimplePacket;
 import io.netty.buffer.Unpooled;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -41,7 +41,7 @@ public class NetworkManager implements INetworkManager {
      */
     public static void initialize() {
         instance = new NetworkManager();
-        com.sighs.oelib.network.net.NetworkManager.setInstance(instance);
+        com.sighs.oelib.network.api.NetworkManager.setInstance(instance);
 
         // 注册内置的数据同步包
         registerBuiltinPackets();

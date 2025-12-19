@@ -1,4 +1,4 @@
-package com.sighs.oelib.network.net;
+package com.sighs.oelib.network.api;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;

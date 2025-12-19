@@ -1,6 +1,6 @@
 package com.sighs.oelib.neoforge.network;
 
-import com.sighs.oelib.network.net.INetworkContext;
+import com.sighs.oelib.network.api.INetworkContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;

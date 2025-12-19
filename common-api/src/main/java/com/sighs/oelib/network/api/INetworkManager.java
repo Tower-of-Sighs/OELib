@@ -1,4 +1,4 @@
-package com.sighs.oelib.network.net;
+package com.sighs.oelib.network.api;
 
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;

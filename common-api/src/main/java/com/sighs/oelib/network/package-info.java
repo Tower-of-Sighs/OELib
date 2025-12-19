@@ -4,6 +4,6 @@
  * 极不稳定，仅供内部使用
  */
 @ApiStatus.Internal
-package com.sighs.oelib.network.net;
+package com.sighs.oelib.network;
 
 import org.jetbrains.annotations.ApiStatus;

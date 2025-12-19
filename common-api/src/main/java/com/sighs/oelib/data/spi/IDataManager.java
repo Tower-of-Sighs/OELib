@@ -28,5 +28,7 @@ public interface IDataManager {
 
     <T> void updateClientData(Class<T> dataClass, Map<ResourceLocation, T> data);
 
+    void updateClientDataRaw(Class<?> dataClass, Map<ResourceLocation, ?> data);
+
     boolean isModLoaded(String modid);
 }

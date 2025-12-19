@@ -8,7 +8,7 @@ import com.mojang.serialization.JsonOps;
 import com.sighs.oelib.OELib;
 import com.sighs.oelib.data.api.DataDriven;
 import com.sighs.oelib.data.api.DataValidator;
-import com.sighs.oelib.fabric.data.net.DataSyncPacket;
+import com.sighs.oelib.data.net.DataSyncPacket;
 import com.sighs.oelib.fabric.event.DataReloadEvent;
 import com.sighs.oelib.util.CodecUtils;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;

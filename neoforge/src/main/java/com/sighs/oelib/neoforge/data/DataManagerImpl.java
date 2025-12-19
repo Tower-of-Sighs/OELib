@@ -17,24 +17,6 @@ import java.util.Set;
 @EventBusSubscriber(modid = OELib.MODID)
 public final class DataManagerImpl implements IDataManager {
 
-    public <T> void register(Class<T> dataClass) {
-        DataManager.register(dataClass);
-    }
-
-    public <T> void registerNamespace(Class<T> dataClass, String namespace) {
-        DataManager.registerNamespace(dataClass, namespace);
-    }
-
-    public <T> void registerNamespaceValidator(Class<T> dataClass, String namespace,
-                                               Class<? extends DataValidator<?>> validatorClass) {
-        DataManager.registerNamespaceValidator(dataClass, namespace, validatorClass);
-    }
-
-    public <T> Map<ResourceLocation, T> getAllData(Class<T> dataClass) {
-        var manager = DataManager.get(dataClass);
-        return manager != null ? manager.getAllData() : Map.of();
-    }
-
     @SubscribeEvent
     public static void onAddReloadListener(AddReloadListenerEvent event) {
         List<Class<?>> types = DataRegistry.getRegisteredTypesByPriority();
@@ -46,21 +28,47 @@ public final class DataManagerImpl implements IDataManager {
         }
     }
 
+    @Override
+    public <T> void register(Class<T> dataClass) {
+        DataManager.register(dataClass);
+    }
+
+    @Override
+    public <T> void registerNamespace(Class<T> dataClass, String namespace) {
+        DataManager.registerNamespace(dataClass, namespace);
+    }
+
+    @Override
+    public <T> void registerNamespaceValidator(Class<T> dataClass, String namespace,
+                                               Class<? extends DataValidator<?>> validatorClass) {
+        DataManager.registerNamespaceValidator(dataClass, namespace, validatorClass);
+    }
+
+    @Override
+    public <T> Map<ResourceLocation, T> getAllData(Class<T> dataClass) {
+        var manager = DataManager.get(dataClass);
+        return manager != null ? manager.getAllData() : Map.of();
+    }
+
+    @Override
     public <T> T getData(Class<T> dataClass, ResourceLocation location) {
         var manager = DataManager.get(dataClass);
         return manager != null ? manager.getData(location) : null;
     }
 
+    @Override
     public <T> List<T> getDataList(Class<T> dataClass) {
         var manager = DataManager.get(dataClass);
         return manager != null ? manager.getDataList() : List.of();
     }
 
+    @Override
     public <T> Set<T> getCachedData(Class<T> dataClass, String cacheKey) {
         var manager = DataManager.get(dataClass);
         return manager != null ? manager.getCachedData(cacheKey) : Set.of();
     }
 
+    @Override
     public <T> void addToCache(Class<T> dataClass, String cacheKey, T data) {
         var manager = DataManager.get(dataClass);
         if (manager != null) {
@@ -68,6 +76,7 @@ public final class DataManagerImpl implements IDataManager {
         }
     }
 
+    @Override
     public <T> void clearCache(Class<T> dataClass) {
         var manager = DataManager.get(dataClass);
         if (manager != null) {
@@ -75,6 +84,7 @@ public final class DataManagerImpl implements IDataManager {
         }
     }
 
+    @Override
     public <T> void updateClientData(Class<T> dataClass, Map<ResourceLocation, T> data) {
         var manager = DataManager.get(dataClass);
         if (manager != null) {
@@ -85,5 +95,18 @@ public final class DataManagerImpl implements IDataManager {
     @Override
     public boolean isModLoaded(String modid) {
         return ModList.get().isLoaded(modid);
+    }
+
+    @Override
+    public void updateClientDataRaw(Class<?> dataClass, Map<ResourceLocation, ?> data) {
+        @SuppressWarnings("unchecked")
+        DataManager<Object> manager = (DataManager<Object>) DataManager.get(dataClass);
+        if (manager != null) {
+            @SuppressWarnings("unchecked")
+            Map<ResourceLocation, Object> castedData = (Map<ResourceLocation, Object>) data;
+            manager.updateClientData(castedData);
+        } else {
+            OELib.LOGGER.warn("No DataManager found for class {} during raw client data update", dataClass.getName());
+        }
     }
 }

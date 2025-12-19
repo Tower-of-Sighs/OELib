@@ -1,11 +1,11 @@
-package com.sighs.oelib.neoforge.data.net;
+package com.sighs.oelib.data.net;
 
 import com.sighs.oelib.OELib;
-import com.sighs.oelib.neoforge.network.ChunkAssembler;
-import com.sighs.oelib.network.net.INetworkContext;
-import com.sighs.oelib.network.net.NetworkPacket;
-import com.sighs.oelib.network.net.Side;
-import com.sighs.oelib.network.net.SimplePacket;
+import com.sighs.oelib.network.ChunkAssembler;
+import com.sighs.oelib.network.api.INetworkContext;
+import com.sighs.oelib.network.api.NetworkPacket;
+import com.sighs.oelib.network.api.Side;
+import com.sighs.oelib.network.api.SimplePacket;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;

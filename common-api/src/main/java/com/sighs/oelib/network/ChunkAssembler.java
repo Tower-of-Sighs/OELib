@@ -1,7 +1,7 @@
-package com.sighs.oelib.neoforge.network;
+package com.sighs.oelib.network;
 
 import com.sighs.oelib.OELib;
-import com.sighs.oelib.neoforge.data.DataManager;
+import com.sighs.oelib.data.DataManager;
 import com.sighs.oelib.util.CodecUtils;
 import net.minecraft.resources.ResourceLocation;
 
@@ -44,7 +44,7 @@ public class ChunkAssembler {
      * @param dataClassName 数据类名
      * @param chunkData     分片数据
      */
-    public static <T> void receiveChunk(UUID sessionId, int chunkIndex, int totalChunks, String dataClassName, byte[] chunkData) {
+    public static void receiveChunk(UUID sessionId, int chunkIndex, int totalChunks, String dataClassName, byte[] chunkData) {
         AssemblySession session = assemblingSessions.computeIfAbsent(sessionId,
                 id -> new AssemblySession(totalChunks, dataClassName));
 
@@ -53,21 +53,16 @@ public class ChunkAssembler {
                 byte[] completeData = session.assembleData();
                 String jsonData = new String(completeData, StandardCharsets.UTF_8);
 
+                Class<?> dataClass = Class.forName(dataClassName);
                 @SuppressWarnings("unchecked")
-                Class<T> dataClass = (Class<T>) Class.forName(dataClassName);
-                Optional<Map<ResourceLocation, T>> dataOpt = CodecUtils.decodeFromJson(dataClass, jsonData);
+                Optional<Map<ResourceLocation, ?>> dataOpt = (Optional<Map<ResourceLocation, ?>>) (Object)
+                        CodecUtils.decodeFromJson((Class<Object>) dataClass, jsonData);
 
                 if (dataOpt.isPresent()) {
-                    Map<ResourceLocation, T> data = dataOpt.get();
-
-                    DataManager<T> manager = DataManager.get(dataClass);
-                    if (manager != null) {
-                        updateClientData(manager, data);
-                        OELib.LOGGER.info("Successfully processed {} {} data entries",
-                                data.size(), dataClass.getSimpleName());
-                    } else {
-                        OELib.LOGGER.error("No data manager found for {}", dataClass.getSimpleName());
-                    }
+                    Map<ResourceLocation, ?> data = dataOpt.get();
+                    DataManager.updateClientDataRaw(dataClass, data);
+                    OELib.LOGGER.info("Successfully processed {} {} data entries",
+                            data.size(), dataClass.getSimpleName());
                 } else {
                     OELib.LOGGER.error("Failed to parse JSON data for {} session {}", dataClassName, sessionId);
                 }
@@ -80,11 +75,6 @@ public class ChunkAssembler {
         }
     }
 
-
-    @SuppressWarnings("unchecked")
-    private static <T> void updateClientData(DataManager<T> manager, Map<ResourceLocation, ?> data) {
-        manager.updateClientData((Map<ResourceLocation, T>) data);
-    }
 
     private static void cleanupExpiredSessions() {
         long currentTime = System.currentTimeMillis();

@@ -1,4 +1,4 @@
-package com.sighs.oelib.network.net;
+package com.sighs.oelib.network.api;
 
 /**
  * 网络包的目标端。
