@@ -100,7 +100,7 @@ public final class DynamicIconRegistry {
                 return v;
             }
         }
-        return variants.get(variants.size() - 1);
+        return variants.getLast();
     }
 
     private static List<IconVariant> filterForFabric(List<IconVariant> variants) {

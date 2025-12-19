@@ -25,3 +25,6 @@ mandatory = true
 versionRange = "[1.21,)"
 ordering = "NONE"
 side = "BOTH"
+
+[[mixins]]
+config = "oelib-neoforge.mixins.json"

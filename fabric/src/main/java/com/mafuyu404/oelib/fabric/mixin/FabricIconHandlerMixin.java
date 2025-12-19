@@ -1,5 +1,6 @@
 package com.mafuyu404.oelib.fabric.mixin;
 
+import com.mafuyu404.oelib.OELib;
 import com.mafuyu404.oelib.icon.DynamicIconRegistry;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.terraformersmc.modmenu.util.mod.fabric.FabricIconHandler;
@@ -48,7 +49,7 @@ public abstract class FabricIconHandlerMixin {
             DynamicTexture tex = new DynamicTexture(image);
             cacheModIcon(path, tex);
             cir.setReturnValue(tex);
-            System.out.println("[OELib: DynamicIcon] Set icon for " + modId + ": " + selected.get());
+            OELib.LOGGER.info("[OELib: DynamicIcon] Set icon for {}: {}", modId, selected.get());
         } catch (Throwable ignored) {
         }
     }
