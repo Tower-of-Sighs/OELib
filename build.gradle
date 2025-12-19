@@ -16,10 +16,6 @@ allprojects {
         compileOnly()
     }
 
-    tasks.withType(GenerateModuleMetadata) {
-        enabled = false
-    }
-
     group = rootProject.maven_group
     version = rootProject.mod_version
 }

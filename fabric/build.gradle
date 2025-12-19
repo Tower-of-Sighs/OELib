@@ -43,16 +43,6 @@ processResources {
     }
 }
 
-components.java {
-    withVariantsFromConfiguration(project.configurations.shadowRuntimeElements) {
-        skip()
-    }
-}
-
-jar {
-    archiveClassifier = "dev"
-}
-
 java {
     withSourcesJar()
 }

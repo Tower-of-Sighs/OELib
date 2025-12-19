@@ -2,12 +2,6 @@ architectury {
     common rootProject.enabled_platforms.split(',')
 }
 
-sourceSets {
-    main {
-        java {}
-        resources { srcDir 'src/main/resources' }
-    }
-}
 
 loom {
     accessWidenerPath = file("src/main/resources/oelib.accesswidener")
@@ -15,33 +9,6 @@ loom {
 
 dependencies {
     modCompileOnly "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
-}
-
-tasks.named("processResources") {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-}
-
-remapJar {
-    archiveClassifier = "raw"
-}
-
-tasks.register("fakeJar", Jar) {
-    dependsOn tasks.remapJar
-    from(tasks.remapJar.archiveFile.map { zipTree(it) })
-    from(rootProject.file("fake/fabric.mod.json")) { into "" }
-    from(rootProject.file("fake/neoforge.mods.toml")) { into "META-INF" }
-    archiveClassifier = null
-    metadataCharset "UTF-8"
-}
-
-artifacts {
-    apiElements(tasks.named("fakeJar"))
-    runtimeElements(tasks.named("fakeJar"))
-}
-
-afterEvaluate {
-    configurations.apiElements.artifacts.removeIf { it.buildDependencies.getDependencies(null).contains(tasks.remapJar) }
-    configurations.runtimeElements.artifacts.removeIf { it.buildDependencies.getDependencies(null).contains(tasks.remapJar) }
 }
 
 publishing {

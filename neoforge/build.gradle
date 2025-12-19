@@ -43,25 +43,11 @@ processResources {
     }
 }
 
-def modRuntime(str) {
-    dependencies.modLocalRuntime(str)
-}
-
-
-components.java {
-    withVariantsFromConfiguration(project.configurations.shadowRuntimeElements) {
-        skip()
-    }
-}
-
 shadowJar {
     configurations = [project.configurations.shadowCommon]
     archiveClassifier = "dev-shadow"
 }
 
-jar {
-    archiveClassifier = "dev"
-}
 
 java {
     withSourcesJar()
