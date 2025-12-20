@@ -38,8 +38,8 @@ import java.util.stream.Collectors;
 public class DataManager<T> implements SimpleResourceReloadListener<Map<ResourceLocation, JsonElement>> {
     private static final Gson GSON = new GsonBuilder().setLenient().create();
     private static final Map<Class<?>, DataManager<?>> managers = new ConcurrentHashMap<>();
-    private static final Map<Class<?>, Set<String>> runtimeRegisteredNamespaces = new ConcurrentHashMap<>();
     private static boolean serverStarted = false;
+    private static final Map<Class<?>, Set<String>> runtimeRegisteredNamespaces = new ConcurrentHashMap<>();
     private static MinecraftServer currentServer = null;
 
     static {
@@ -63,6 +63,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
                 }
             }
         });
+
     }
 
     private final Class<T> dataClass;
@@ -134,20 +135,6 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
         if (mgr != null && namespace != null && !namespace.isBlank() && validatorClass != null) {
             mgr.namespaceValidatorClasses.put(namespace, validatorClass);
         }
-    }
-
-    public static MinecraftServer getCurrentServer() {
-        return currentServer;
-    }
-
-    private static String getFolder(Class<?> dataClass) {
-        DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
-        return annotation.folder();
-    }
-
-    private static String getModId(Class<?> dataClass) {
-        DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
-        return annotation.modid();
     }
 
     @Override
@@ -430,9 +417,23 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
         });
     }
 
+    public static MinecraftServer getCurrentServer() {
+        return currentServer;
+    }
+
+    private static String getFolder(Class<?> dataClass) {
+        DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
+        return annotation.folder();
+    }
+
+    private static String getModId(Class<?> dataClass) {
+        DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
+        return annotation.modid();
+    }
+
     private void syncToAllPlayers() {
         try {
-            MinecraftServer server = getCurrentServer();
+            var server = getCurrentServer();
             if (server != null && (!loadedData.isEmpty() || !deferredData.isEmpty())) {
                 Map<ResourceLocation, T> allData = new HashMap<>(loadedData);
                 allData.putAll(deferredData);
@@ -451,7 +452,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
      * @param player 玩家
      */
     public void syncToPlayer(ServerPlayer player) {
-        if (annotation.syncToClient() && (!loadedData.isEmpty() || !deferredData.isEmpty())) {
+        if (player != null && annotation.syncToClient() && (!loadedData.isEmpty() || !deferredData.isEmpty())) {
             try {
                 Map<ResourceLocation, T> allData = new HashMap<>(loadedData);
                 allData.putAll(deferredData);
@@ -463,6 +464,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
             }
         }
     }
+
 
     @SuppressWarnings("unchecked")
     private DataValidator<T> createValidator(Class<? extends DataValidator<?>> validatorClass) {

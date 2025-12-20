@@ -14,18 +14,28 @@ import org.joml.Matrix4f;
 import java.util.ServiceLoader;
 
 /**
- * 流体渲染统一入口类。
+ * Utility class for Fluid GUI Rendering.
  * <p>
- * 本类提供了流体 GUI 渲染能力，通过 {@link #render(GuiGraphics, Object, long, long, int, int, int, int)}
- * 方法可自动识别传入的流体类型（{@code net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant} 或 {@code net.minecraftforge.fluids.FluidStack}），并正确渲染其纹理与颜色。
+ * This class provides GUI rendering capabilities for fluids. The method
+ * {@link #render(GuiGraphics, Object, long, long, int, int, int, int)}
+ * automatically detects the type of the provided fluid object—either a
+ * {@code net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant} (Fabric)
+ * or a {@code net.minecraftforge.fluids.FluidStack} (Forge)—and renders it
+ * with the correct texture and tint color.
  * </p>
  *
- * <h2>基本用法</h2>
+ * <h2>Basic Usage</h2>
  * <ul>
- *   <li>调用 {@link #render(GuiGraphics, Object, long, long, int, int, int, int)}，
- *       传入任意平台的流体对象（如 {@code FluidVariant} 或 {@code FluidStack}）、当前流体量、总容量及目标矩形区域。</li>
- *   <li>内部会自动解析纹理 Sprite 与 ARGB 颜色，并按 {@code amount/capacity} 比例垂直缩放填充高度。</li>
- *   <li>若需手动控制渲染（例如已知 Sprite 和颜色），可直接使用 {@link #renderTiledSprite(GuiGraphics, TextureAtlasSprite, int, int, int, int, int, int)}。</li>
+ *   <li>Call {@link #render(GuiGraphics, Object, long, long, int, int, int, int)},
+ *       passing in a fluid object from either platform (e.g., {@code FluidVariant}
+ *       or {@code FluidStack}), the current fluid amount, total capacity, and the
+ *       target rectangular area.</li>
+ *   <li>The implementation automatically resolves the appropriate texture sprite
+ *       and ARGB tint color, then renders the fluid by vertically scaling its
+ *       fill height according to the {@code amount / capacity} ratio.</li>
+ *   <li>For fine-grained control—such as when you already have a specific sprite
+ *       and color—you can use the lower-level method
+ *       {@link #renderTiledSprite(GuiGraphics, TextureAtlasSprite, int, int, int, int, int, int)} directly.</li>
  * </ul>
  */
 public final class FluidRenderers {
@@ -37,7 +47,7 @@ public final class FluidRenderers {
     static {
         IMPL = ServiceLoader.load(IFluidRenderers.class)
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("No FluidRenderersSPI implementation found"));
+                .orElseThrow(() -> new IllegalStateException("No IFluidRenderers implementation found"));
     }
 
     private FluidRenderers() {

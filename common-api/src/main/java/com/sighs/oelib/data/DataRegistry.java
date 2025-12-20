@@ -8,6 +8,7 @@ import com.sighs.oelib.data.mvel.ExpressionEngine;
 import com.sighs.oelib.data.mvel.FunctionUsageAnalyzer;
 import com.sighs.oelib.util.CodecUtils;
 import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -31,14 +32,17 @@ public final class DataRegistry {
         registerInternal(dataClass, codec, (String[]) null);
     }
 
+    @ApiStatus.Internal
     public static <T> void registerWithNamespaces(Class<T> dataClass, String... namespaces) {
         registerInternal(dataClass, null, namespaces);
     }
 
+    @ApiStatus.Internal
     public static <T> void registerWithNamespaces(Class<T> dataClass, Codec<T> codec, String... namespaces) {
         registerInternal(dataClass, codec, namespaces);
     }
 
+    @ApiStatus.Internal
     public static <T> void registerNamespaceValidator(
             Class<T> dataClass,
             String namespace,
@@ -142,7 +146,6 @@ public final class DataRegistry {
             }
         }
 
-        // 数据包尚未加载，延迟初始化
         if (!hasAnyData) {
             OELib.LOGGER.info("No datapack data loaded yet; deferring expression engine initialization");
             return;
@@ -150,7 +153,6 @@ public final class DataRegistry {
 
         OELib.LOGGER.info("Smart registration: found {} total used functions: {}", allUsedFunctions.size(), allUsedFunctions);
 
-        // 定向注册，仅注册扫描到的函数；若定向结果为空，ExpressionEngine 内部会回退全量
         ExpressionEngine.initialize(allUsedFunctions);
 
         expressionEngineInitialized = true;

@@ -12,8 +12,14 @@ import java.util.UUID;
 
 /**
  * 数据同步分片数据包。
+ *  *
+ *  * @param sessionId     会话ID
+ *  * @param chunkIndex    当前分片索引
+ *  * @param totalChunks   总分片数
+ *  * @param dataClassName 数据类名
+ *  * @param chunkData     分片数据
  */
-@NetworkPacket(side = Side.BOTH, priority = 0)
+@NetworkPacket(side = Side.BOTH, chunkThreshold = 30000)
 public record DataSyncChunkPacket(UUID sessionId, int chunkIndex, int totalChunks, String dataClassName,
                                   byte[] chunkData) implements INetworkPacket<DataSyncChunkPacket> {
 

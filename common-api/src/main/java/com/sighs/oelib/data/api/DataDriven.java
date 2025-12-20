@@ -1,5 +1,7 @@
 package com.sighs.oelib.data.api;
 
+import org.jetbrains.annotations.ApiStatus;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -7,10 +9,6 @@ import java.lang.annotation.Target;
 
 /**
  * 标记数据驱动类型的注解。
- * <p>
- * 使用此注解标记的记录类将被自动注册到数据驱动系统中，
- * 支持从数据包加载、网络同步、热重载等功能。
- * </p>
  *
  * <h3>使用示例：</h3>
  * <pre>{@code
@@ -111,6 +109,7 @@ public @interface DataDriven {
      * 为不同命名空间绑定特定验证器。
      * 适用于同一数据类型在多个 namespace 下共享但需要不同的验证逻辑的场景。
      */
+    @ApiStatus.Internal
     ValidatorBinding[] namespaceValidators() default {};
 
     /**
@@ -118,6 +117,7 @@ public @interface DataDriven {
      */
     @Target({})
     @Retention(RetentionPolicy.RUNTIME)
+    @ApiStatus.Internal
     @interface ValidatorBinding {
         String namespace();
 

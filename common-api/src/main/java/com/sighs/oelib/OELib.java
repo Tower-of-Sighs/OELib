@@ -4,8 +4,6 @@ import com.sighs.oelib.data.DataRegistry;
 import com.sighs.oelib.example.ExampleCreativeTab;
 import com.sighs.oelib.example.ExampleRegistry;
 import com.sighs.oelib.icon.DynamicIconRegistry;
-import com.sighs.oelib.registry.extra.FuelRegister;
-import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,7 +17,6 @@ public class OELib {
         ExampleCreativeTab.registerCreativeTabEntries();
         ExampleCreativeTab.modifyCreativeTab();
         ExampleRegistry.registerFuel();
-        ExampleRegistry.EXAMPLE_BLOCK_ITEM.listen(block -> LOGGER.info("Fuel burn time: {}", FuelRegister.get(new ItemStack(block))));
         DynamicIconRegistry.forMod(MODID)
                 .addNameFabric("icon1.png", 1)
                 .addNameFabric("icon2.png", 1)

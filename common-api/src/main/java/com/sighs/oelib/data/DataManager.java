@@ -3,6 +3,7 @@ package com.sighs.oelib.data;
 import com.sighs.oelib.data.api.DataValidator;
 import com.sighs.oelib.data.spi.IDataManager;
 import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.ApiStatus;
 
 import java.util.List;
 import java.util.Map;
@@ -21,16 +22,17 @@ public final class DataManager {
     private DataManager() {
     }
 
+    @ApiStatus.Internal
     public static <T> void register(Class<T> dataClass) {
         IMPL.register(dataClass);
     }
 
-
+    @ApiStatus.Internal
     public static <T> void registerNamespace(Class<T> dataClass, String namespace) {
         IMPL.registerNamespace(dataClass, namespace);
     }
 
-
+    @ApiStatus.Internal
     public static <T> void registerNamespaceValidator(Class<T> dataClass, String namespace,
                                                       Class<? extends DataValidator<?>> validatorClass) {
         IMPL.registerNamespaceValidator(dataClass, namespace, validatorClass);
@@ -75,6 +77,7 @@ public final class DataManager {
         IMPL.updateClientDataRaw(dataClass, data);
     }
 
+    @ApiStatus.Internal
     public static boolean isModLoaded(String modId) {
         return IMPL.isModLoaded(modId);
     }

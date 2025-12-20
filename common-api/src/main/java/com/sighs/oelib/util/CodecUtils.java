@@ -7,21 +7,22 @@ import com.mojang.serialization.DataResult;
 import com.mojang.serialization.JsonOps;
 import com.sighs.oelib.OELib;
 import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.ApiStatus;
 
-import java.lang.reflect.Field;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
+@ApiStatus.Internal
 public class CodecUtils {
 
     private static final Map<Class<?>, Codec<?>> codecCache = new ConcurrentHashMap<>();
 
     public static <T> Optional<String> encodeToJson(Class<T> dataClass, Map<ResourceLocation, T> data) {
         return executeWithExceptionHandling(dataClass, "encoding", () -> {
-            Codec<Map<ResourceLocation, T>> mapCodec = createMapCodec(dataClass);
-            DataResult<JsonElement> result = mapCodec.encodeStart(JsonOps.INSTANCE, data);
+            var mapCodec = createMapCodec(dataClass);
+            var result = mapCodec.encodeStart(JsonOps.INSTANCE, data);
 
             return handleDataResult(dataClass, "encode", result)
                     .map(JsonElement::toString);
@@ -30,9 +31,9 @@ public class CodecUtils {
 
     public static <T> Optional<Map<ResourceLocation, T>> decodeFromJson(Class<T> dataClass, String jsonData) {
         return executeWithExceptionHandling(dataClass, "decoding", () -> {
-            JsonElement jsonElement = JsonParser.parseString(jsonData);
-            Codec<Map<ResourceLocation, T>> mapCodec = createMapCodec(dataClass);
-            DataResult<Map<ResourceLocation, T>> result = mapCodec.parse(JsonOps.INSTANCE, jsonElement);
+            var jsonElement = JsonParser.parseString(jsonData);
+            var mapCodec = createMapCodec(dataClass);
+            var result = mapCodec.parse(JsonOps.INSTANCE, jsonElement);
 
             return handleDataResult(dataClass, "decode", result);
         });
@@ -40,8 +41,8 @@ public class CodecUtils {
 
     public static <T> Optional<T> decodeSingle(Class<T> dataClass, JsonElement jsonElement) {
         return executeWithExceptionHandling(dataClass, "decoding", () -> {
-            Codec<T> codec = getCodec(dataClass);
-            DataResult<T> result = codec.parse(JsonOps.INSTANCE, jsonElement);
+            var codec = getCodec(dataClass);
+            var result = codec.parse(JsonOps.INSTANCE, jsonElement);
 
             return handleDataResult(dataClass, "decode", result);
         });
@@ -68,7 +69,7 @@ public class CodecUtils {
     }
 
     private static <T> Codec<Map<ResourceLocation, T>> createMapCodec(Class<T> dataClass) {
-        Codec<T> codec = getCodec(dataClass);
+        var codec = getCodec(dataClass);
         return Codec.unboundedMap(ResourceLocation.CODEC, codec);
     }
 
@@ -78,7 +79,7 @@ public class CodecUtils {
     public static <T> Codec<T> getCodec(Class<T> dataClass) {
         return (Codec<T>) codecCache.computeIfAbsent(dataClass, cls -> {
             try {
-                Field codecField = cls.getDeclaredField("CODEC");
+                var codecField = cls.getDeclaredField("CODEC");
                 codecField.setAccessible(true);
                 return (Codec<?>) codecField.get(null);
             } catch (Exception e) {

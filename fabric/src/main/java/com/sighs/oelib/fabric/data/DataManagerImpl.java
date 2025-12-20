@@ -14,9 +14,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class DataManagerImpl implements IDataManager {
-
     private static final Set<Class<?>> registeredReloadListeners = ConcurrentHashMap.newKeySet();
 
+    @Override
     public <T> void register(Class<T> dataClass) {
         DataManager.register(dataClass);
         if (registeredReloadListeners.add(dataClass)) {
@@ -101,7 +101,7 @@ public final class DataManagerImpl implements IDataManager {
     }
 
     @Override
-    public boolean isModLoaded(String modid) {
-        return FabricLoader.getInstance().isModLoaded(modid);
+    public boolean isModLoaded(String modId) {
+        return FabricLoader.getInstance().isModLoaded(modId);
     }
 }

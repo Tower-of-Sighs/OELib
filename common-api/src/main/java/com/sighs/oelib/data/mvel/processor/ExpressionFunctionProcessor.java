@@ -131,7 +131,6 @@ public class ExpressionFunctionProcessor extends AbstractProcessor {
             out.println("}");
         }
 
-        // ServiceLoader provider for generated registrar
         String registrarService = "com.mafuyu404.oelib.data.mvel.gen.ExpressionFunctionsRegistrar";
         try (PrintWriter svc = new PrintWriter(
                 filer.createResource(StandardLocation.CLASS_OUTPUT, "", "META-INF/services/" + registrarService)
