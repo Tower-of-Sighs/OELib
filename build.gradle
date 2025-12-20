@@ -1,5 +1,5 @@
 plugins {
-    id 'dev.architectury.loom' version '1.10-SNAPSHOT' apply false
+    id 'dev.architectury.loom' version '1.13-SNAPSHOT' apply false
     id 'architectury-plugin' version '3.4-SNAPSHOT'
     id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
 }
@@ -16,10 +16,6 @@ allprojects {
         compileOnly()
     }
 
-    tasks.withType(GenerateModuleMetadata) {
-        enabled = false
-    }
-
     group = rootProject.maven_group
     version = rootProject.mod_version
 }
@@ -28,12 +24,14 @@ subprojects {
     apply plugin: 'dev.architectury.loom'
     apply plugin: 'architectury-plugin'
     apply plugin: 'maven-publish'
+    apply plugin: 'java'
 
     base {
         archivesName = "${rootProject.archives_name}-${project.name}-${rootProject.minecraft_version}"
     }
 
     repositories {
+        mavenCentral()
         maven {
             name = "Jared's maven"
             url = "https://maven.blamejared.com/"
@@ -44,9 +42,16 @@ subprojects {
         minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
         mappings loom.officialMojangMappings()
 
-        if (project.name == "fabric" || project.name == "neoforge" || project.name == "forge") {
-            implementation(include("org.mvel:mvel2:2.5.0.Final"))
-        } else {
+        if (project.name == "fabric") {
+            api("org.mvel:mvel2:2.5.0.Final")
+            include("org.mvel:mvel2:2.5.0.Final")
+        }
+        if (project.name == "neoforge" || project.name == "forge") {
+            api("org.mvel:mvel2:2.5.0.Final")
+            include("org.mvel:mvel2:2.5.0.Final")
+            forgeRuntimeLibrary("org.mvel:mvel2:2.5.0.Final")
+        }
+        if (project.name == "common-api") {
             implementation "org.mvel:mvel2:2.5.0.Final"
         }
 

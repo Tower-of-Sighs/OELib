@@ -1,8 +1,0 @@
-{
-  "schemaVersion": 1,
-  "id": "oelib-common-api",
-  "version": "${version}",
-  "name": "OELib Common API (Fake)",
-  "description": "Fake mod marker for common-api to allow nested jars.",
-  "environment": "*"
-}

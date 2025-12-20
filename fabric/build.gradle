@@ -1,5 +1,3 @@
-import net.fabricmc.loom.task.RemapJarTask
-
 plugins {
     id 'com.github.johnrengelman.shadow'
 }
@@ -7,6 +5,10 @@ plugins {
 architectury {
     platformSetupLoomIde()
     fabric()
+}
+
+loom {
+    accessWidenerPath = project(":common-api").loom.accessWidenerPath
 }
 
 configurations {
@@ -41,16 +43,6 @@ processResources {
     }
 }
 
-components.java {
-    withVariantsFromConfiguration(project.configurations.shadowRuntimeElements) {
-        skip()
-    }
-}
-
-jar {
-    archiveClassifier = "dev"
-}
-
 java {
     withSourcesJar()
 }
@@ -79,9 +71,4 @@ publishing {
             }
         }
     }
-}
-
-// 此开发环境运行时无法识别 MVEL，很神秘
-tasks.named("runClient") {
-    systemProperty "oelib.skipExpressionEngine", "true"
 }

@@ -5,13 +5,17 @@ plugins {
 
 loom {
     forge {
-        mixinConfig "oelib.mixins.json"
+        mixinConfig "oelib.forge.mixins.json"
     }
 }
 
 architectury {
     platformSetupLoomIde()
     forge()
+}
+
+loom {
+    accessWidenerPath = project(":common-api").loom.accessWidenerPath
 }
 
 configurations {
@@ -38,25 +42,11 @@ processResources {
     }
 }
 
-def modRuntime(str) {
-    dependencies.modLocalRuntime(str)
-}
-
-
-components.java {
-    withVariantsFromConfiguration(project.configurations.shadowRuntimeElements) {
-        skip()
-    }
-}
-
 shadowJar {
     configurations = [project.configurations.shadowCommon]
     archiveClassifier = "dev-shadow"
 }
 
-jar {
-    archiveClassifier = "dev"
-}
 
 java {
     withSourcesJar()
@@ -81,9 +71,4 @@ publishing {
             }
         }
     }
-}
-
-// 此开发环境运行时无法识别 MVEL，很神秘
-tasks.named("runClient") {
-    systemProperty "oelib.skipExpressionEngine", "true"
 }

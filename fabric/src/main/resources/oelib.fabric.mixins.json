@@ -1,11 +1,10 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "com.mafuyu404.oelib.fabric.mixin",
-  "plugin": "com.mafuyu404.oelib.fabric.mixin.MixinPlugin",
+  "package": "com.sighs.oelib.fabric.mixin",
+  "plugin": "com.sighs.oelib.fabric.mixin.MixinPlugin",
   "compatibilityLevel": "JAVA_17",
   "mixins": [
-
   ],
   "client": [
     "FabricIconHandlerMixin"
