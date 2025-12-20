@@ -3,10 +3,13 @@ package com.sighs.oelib.icon;
 import java.util.Objects;
 
 public final class IconVariant {
+    public enum Platform {COMMON, FABRIC, FORGE}
+
     private final String name;
     private final String path;
     private final int weight;
     private final Platform platform;
+
     private IconVariant(String name, String path, int weight, Platform platform) {
         this.name = name;
         this.path = path;
@@ -69,6 +72,4 @@ public final class IconVariant {
     boolean appliesToForge() {
         return platform == Platform.COMMON || platform == Platform.FORGE;
     }
-
-    public enum Platform {COMMON, FABRIC, FORGE}
 }
