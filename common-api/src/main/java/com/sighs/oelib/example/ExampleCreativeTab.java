@@ -8,7 +8,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
 
 public class ExampleCreativeTab {
@@ -29,9 +31,8 @@ public class ExampleCreativeTab {
     }
 
     public static void registerCreativeTabEntries() {
-        GENERAL.listen(general -> {
-            CreativeTabRegister.appendBuiltinStack(
-                    general,
+        CreativeTabRegister.appendStack(
+                GENERAL.key(),
                     () -> {
 
                         var mc = Minecraft.getInstance();
@@ -49,6 +50,15 @@ public class ExampleCreativeTab {
                         return sword;
                     }
             );
-        });
+    }
+
+    public static void modifyCreativeTab() {
+        CreativeTabRegister.modify(
+                CreativeModeTabs.COMBAT, ((flags, output, canUseGameMasterBlocks) -> {
+                    var item = new ItemStack(ExampleRegistry.EXAMPLE_ITEM.get());
+                    var sword = new ItemStack(Items.NETHERITE_SWORD);
+                    output.acceptAfter(sword, item);
+                })
+        );
     }
 }

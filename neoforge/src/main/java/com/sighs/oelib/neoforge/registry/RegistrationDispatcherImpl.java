@@ -1,5 +1,6 @@
 package com.sighs.oelib.neoforge.registry;
 
+import com.sighs.oelib.OELib;
 import com.sighs.oelib.registry.RegisterSupplier;
 import com.sighs.oelib.registry.action.*;
 import com.sighs.oelib.registry.api.CreativeTabModifyCallback;
@@ -73,6 +74,15 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
     private static final Map<ResourceKey<?>, List<ListenEntry<?>>> ENTRY_LISTENERS = new ConcurrentHashMap<>();
     private static final Map<ResourceLocation, List<Supplier<ItemStack>>> TAB_APPENDS = new ConcurrentHashMap<>();
     private static final Map<ResourceLocation, List<CreativeTabModifyCallback>> TAB_MODIFIERS = new ConcurrentHashMap<>();
+    private static final Map<ResourceKey<?>, List<RegisterSupplier<?>>> REGISTERED_ENTRIES = new ConcurrentHashMap<>();
+
+    private static void putFuelTime(int time, ItemLike item) {
+        if (time >= 0) {
+            FUEL_TIMES.put(item, time);
+        } else {
+            FUEL_TIMES.remove(item);
+        }
+    }
 
     @SuppressWarnings("unchecked")
     @Override
@@ -163,8 +173,16 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
             Collections.addAll(list, trades);
             return;
         }
-        if (action instanceof FuelAction(int time, ItemLike[] items)) {
-            for (var item : items) FUEL_TIMES.put(item, time);
+        if (action instanceof FuelAction(int time, Supplier<? extends ItemLike>[] items)) {
+            for (var s : items) {
+                if (s instanceof RegisterSupplier<?> rs) {
+                    @SuppressWarnings("unchecked")
+                    RegisterSupplier<? extends ItemLike> itemSupplier = (RegisterSupplier<? extends ItemLike>) rs;
+                    itemSupplier.listen(item -> putFuelTime(time, item));
+                    continue;
+                }
+                putFuelTime(time, s.get());
+            }
         }
     }
 
@@ -175,15 +193,19 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
         var dr = DeferredRegister.create(key, modid);
         dr.register(ModLoadingContext.get().getActiveContainer().getEventBus());
         for (RegisterSupplier<? extends T> entry : batch.entries()) {
-            dr.register(entry.id().getPath(), () -> ((RegisterSupplier<T>) entry).get());
+            @SuppressWarnings("unchecked")
+            Supplier<T> supplier = (Supplier<T>) entry.getCreator();
+            var ro = dr.register(entry.id().getPath(), supplier);
+            ((RegisterSupplier<T>) entry).setGetter(ro);
         }
+        REGISTERED_ENTRIES.computeIfAbsent(key, _k -> new CopyOnWriteArrayList<>()).addAll(batch.entries());
     }
 
     private record ListenEntry<T>(RegisterSupplier<? extends T> supplier, Consumer<? super T> callback) {
     }
 
     @SuppressWarnings("unchecked")
-    @EventBusSubscriber(value = Dist.CLIENT)
+    @EventBusSubscriber(modid = OELib.MODID, value = Dist.CLIENT)
     public static final class ClientEventHooks {
         @SubscribeEvent
         public static void onBuildCreative(BuildCreativeModeTabContentsEvent event) {
@@ -296,13 +318,19 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
     public static final class ModEventHooks {
         @SubscribeEvent(priority = EventPriority.LOWEST)
         public static void onNotifyRegistered(RegisterEvent event) {
+            var entries = REGISTERED_ENTRIES.remove(event.getRegistryKey());
+            if (entries != null) {
+                for (var e : entries) {
+                    Object obj = e.get();
+                    ((RegisterSupplier<Object>) e).bindInstance(obj);
+                }
+            }
+
             var list = ENTRY_LISTENERS.remove(event.getRegistryKey());
             if (list != null) {
                 for (var leRaw : list) {
                     var le = (ListenEntry<Object>) leRaw;
-                    var obj = le.supplier.get();
-                    le.supplier.markPresent();
-                    le.callback.accept(obj);
+                    le.callback.accept(le.supplier.get());
                 }
             }
         }

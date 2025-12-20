@@ -62,18 +62,23 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
     @SuppressWarnings("unchecked")
     @Override
     public void perform(RegistrationAction action) {
-        if (action instanceof RegistryBatchAction<?> batchRaw) {
-            performRegistryBatch((RegistryBatchAction<Object>) batchRaw);
+        if (action instanceof RegistryBatchAction<?>) {
+            RegistryBatchAction<Object> batchRaw = (RegistryBatchAction<Object>) action;
+            performRegistryBatch(batchRaw);
             return;
         }
-        if (action instanceof ListenAction<?> laRaw) {
-            var la = (ListenAction<Object>) laRaw;
+
+        if (action instanceof ListenAction<?>) {
+            ListenAction<Object> la = (ListenAction<Object>) action;
             var raw = BuiltInRegistries.REGISTRY.get(la.registryKey().location());
             if (raw != null) {
                 var reg = (Registry<Object>) raw;
-                var present = reg.get(la.supplier().id()) != null;
-                if (present) {
-                    la.callback().accept(la.supplier().get());
+                var obj = reg.get(la.supplier().id());
+                if (obj != null) {
+                    if (!la.supplier().isPresent()) {
+                        la.supplier().bindInstance(obj);
+                    }
+                    la.callback().accept(obj);
                     return;
                 }
             }
@@ -184,13 +189,29 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
                         list -> Collections.addAll(list, trades));
                 return;
             }
-            if (action instanceof FuelAction(int time, ItemLike[] items)) {
-                for (var item : items) {
-                    if (time >= 0) {
-                        FuelRegistry.INSTANCE.add(item, time);
-                    } else {
-                        FuelRegistry.INSTANCE.remove(item);
-                    }
+
+        }
+
+        if (action instanceof FuelAction(int time, Supplier<? extends ItemLike>[] items)) {
+            for (var s : items) {
+                if (s instanceof RegisterSupplier<?> rs) {
+                    @SuppressWarnings("unchecked")
+                    RegisterSupplier<? extends ItemLike> itemSupplier = (RegisterSupplier<? extends ItemLike>) rs;
+                    itemSupplier.listen(item -> {
+                        if (time >= 0) {
+                            FuelRegistry.INSTANCE.add(item, time);
+                        } else {
+                            FuelRegistry.INSTANCE.remove(item);
+                        }
+                    });
+                    continue;
+                }
+
+                ItemLike item = s.get();
+                if (time >= 0) {
+                    FuelRegistry.INSTANCE.add(item, time);
+                } else {
+                    FuelRegistry.INSTANCE.remove(item);
                 }
             }
         }
@@ -205,7 +226,7 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
         var registry = (Registry<T>) rawRegistry;
 
         for (RegisterSupplier<? extends T> entry : batch.entries()) {
-            T instance = ((RegisterSupplier<T>) entry).get();
+            T instance = ((RegisterSupplier<T>) entry).getCreator().get();
             Registry.register(registry, entry.id(), instance);
             ((RegisterSupplier<T>) entry).bindInstance(instance);
             var ls = ENTRY_LISTENERS.remove(entry);

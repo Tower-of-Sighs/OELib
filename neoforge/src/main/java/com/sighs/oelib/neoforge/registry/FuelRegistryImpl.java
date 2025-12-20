@@ -1,9 +1,9 @@
 package com.sighs.oelib.neoforge.registry;
 
-import com.sighs.oelib.registry.spi.FuelRegistry;
+import com.sighs.oelib.registry.spi.IFuelRegistry;
 import net.minecraft.world.item.ItemStack;
 
-public class FuelRegistryImpl implements FuelRegistry {
+public class FuelRegistryImpl implements IFuelRegistry {
     @Override
     public int getBurnTime(ItemStack stack) {
         return stack.getBurnTime(null);

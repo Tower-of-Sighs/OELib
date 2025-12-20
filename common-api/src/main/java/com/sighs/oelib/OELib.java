@@ -15,6 +15,8 @@ public class OELib {
         ExampleRegistry.init();
         ExampleCreativeTab.init();
         ExampleCreativeTab.registerCreativeTabEntries();
+        ExampleCreativeTab.modifyCreativeTab();
+        ExampleRegistry.registerFuel();
         DynamicIconRegistry.forMod(MODID)
                 .addNameFabric("icon1.png", 1)
                 .addNameFabric("icon2.png", 1)

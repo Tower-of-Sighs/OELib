@@ -1,7 +1,7 @@
 package com.sighs.oelib.fabric;
 
 import com.sighs.oelib.OELibClient;
-import com.sighs.oelib.fabric.data.net.DataSyncChunkPacket;
+import com.sighs.oelib.data.net.DataSyncChunkPacket;
 import com.sighs.oelib.fabric.example.FluidRenderExampleClient;
 import com.sighs.oelib.network.api.NetworkManager;
 import net.fabricmc.api.ClientModInitializer;

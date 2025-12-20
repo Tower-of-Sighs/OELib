@@ -28,11 +28,7 @@ public final class RegisterSupplier<T> implements Supplier<T> {
         this.getterRef.set(() -> {
             var current = instanceRef.get();
             if (current != null) return current;
-            var created = creator.get();
-            if (!instanceRef.compareAndSet(null, created)) {
-                return instanceRef.get();
-            }
-            return created;
+            throw new IllegalStateException("Object is not registered yet: " + registryKey.location() + " " + id);
         });
     }
 
@@ -45,7 +41,17 @@ public final class RegisterSupplier<T> implements Supplier<T> {
     }
 
     public void setGetter(Supplier<? extends T> getter) {
-        this.getterRef.set(Objects.requireNonNull(getter, "getter"));
+        Objects.requireNonNull(getter, "getter");
+        this.getterRef.set(() -> {
+            var current = instanceRef.get();
+            if (current != null) return current;
+            try {
+                var v = getter.get();
+                if (v != null) return v;
+            } catch (Throwable ignored) {
+            }
+            throw new IllegalStateException("Object is not registered yet: " + registryKey.location() + " " + id);
+        });
     }
 
     public void bindInstance(T instance) {

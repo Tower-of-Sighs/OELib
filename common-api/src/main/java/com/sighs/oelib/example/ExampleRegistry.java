@@ -3,6 +3,7 @@ package com.sighs.oelib.example;
 import com.sighs.oelib.OELib;
 import com.sighs.oelib.registry.DeferredRegister;
 import com.sighs.oelib.registry.RegisterSupplier;
+import com.sighs.oelib.registry.extra.FuelRegister;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
@@ -33,5 +34,9 @@ public final class ExampleRegistry {
         BLOCKS.register();
         ITEMS.register();
         OELib.LOGGER.info("Queued example registration: {}", EXAMPLE_ITEM.id() + " " + EXAMPLE_BLOCK.id());
+    }
+
+    public static void registerFuel() {
+        FuelRegister.register(20, EXAMPLE_BLOCK_ITEM);
     }
 }

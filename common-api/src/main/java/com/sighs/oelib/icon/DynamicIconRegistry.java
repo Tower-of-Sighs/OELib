@@ -36,7 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class DynamicIconRegistry {
     private static final Map<String, List<IconVariant>> VARIANTS = new ConcurrentHashMap<>();
     private static final Map<String, String> SELECTED_FABRIC_PATH = new ConcurrentHashMap<>();
-    private static final Map<String, String> SELECTED_NeoForge_PATH = new ConcurrentHashMap<>();
+    private static final Map<String, String> SELECTED_NEOFORGE_PATH = new ConcurrentHashMap<>();
     private static final Random RANDOM = new Random();
 
     private DynamicIconRegistry() {
@@ -72,7 +72,7 @@ public final class DynamicIconRegistry {
     }
 
     public static Optional<String> getSelectedNeoForgePath(String modId) {
-        String cached = SELECTED_NeoForge_PATH.get(modId);
+        String cached = SELECTED_NEOFORGE_PATH.get(modId);
         if (cached != null) return Optional.of(cached);
 
         List<IconVariant> variants = VARIANTS.get(modId);
@@ -83,7 +83,7 @@ public final class DynamicIconRegistry {
 
         IconVariant picked = pickWeighted(effective);
         String path = resolveNeoForgePath(picked);
-        SELECTED_NeoForge_PATH.put(modId, path);
+        SELECTED_NEOFORGE_PATH.put(modId, path);
         return Optional.of(path);
     }
 
