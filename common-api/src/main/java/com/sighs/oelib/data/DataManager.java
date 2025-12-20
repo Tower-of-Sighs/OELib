@@ -78,7 +78,7 @@ public final class DataManager {
     }
 
     @ApiStatus.Internal
-    public static boolean isModLoaded(String modid) {
-        return IMPL.isModLoaded(modid);
+    public static boolean isModLoaded(String modId) {
+        return IMPL.isModLoaded(modId);
     }
 }

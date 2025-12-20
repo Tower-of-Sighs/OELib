@@ -101,7 +101,7 @@ public final class DataManagerImpl implements IDataManager {
     }
 
     @Override
-    public boolean isModLoaded(String modid) {
-        return FabricLoader.getInstance().isModLoaded(modid);
+    public boolean isModLoaded(String modId) {
+        return FabricLoader.getInstance().isModLoaded(modId);
     }
 }

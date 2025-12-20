@@ -33,23 +33,23 @@ public class ExampleCreativeTab {
     public static void registerCreativeTabEntries() {
         CreativeTabRegister.appendStack(
                 GENERAL.key(),
-                    () -> {
+                () -> {
 
-                        var mc = Minecraft.getInstance();
+                    var mc = Minecraft.getInstance();
 
-                        var registryAccess = mc.level.registryAccess();
-                        var enchantReg = registryAccess.registryOrThrow(Registries.ENCHANTMENT);
+                    var registryAccess = mc.level.registryAccess();
+                    var enchantReg = registryAccess.registryOrThrow(Registries.ENCHANTMENT);
 
-                        var sharpness = enchantReg
-                                .getHolder(Enchantments.SHARPNESS)
-                                .orElse(null);
+                    var sharpness = enchantReg
+                            .getHolder(Enchantments.SHARPNESS)
+                            .orElse(null);
 
-                        var sword = new ItemStack(ExampleRegistry.EXAMPLE_ITEM.get());
-                        sword.enchant(sharpness, 5);
+                    var sword = new ItemStack(ExampleRegistry.EXAMPLE_ITEM.get());
+                    sword.enchant(sharpness, 5);
 
-                        return sword;
-                    }
-            );
+                    return sword;
+                }
+        );
     }
 
     public static void modifyCreativeTab() {

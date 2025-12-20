@@ -93,11 +93,6 @@ public final class DataManagerImpl implements IDataManager {
     }
 
     @Override
-    public boolean isModLoaded(String modid) {
-        return ModList.get().isLoaded(modid);
-    }
-
-    @Override
     public void updateClientDataRaw(Class<?> dataClass, Map<ResourceLocation, ?> data) {
         @SuppressWarnings("unchecked")
         DataManager<Object> manager = (DataManager<Object>) DataManager.get(dataClass);
@@ -108,5 +103,10 @@ public final class DataManagerImpl implements IDataManager {
         } else {
             OELib.LOGGER.warn("No DataManager found for class {} during raw client data update", dataClass.getName());
         }
+    }
+
+    @Override
+    public boolean isModLoaded(String modId) {
+        return ModList.get().isLoaded(modId);
     }
 }
