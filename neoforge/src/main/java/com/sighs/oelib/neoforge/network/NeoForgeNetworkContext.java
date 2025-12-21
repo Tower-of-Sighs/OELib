@@ -6,7 +6,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * NeoForge网络上下文实现。
+ * NeoForge implementation of {@link INetworkContext}.
  */
 public class NeoForgeNetworkContext implements INetworkContext {
 
@@ -40,5 +40,10 @@ public class NeoForgeNetworkContext implements INetworkContext {
             return Minecraft.getInstance();
         }
         return null;
+    }
+
+    @Override
+    public void enqueueWork(Runnable task) {
+        context.enqueueWork(task);
     }
 }

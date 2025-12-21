@@ -5,7 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
- * Fabric网络上下文实现。
+ * Fabric implementation of {@link INetworkContext}.
  */
 public record FabricNetworkContext(ServerPlayer sender, boolean isServerSide) implements INetworkContext {
 
@@ -20,5 +20,18 @@ public record FabricNetworkContext(ServerPlayer sender, boolean isServerSide) im
             return Minecraft.getInstance();
         }
         return null;
+    }
+
+    @Override
+    public void enqueueWork(Runnable task) {
+        if (isServerSide) {
+            ServerPlayer player = sender;
+            if (player != null && player.serverLevel() != null) {
+                player.serverLevel().getServer().execute(task);
+            }
+        } else {
+            Minecraft minecraft = Minecraft.getInstance();
+            minecraft.execute(task);
+        }
     }
 }

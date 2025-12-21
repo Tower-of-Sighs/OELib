@@ -2,6 +2,7 @@ package com.sighs.oelib;
 
 import com.sighs.oelib.data.DataRegistry;
 import com.sighs.oelib.example.ExampleCreativeTab;
+import com.sighs.oelib.example.ExampleMenus;
 import com.sighs.oelib.example.ExampleRegistry;
 import com.sighs.oelib.icon.DynamicIconRegistry;
 import org.slf4j.Logger;
@@ -17,6 +18,7 @@ public class OELib {
         ExampleCreativeTab.registerCreativeTabEntries();
         ExampleCreativeTab.modifyCreativeTab();
         ExampleRegistry.registerFuel();
+        ExampleMenus.init();
         DynamicIconRegistry.forMod(MODID)
                 .addNameFabric("icon1.png", 1)
                 .addNameFabric("icon2.png", 1)

@@ -1,15 +1,20 @@
 package com.sighs.oelib.fabric.example;
 
+import com.sighs.oelib.example.FluidRenderExampleMenu;
 import com.sighs.oelib.renderer.FluidRenderers;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.level.material.Fluids;
 
-public class FluidRenderExampleScreen extends Screen {
-    public FluidRenderExampleScreen() {
-        super(Component.literal("OELib Fluid Render Example"));
+public class FluidRenderExampleScreen extends AbstractContainerScreen<FluidRenderExampleMenu> {
+
+    public FluidRenderExampleScreen(FluidRenderExampleMenu menu, Inventory inv, Component title) {
+        super(menu, inv, title);
+        this.imageWidth = 240;
+        this.imageHeight = 140;
     }
 
     @Override
@@ -18,13 +23,10 @@ public class FluidRenderExampleScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        super.render(graphics, mouseX, mouseY, partialTick);
-        int w = 240, h = 140;
-        int left = (this.width - w) / 2;
-        int top = (this.height - h) / 2;
-
-        graphics.fill(left, top, left + w, top + h, 0x66000000);
+    protected void renderBg(GuiGraphics guiGraphics, float partialTick, int mouseX, int mouseY) {
+        int left = this.leftPos;
+        int top = this.topPos;
+        guiGraphics.fill(left, top, left + imageWidth, top + imageHeight, 0x66000000);
 
         long capacity = 1000;
         long amount = 1000;
@@ -33,13 +35,13 @@ public class FluidRenderExampleScreen extends Screen {
         int fluidHeight = 64;
         int gap = 20;
         int totalWidth = fluidWidth * 2 + gap;
-        int startX = left + (w - totalWidth) / 2;
-        int startY = top + (h - fluidHeight) / 2;
+        int startX = left + (imageWidth - totalWidth) / 2;
+        int startY = top + (imageHeight - fluidHeight) / 2;
 
-        FluidVariant water = FluidVariant.of(Fluids.WATER);
-        FluidRenderers.render(graphics, water, amount, capacity, startX, startY, fluidWidth, fluidHeight);
+        FluidRenderers.render(guiGraphics, FluidVariant.of(Fluids.WATER), amount, capacity,
+                startX, startY, fluidWidth, fluidHeight);
 
-        FluidVariant lava = FluidVariant.of(Fluids.LAVA);
-        FluidRenderers.render(graphics, lava, amount, capacity, startX + fluidWidth + gap, startY, fluidWidth, fluidHeight);
+        FluidRenderers.render(guiGraphics, FluidVariant.of(Fluids.LAVA), amount, capacity,
+                startX + fluidWidth + gap, startY, fluidWidth, fluidHeight);
     }
 }

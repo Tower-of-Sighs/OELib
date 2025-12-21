@@ -1,14 +1,19 @@
 package com.sighs.oelib.neoforge.example;
 
 import com.sighs.oelib.OELib;
+import com.sighs.oelib.data.net.OpenGuiPacket;
+import com.sighs.oelib.example.ExampleMenus;
 import com.sighs.oelib.registry.extra.KeyMappingRegister;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import org.lwjgl.glfw.GLFW;
 
 @EventBusSubscriber(modid = OELib.MODID, value = Dist.CLIENT)
@@ -25,7 +30,20 @@ public final class FluidRenderExampleClient {
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         if (openExample != null && openExample.consumeClick()) {
-            Minecraft.getInstance().setScreen(new FluidRenderExampleScreen());
+            var mc = Minecraft.getInstance();
+            if (mc.hitResult != null && mc.hitResult.getType() == HitResult.Type.BLOCK) {
+                var pos = ((BlockHitResult) mc.hitResult).getBlockPos();
+                var packet = new OpenGuiPacket(pos);
+                packet.sendToServer();
+            }
         }
+    }
+
+    @SubscribeEvent
+    public static void registerMenus(RegisterMenuScreensEvent event) {
+        event.register(
+                ExampleMenus.FLUID_RENDER_EXAMPLE.get(),
+                FluidRenderExampleScreen::new
+        );
     }
 }

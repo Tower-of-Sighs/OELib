@@ -41,7 +41,7 @@ public class DataSyncPacket<T> {
             DataSyncChunkPacket packet = new DataSyncChunkPacket(
                     UUID.randomUUID(), 0, 1, dataClass.getName(), dataBytes);
 
-            packet.sendToWithChunking(player);
+            packet.sendTo(player);
 
         } catch (Exception e) {
             OELib.LOGGER.error("Failed to send {} sync packet: {}", dataClass.getSimpleName(), e.getMessage(), e);
@@ -63,7 +63,7 @@ public class DataSyncPacket<T> {
             DataSyncChunkPacket packet = new DataSyncChunkPacket(
                     UUID.randomUUID(), 0, 1, dataClass.getName(), dataBytes);
 
-            packet.sendToAllWithChunking();
+            packet.sendToAll();
 
         } catch (Exception e) {
             OELib.LOGGER.error("Failed to send {} sync packet to all players: {}", dataClass.getSimpleName(), e.getMessage(), e);

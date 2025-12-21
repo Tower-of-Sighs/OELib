@@ -4,44 +4,57 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
- * 网络上下文接口。
+ * Platform independent network context.
  * <p>
- * 提供平台无关的网络上下文信息。
+ * Wraps platform specific networking state so that packet handlers can be
+ * written once in the common module. Typical implementations are backed by
+ * Fabric server or client contexts or NeoForge {@code IPayloadContext}.
  * </p>
  */
 public interface INetworkContext {
 
     /**
-     * 检查是否在客户端。
+     * Returns whether this context represents the logical client.
      *
-     * @return 如果在客户端返回 true
+     * @return true if on client side
      */
     boolean isClientSide();
 
     /**
-     * 检查是否在服务端。
+     * Returns whether this context represents the logical server.
      *
-     * @return 如果在服务端返回 true
+     * @return true if on server side
      */
     boolean isServerSide();
 
     /**
-     * 获取发送者玩家。
+     * Returns the sending player if available.
      * <p>
-     * 仅在服务端有效。
+     * Only valid on the logical server.
      * </p>
      *
-     * @return 发送者玩家，如果在客户端或无法获取则返回 null
+     * @return sender player, or {@code null} if unavailable
      */
     ServerPlayer sender();
 
     /**
-     * 获取客户端实例。
+     * Returns the Minecraft client instance if available.
      * <p>
-     * 仅在客户端有效。
+     * Only valid on the logical client.
      * </p>
      *
-     * @return 客户端实例，如果在服务端或无法获取则返回 null
+     * @return client instance, or {@code null} on the server
      */
     Minecraft client();
+
+    /**
+     * Enqueues a task on the correct game thread for this context.
+     * <p>
+     * Use this to schedule logic that must access game state on the main
+     * thread, regardless of platform specifics.
+     * </p>
+     *
+     * @param task task to execute
+     */
+    void enqueueWork(Runnable task);
 }

@@ -3,10 +3,9 @@ package com.sighs.oelib.fabric.network;
 import com.sighs.oelib.OELib;
 import com.sighs.oelib.data.net.DataSyncChunkPacket;
 import com.sighs.oelib.fabric.data.DataManager;
-import com.sighs.oelib.network.api.INetworkManager;
-import com.sighs.oelib.network.api.INetworkPacket;
-import com.sighs.oelib.network.api.NetworkPacket;
-import com.sighs.oelib.network.api.SimplePacket;
+import com.sighs.oelib.network.api.*;
+import com.sighs.oelib.network.serialization.NetworkSerialization;
+import com.sighs.oelib.network.spi.INetworkManager;
 import io.netty.buffer.Unpooled;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -15,41 +14,29 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 
 /**
- * Fabric网络管理器。
+ * Fabric implementation of the shared networking API.
  * <p>
- * 提供统一的网络包注册和发送功能。
+ * Bridges {@link com.sighs.oelib.network.api.INetworkPacket} to Fabric's
+ * play stage networking facilities.
  * </p>
  */
-public class NetworkManager implements INetworkManager {
+public class NetworkManagerImpl implements INetworkManager {
 
     private static final Map<CustomPacketPayload.Type<?>, PacketInfo<?>> registeredPackets = new ConcurrentHashMap<>();
-    private static NetworkManager instance;
 
-    /**
-     * 初始化网络管理器。
-     * <p>
-     * 此方法应该在模组初始化时调用。
-     * </p>
-     */
     public static void initialize() {
-        instance = new NetworkManager();
-        com.sighs.oelib.network.api.NetworkManager.setInstance(instance);
-
-        // 注册内置的数据同步包
         registerBuiltinPackets();
-
         OELib.LOGGER.info("Network manager initialized");
     }
 
-    @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void registerBidirectionalPacket(
             Class<T> packetClass,
             StreamCodec<? super RegistryFriendlyByteBuf, T> codec
@@ -57,14 +44,6 @@ public class NetworkManager implements INetworkManager {
         registerServerOrBidirectionalPacket(packetClass, codec);
     }
 
-    @Override
-    public void registerBidirectionalPackets(PacketRegistration<?>... packets) {
-        for (PacketRegistration<?> packet : packets) {
-            registerBidirectionalPacketUnchecked(packet.packetClass(), packet.codec());
-        }
-    }
-
-    @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void registerClientPacket(
             Class<T> packetClass,
             StreamCodec<? super RegistryFriendlyByteBuf, T> codec
@@ -86,60 +65,17 @@ public class NetworkManager implements INetworkManager {
         }
     }
 
-    @Override
-    public void registerClientPackets(PacketRegistration<?>... packets) {
-        for (PacketRegistration<?> packet : packets) {
-            registerClientPacketUnchecked(packet.packetClass(), packet.codec());
-        }
-    }
-
-
-    @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void registerServerPacket(Class<T> packetClass, StreamCodec<? super RegistryFriendlyByteBuf, T> codec) {
         registerServerOrBidirectionalPacket(packetClass, codec);
     }
 
-    @Override
-    public void registerServerPackets(PacketRegistration<?>... packets) {
-        for (PacketRegistration<?> packet : packets) {
-            registerServerPacketUnchecked(packet.packetClass(), packet.codec());
-        }
-    }
-
     /**
-     * 通过类名创建网络包类型。
+     * Returns the number of registered packet types.
+     *
+     * @return registered packet type count
      */
-    private <T extends INetworkPacket<T> & CustomPacketPayload> CustomPacketPayload.Type<T> createPacketType(Class<T> packetClass) {
-        try {
-            // 尝试获取模组ID
-            String modId = getModIdFromClass(packetClass);
-            String className = packetClass.getSimpleName().toLowerCase();
-            ResourceLocation id = ResourceLocation.fromNamespaceAndPath(modId, className);
-            return new CustomPacketPayload.Type<>(id);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to create packet type for " + packetClass.getSimpleName(), e);
-        }
-    }
-
-    /**
-     * 从类中获取模组ID。
-     */
-    private String getModIdFromClass(Class<?> packetClass) {
-        try {
-            // 尝试创建临时实例来获取模组ID
-            Object tempInstance = packetClass.getDeclaredConstructor().newInstance();
-            if (tempInstance instanceof SimplePacket) {
-                return ((SimplePacket<?>) tempInstance).getModId();
-            }
-        } catch (Exception e) {
-            // 如果无法创建实例，尝试从包名推断
-            String packageName = packetClass.getPackage().getName();
-            if (packageName.contains("oelib")) {
-                return "oelib";
-            }
-        }
-
-        return "oelib";
+    public static int getRegisteredPacketCount() {
+        return registeredPackets.size();
     }
 
     private <T extends INetworkPacket<T> & CustomPacketPayload> void registerServerOrBidirectionalPacket(
@@ -147,7 +83,6 @@ public class NetworkManager implements INetworkManager {
             StreamCodec<? super RegistryFriendlyByteBuf, T> codec
     ) {
         try {
-            // 通过类名生成类型信息，避免创建临时实例
             CustomPacketPayload.Type<T> type = createPacketType(packetClass);
 
             if (registeredPackets.containsKey(type)) {
@@ -161,7 +96,6 @@ public class NetworkManager implements INetworkManager {
             PayloadTypeRegistry.playC2S().register(type, codec);
             PayloadTypeRegistry.playS2C().register(type, codec);
 
-            // 注册服务端接收器
             ServerPlayNetworking.registerGlobalReceiver(type, (packet, context) -> {
                 context.server().execute(() -> {
                     FabricNetworkContext networkContext = new FabricNetworkContext(context.player(), true);
@@ -178,69 +112,20 @@ public class NetworkManager implements INetworkManager {
     }
 
     /**
-     * 注册单个双端网络包（无类型检查版本）。
+     * Returns the set of registered packet types.
+     *
+     * @return registered packet types
      */
-    @SuppressWarnings("unchecked")
-    private <T extends INetworkPacket<T> & CustomPacketPayload> void registerBidirectionalPacketUnchecked(
-            Class<?> packetClass,
-            StreamCodec<? super RegistryFriendlyByteBuf, ?> codec
-    ) {
-        registerBidirectionalPacket((Class<T>) packetClass, (StreamCodec<? super RegistryFriendlyByteBuf, T>) codec);
+    public static Set<CustomPacketPayload.Type<?>> getRegisteredPacketTypes() {
+        return new HashSet<>(registeredPackets.keySet());
     }
 
-    /**
-     * 注册单个客户端网络包（无类型检查版本）。
-     */
-    @SuppressWarnings("unchecked")
-    private <T extends INetworkPacket<T> & CustomPacketPayload> void registerClientPacketUnchecked(
-            Class<?> packetClass,
-            StreamCodec<? super RegistryFriendlyByteBuf, ?> codec
-    ) {
-        registerClientPacket((Class<T>) packetClass, (StreamCodec<? super RegistryFriendlyByteBuf, T>) codec);
-    }
-
-    /**
-     * 注册单个服务端端网络包（无类型检查版本）。
-     */
-    @SuppressWarnings("unchecked")
-    private <T extends INetworkPacket<T> & CustomPacketPayload> void registerServerPacketUnchecked(
-            Class<?> packetClass,
-            StreamCodec<? super RegistryFriendlyByteBuf, ?> codec
-    ) {
-        registerServerPacket((Class<T>) packetClass, (StreamCodec<? super RegistryFriendlyByteBuf, T>) codec);
-    }
-
-    @Override
-    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToPlayer(T packet, ServerPlayer player) {
-        if (player == null) {
-            OELib.LOGGER.warn("Cannot send packet {}: player is null", packet.type().id());
-            return;
+    private static void registerBuiltinPackets() {
+        NetworkManagerImpl impl = new NetworkManagerImpl();
+        for (Class<? extends INetworkPacket<?>> rawClass : NetworkAutoRegistration.findAllAnnotatedPackets()) {
+            impl.registerServerAnnotatedPacket(rawClass);
         }
-
-        try {
-            ServerPlayNetworking.send(player, packet);
-            OELib.LOGGER.debug("Sent packet {} to player {}",
-                    packet.type().id(), player.getName().getString());
-        } catch (Exception e) {
-            OELib.LOGGER.error("Failed to send packet {} to player {}: {}",
-                    packet.type().id(), player.getName().getString(), e.getMessage(), e);
-        }
-    }
-
-    @Override
-    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToAll(T packet) {
-        try {
-            MinecraftServer server = DataManager.getCurrentServer();
-            if (server != null) {
-                for (ServerPlayer player : PlayerLookup.all(server)) {
-                    ServerPlayNetworking.send(player, packet);
-                }
-            }
-            OELib.LOGGER.debug("Sent packet {} to all players", packet.type().id());
-        } catch (Exception e) {
-            OELib.LOGGER.error("Failed to send packet {} to all players: {}",
-                    packet.type().id(), e.getMessage(), e);
-        }
+        OELib.LOGGER.info("Registered builtin server network packets");
     }
 
     @Override
@@ -254,56 +139,79 @@ public class NetworkManager implements INetworkManager {
         }
     }
 
+    public static void initializeClient() {
+        NetworkManagerImpl impl = new NetworkManagerImpl();
+        for (Class<? extends INetworkPacket<?>> rawClass : NetworkAutoRegistration.findAllAnnotatedPackets()) {
+            impl.registerClientAnnotatedPacket(rawClass);
+        }
+        OELib.LOGGER.info("Registered builtin client network packets");
+    }
+
+    /**
+     * Creates a packet type descriptor using {@link NetworkPacket} metadata.
+     */
+    private <T extends INetworkPacket<T> & CustomPacketPayload> CustomPacketPayload.Type<T> createPacketType(Class<T> packetClass) {
+        return NetworkPacketTypes.typeOf(packetClass);
+    }
+
     @Override
-    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToPlayerWithChunking(T packet, ServerPlayer player) {
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToPlayer(T packet, ServerPlayer player) {
         if (player == null) {
             OELib.LOGGER.warn("Cannot send packet {}: player is null", packet.type().id());
             return;
         }
 
-        // 检查是否需要分片
-        Class<?> packetClass = packet.getClass();
-        if (packetClass.isAnnotationPresent(NetworkPacket.class)) {
-            NetworkPacket annotation = packetClass.getAnnotation(NetworkPacket.class);
-            if (annotation.chunkThreshold() > 0) {
-                sendWithChunking(packet, Collections.singletonList(player), annotation.chunkThreshold());
-                return;
+        try {
+            Class<?> packetClass = packet.getClass();
+            int threshold = 0;
+            if (packetClass.isAnnotationPresent(NetworkPacket.class)) {
+                threshold = packetClass.getAnnotation(NetworkPacket.class).chunkThreshold();
             }
+            if (threshold > 0) {
+                sendWithChunking(packet, Collections.singletonList(player), threshold);
+            } else {
+                ServerPlayNetworking.send(player, packet);
+                OELib.LOGGER.debug("Sent packet {} to player {}",
+                        packet.type().id(), player.getName().getString());
+            }
+        } catch (Exception e) {
+            OELib.LOGGER.error("Failed to send packet {} to player {}: {}",
+                    packet.type().id(), player.getName().getString(), e.getMessage(), e);
         }
-
-        sendToPlayer(packet, player);
     }
 
     @Override
-    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToAllWithChunking(T packet) {
-        // 检查是否需要分片
-        Class<?> packetClass = packet.getClass();
-        if (packetClass.isAnnotationPresent(NetworkPacket.class)) {
-            NetworkPacket annotation = packetClass.getAnnotation(NetworkPacket.class);
-            if (annotation.chunkThreshold() > 0) {
-                MinecraftServer server = DataManager.getCurrentServer();
-                if (server != null) {
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToAll(T packet) {
+        try {
+            MinecraftServer server = DataManager.getCurrentServer();
+            if (server != null) {
+                Class<?> packetClass = packet.getClass();
+                int threshold = 0;
+                if (packetClass.isAnnotationPresent(NetworkPacket.class)) {
+                    threshold = packetClass.getAnnotation(NetworkPacket.class).chunkThreshold();
+                }
+                if (threshold > 0) {
                     List<ServerPlayer> players = new ArrayList<>(PlayerLookup.all(server));
-                    sendWithChunking(packet, players, annotation.chunkThreshold());
-                    return;
+                    sendWithChunking(packet, players, threshold);
+                } else {
+                    for (ServerPlayer player : PlayerLookup.all(server)) {
+                        ServerPlayNetworking.send(player, packet);
+                    }
                 }
             }
+            OELib.LOGGER.debug("Sent packet {} to all players", packet.type().id());
+        } catch (Exception e) {
+            OELib.LOGGER.error("Failed to send packet {} to all players: {}",
+                    packet.type().id(), e.getMessage(), e);
         }
-
-        sendToAll(packet);
     }
 
-    /**
-     * 使用分片发送网络包。
-     */
     @SuppressWarnings("unchecked")
     private <T extends INetworkPacket<T> & CustomPacketPayload> void sendWithChunking(
             T packet, Iterable<ServerPlayer> players, int chunkThreshold) {
         try {
-            // 将包编码为字节数组
             RegistryFriendlyByteBuf tempBuf = new RegistryFriendlyByteBuf(Unpooled.buffer(), null);
 
-            // 获取对应的编解码器并编码
             PacketInfo<T> info = (PacketInfo<T>) registeredPackets.get(packet.type());
             if (info != null) {
                 info.codec().encode(tempBuf, packet);
@@ -313,14 +221,12 @@ public class NetworkManager implements INetworkManager {
                 tempBuf.release();
 
                 if (packetData.length <= chunkThreshold) {
-                    // 不需要分片，直接发送
                     for (ServerPlayer player : players) {
-                        sendToPlayer(packet, player);
+                        ServerPlayNetworking.send(player, packet);
                     }
                     OELib.LOGGER.debug("Sent packet {} without chunking ({} bytes)",
                             packet.type().id(), packetData.length);
                 } else {
-                    // 需要分片发送
                     sendChunkedPacket(packetData, packet.getClass().getName(), players, chunkThreshold);
                 }
             } else {
@@ -333,7 +239,7 @@ public class NetworkManager implements INetworkManager {
     }
 
     /**
-     * 发送分片数据包。
+     * Sends a chunked data packet.
      */
     private void sendChunkedPacket(byte[] data, String packetClassName, Iterable<ServerPlayer> players, int chunkSize) {
         try {
@@ -366,28 +272,44 @@ public class NetworkManager implements INetworkManager {
         }
     }
 
-    /**
-     * 获取已注册的网络包数量。
-     *
-     * @return 已注册的网络包数量
-     */
-    public static int getRegisteredPacketCount() {
-        return registeredPackets.size();
+    @SuppressWarnings("unchecked")
+    private <T extends INetworkPacket<T> & CustomPacketPayload> void registerAnnotatedPacket(
+            Class<? extends INetworkPacket<?>> rawClass,
+            BiConsumer<Side, RegistrationContext<T>> registrationLogic) {
+
+        Class<T> packetClass = (Class<T>) rawClass;
+        NetworkPacket meta = packetClass.getAnnotation(NetworkPacket.class);
+
+        if (meta == null) return;
+
+        if (!packetClass.isRecord()) {
+            OELib.LOGGER.warn("Skipping non-record network packet {}", packetClass.getName());
+            return;
+        }
+
+        StreamCodec<RegistryFriendlyByteBuf, T> codec = NetworkSerialization.autoCodec(packetClass);
+
+        registrationLogic.accept(meta.side(), new RegistrationContext<>(packetClass, codec));
     }
 
-    /**
-     * 获取已注册的网络包类型列表。
-     *
-     * @return 已注册的网络包类型列表
-     */
-    public static Set<CustomPacketPayload.Type<?>> getRegisteredPacketTypes() {
-        return new HashSet<>(registeredPackets.keySet());
+    private void registerServerAnnotatedPacket(Class<? extends INetworkPacket<?>> rawClass) {
+        registerAnnotatedPacket(rawClass, (side, ctx) -> {
+            switch (side) {
+                case SERVER -> registerServerPacket(ctx.packetClass, ctx.codec);
+                case BOTH -> registerBidirectionalPacket(ctx.packetClass, ctx.codec);
+            }
+        });
     }
 
-    private static void registerBuiltinPackets() {
-        instance.registerServerPacket(DataSyncChunkPacket.class, DataSyncChunkPacket.STREAM_CODEC);
+    private void registerClientAnnotatedPacket(Class<? extends INetworkPacket<?>> rawClass) {
+        registerAnnotatedPacket(rawClass, (side, ctx) -> {
+            if (side == Side.CLIENT || side == Side.BOTH) {
+                registerClientPacket(ctx.packetClass, ctx.codec);
+            }
+        });
+    }
 
-        OELib.LOGGER.info("Registered builtin data sync packets");
+    private record RegistrationContext<T>(Class<T> packetClass, StreamCodec<RegistryFriendlyByteBuf, T> codec) {
     }
 
     private record PacketInfo<T extends INetworkPacket<T> & CustomPacketPayload>(

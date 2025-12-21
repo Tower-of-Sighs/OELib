@@ -1,173 +1,62 @@
 package com.sighs.oelib.network.api;
 
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
+import com.sighs.oelib.network.spi.INetworkManager;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.ServiceLoader;
+
 /**
- * 通用网络管理器接口。
+ * Static facade for platform specific network managers.
  * <p>
- * 提供平台无关的网络包发送功能。
- * 具体实现由各平台的NetworkManager提供。
+ * Provides platform independent helpers for sending packets. The actual
+ * implementation is supplied by platform modules through the
+ * {@link INetworkManager} service provider interface discovered via
+ * {@link ServiceLoader}.
  * </p>
  */
 public class NetworkManager {
 
-    private static INetworkManager instance;
+    private static final INetworkManager IMPL;
 
-    /**
-     * 设置网络管理器实例。
-     * <p>
-     * 此方法由各平台的NetworkManager在初始化时调用。
-     * </p>
-     *
-     * @param manager 网络管理器实例
-     */
-    public static void setInstance(INetworkManager manager) {
-        instance = manager;
+    static {
+        IMPL = ServiceLoader.load(INetworkManager.class)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("No INetworkManager implementation found"));
+    }
+
+    public static void registerPacketScanPackage(String basePackage) {
+        NetworkAutoRegistration.registerBasePackage(basePackage);
     }
 
     /**
-     * 发送网络包到指定玩家。
+     * Sends a packet to a specific player.
      *
-     * @param packet 网络包
-     * @param player 目标玩家
-     * @param <T>    网络包类型
+     * @param packet packet instance
+     * @param player target player
+     * @param <T>    packet type
      */
     public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToPlayer(T packet, ServerPlayer player) {
-        if (instance != null) {
-            instance.sendToPlayer(packet, player);
-        }
+        IMPL.sendToPlayer(packet, player);
     }
 
     /**
-     * 发送网络包到所有玩家。
+     * Sends a packet to all players.
      *
-     * @param packet 网络包
-     * @param <T>    网络包类型
+     * @param packet packet instance
+     * @param <T>    packet type
      */
     public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToAll(T packet) {
-        if (instance != null) {
-            instance.sendToAll(packet);
-        }
+        IMPL.sendToAll(packet);
     }
 
     /**
-     * 发送网络包到服务器。
+     * Sends a packet to the logical server.
      *
-     * @param packet 网络包
-     * @param <T>    网络包类型
+     * @param packet packet instance
+     * @param <T>    packet type
      */
     public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToServer(T packet) {
-        if (instance != null) {
-            instance.sendToServer(packet);
-        }
-    }
-
-    /**
-     * 发送网络包到指定玩家（支持自动分片）。
-     *
-     * @param packet 网络包
-     * @param player 目标玩家
-     * @param <T>    网络包类型
-     */
-    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToPlayerWithChunking(T packet, ServerPlayer player) {
-        if (instance != null) {
-            instance.sendToPlayerWithChunking(packet, player);
-        }
-    }
-
-    /**
-     * 发送网络包到所有玩家（支持自动分片）。
-     *
-     * @param packet 网络包
-     * @param <T>    网络包类型
-     */
-    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToAllWithChunking(T packet) {
-        if (instance != null) {
-            instance.sendToAllWithChunking(packet);
-        }
-    }
-
-    /**
-     * 注册双端网络包。
-     *
-     * @param packetClass 网络包类
-     * @param codec       编解码器
-     * @param <T>         网络包类型
-     */
-    public static <T extends INetworkPacket<T> & CustomPacketPayload> void registerBidirectionalPacket(
-            Class<T> packetClass,
-            StreamCodec<? super RegistryFriendlyByteBuf, T> codec
-    ) {
-        if (instance != null) {
-            instance.registerBidirectionalPacket(packetClass, codec);
-        }
-    }
-
-    /**
-     * 批量双端注册网络包。
-     *
-     * @param packets 网络包注册信息
-     */
-    public static void registerBidirectionalPackets(INetworkManager.PacketRegistration<?>... packets) {
-        if (instance != null) {
-            instance.registerBidirectionalPackets(packets);
-        }
-    }
-
-    /**
-     * 注册服务端网络包。
-     *
-     * @param packetClass 网络包类
-     * @param codec       编解码器
-     * @param <T>         网络包类型
-     */
-    public static <T extends INetworkPacket<T> & CustomPacketPayload> void registerServerPacket(
-            Class<T> packetClass,
-            StreamCodec<? super RegistryFriendlyByteBuf, T> codec
-    ) {
-        if (instance != null) {
-            instance.registerServerPacket(packetClass, codec);
-        }
-    }
-
-    /**
-     * 批量服务端注册网络包。
-     *
-     * @param packets 网络包注册信息
-     */
-    public static void registerServerPackets(INetworkManager.PacketRegistration<?>... packets) {
-        if (instance != null) {
-            instance.registerServerPackets(packets);
-        }
-    }
-
-    /**
-     * 注册客户端网络包。
-     *
-     * @param packetClass 网络包类
-     * @param codec       编解码器
-     * @param <T>         网络包类型
-     */
-    public static <T extends INetworkPacket<T> & CustomPacketPayload> void registerClientPacket(
-            Class<T> packetClass,
-            StreamCodec<? super RegistryFriendlyByteBuf, T> codec
-    ) {
-        if (instance != null) {
-            instance.registerClientPacket(packetClass, codec);
-        }
-    }
-
-    /**
-     * 批量注册客户端网络包。
-     *
-     * @param packets 网络包注册信息
-     */
-    public static void registerClientPackets(INetworkManager.PacketRegistration<?>... packets) {
-        if (instance != null) {
-            instance.registerClientPackets(packets);
-        }
+        IMPL.sendToServer(packet);
     }
 }
