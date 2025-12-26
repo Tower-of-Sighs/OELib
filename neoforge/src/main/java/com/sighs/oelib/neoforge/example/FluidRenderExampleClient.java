@@ -1,8 +1,8 @@
 package com.sighs.oelib.neoforge.example;
 
 import com.sighs.oelib.OELib;
-import com.sighs.oelib.data.net.OpenGuiPacket;
 import com.sighs.oelib.example.ExampleMenus;
+import com.sighs.oelib.example.OpenGuiPacket;
 import com.sighs.oelib.registry.extra.KeyMappingRegister;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;

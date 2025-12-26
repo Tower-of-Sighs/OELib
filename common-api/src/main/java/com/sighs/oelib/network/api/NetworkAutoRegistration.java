@@ -12,7 +12,8 @@ public final class NetworkAutoRegistration {
     private static final Set<String> BASE_PACKAGES = new LinkedHashSet<>();
 
     static {
-        BASE_PACKAGES.add("com.sighs.oelib");
+        BASE_PACKAGES.add("com.sighs.oelib.data.net");
+        BASE_PACKAGES.add("com.sighs.oelib.example");
     }
 
     private NetworkAutoRegistration() {

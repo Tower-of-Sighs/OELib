@@ -1,8 +1,6 @@
-package com.sighs.oelib.data.net;
+package com.sighs.oelib.example;
 
 import com.sighs.oelib.OELib;
-import com.sighs.oelib.example.ExampleBlock;
-import com.sighs.oelib.example.FluidRenderExampleMenu;
 import com.sighs.oelib.network.api.INetworkContext;
 import com.sighs.oelib.network.api.INetworkPacket;
 import com.sighs.oelib.network.api.NetworkPacket;
@@ -28,7 +26,14 @@ public record OpenGuiPacket(
         }
         ServerPlayer player = context.sender();
         if (player != null) {
-            if (player.level().getBlockState(pos).getBlock() instanceof ExampleBlock) {
+            double distanceSq = player.distanceToSqr(
+                    pos.getX() + 0.5,
+                    pos.getY() + 0.5,
+                    pos.getZ() + 0.5
+            );
+
+            if (distanceSq <= 4.0 &&
+                    player.level().getBlockState(pos).getBlock() instanceof ExampleBlock) {
                 player.openMenu(new FluidRenderExampleMenu.Provider(pos));
             }
         }

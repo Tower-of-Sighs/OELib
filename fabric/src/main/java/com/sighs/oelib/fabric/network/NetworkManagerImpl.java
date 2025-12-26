@@ -52,10 +52,10 @@ public class NetworkManagerImpl implements INetworkManager {
             // 通过类名生成类型信息，避免创建临时实例
             CustomPacketPayload.Type<T> type = createPacketType(packetClass);
 
-            ClientPlayNetworking.registerGlobalReceiver(type, (packet, context) -> context.client().execute(() -> {
-                FabricNetworkContext networkContext = new FabricNetworkContext(null, false);
+            ClientPlayNetworking.registerGlobalReceiver(type, (packet, context) -> {
+                FabricClientNetworkContext networkContext = new FabricClientNetworkContext(context);
                 packet.handle(networkContext);
-            }));
+            });
 
             OELib.LOGGER.info("Registered client network packet: {} (ID: {})",
                     type.id().getPath(), type.id());
@@ -97,11 +97,9 @@ public class NetworkManagerImpl implements INetworkManager {
             PayloadTypeRegistry.playS2C().register(type, codec);
 
             ServerPlayNetworking.registerGlobalReceiver(type, (packet, context) -> {
-                context.server().execute(() -> {
-                    FabricNetworkContext networkContext = new FabricNetworkContext(context.player(), true);
+                FabricServerNetworkContext networkContext = new FabricServerNetworkContext(context);
                     packet.handle(networkContext);
                 });
-            });
 
             OELib.LOGGER.info("Registered network packet: {} (ID: {})",
                     type.id().getPath(), type.id());

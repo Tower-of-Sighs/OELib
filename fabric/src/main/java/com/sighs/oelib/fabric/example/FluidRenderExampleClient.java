@@ -1,6 +1,6 @@
 package com.sighs.oelib.fabric.example;
 
-import com.sighs.oelib.data.net.OpenGuiPacket;
+import com.sighs.oelib.example.OpenGuiPacket;
 import com.sighs.oelib.registry.extra.KeyMappingRegister;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
