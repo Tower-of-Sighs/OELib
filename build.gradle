@@ -42,14 +42,19 @@ subprojects {
         minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
         mappings loom.officialMojangMappings()
 
+        implementation("cn.6tail:lunar:1.7.3")
+
         if (project.name == "fabric") {
             api("org.mvel:mvel2:2.5.0.Final")
             include("org.mvel:mvel2:2.5.0.Final")
+            include("cn.6tail:lunar:1.7.3")
         }
         if (project.name == "neoforge" || project.name == "forge") {
             api("org.mvel:mvel2:2.5.0.Final")
             include("org.mvel:mvel2:2.5.0.Final")
+            include("cn.6tail:lunar:1.7.3")
             forgeRuntimeLibrary("org.mvel:mvel2:2.5.0.Final")
+            forgeRuntimeLibrary("cn.6tail:lunar:1.7.3")
         }
         if (project.name == "common-api") {
             implementation "org.mvel:mvel2:2.5.0.Final"

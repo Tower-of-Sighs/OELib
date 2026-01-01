@@ -2,6 +2,8 @@ package com.sighs.oelib.fabric;
 
 import com.sighs.oelib.OELibClient;
 import com.sighs.oelib.example.ExampleMenus;
+import com.sighs.oelib.fabric.bless.FestivalToastManager;
+import com.sighs.oelib.fabric.bless.OverlayRenderer;
 import com.sighs.oelib.fabric.example.FluidRenderExampleClient;
 import com.sighs.oelib.fabric.example.FluidRenderExampleScreen;
 import com.sighs.oelib.fabric.network.NetworkManagerImpl;
@@ -12,6 +14,8 @@ public final class OELibFabricClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         OELibClient.initClient();
+        FestivalToastManager.init();
+        OverlayRenderer.register();
         NetworkManagerImpl.initializeClient();
         MenuScreens.register(
                 ExampleMenus.FLUID_RENDER_EXAMPLE.get(),

@@ -11,6 +11,8 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
+import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.commands.Commands;
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -38,6 +40,7 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.client.event.*;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
 import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent;
 import net.neoforged.neoforge.event.furnace.FurnaceFuelBurnTimeEvent;
@@ -75,6 +78,9 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
     private static final Map<ResourceLocation, List<Supplier<ItemStack>>> TAB_APPENDS = new ConcurrentHashMap<>();
     private static final Map<ResourceLocation, List<CreativeTabModifyCallback>> TAB_MODIFIERS = new ConcurrentHashMap<>();
     private static final Map<ResourceKey<?>, List<RegisterSupplier<?>>> REGISTERED_ENTRIES = new ConcurrentHashMap<>();
+    private static final List<CommandRegisterAction> SERVER_COMMANDS = new CopyOnWriteArrayList<>();
+    private static final List<CommandRegisterAction> CLIENT_COMMANDS = new CopyOnWriteArrayList<>();
+    private static final List<ShaderRegisterAction> SHADERS = new CopyOnWriteArrayList<>();
 
     private static void putFuelTime(int time, ItemLike item) {
         if (time >= 0) {
@@ -109,9 +115,21 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
             TAB_MODIFIERS.computeIfAbsent(tab.location(), k -> new CopyOnWriteArrayList<>()).add(callback);
             return;
         }
+        if (action instanceof CommandRegisterAction cra) {
+            if (cra.clientOnly()) {
+                CLIENT_COMMANDS.add(cra);
+            } else {
+                SERVER_COMMANDS.add(cra);
+            }
+            return;
+        }
         if (FMLEnvironment.dist == Dist.CLIENT) {
             if (action instanceof KeyMappingAction(KeyMapping mapping)) {
                 KEY_MAPPINGS.add(mapping);
+                return;
+            }
+            if (action instanceof ShaderRegisterAction shader) {
+                SHADERS.add(shader);
                 return;
             }
             if (action instanceof ClientTooltipComponentAction<?> tooltipRaw) {
@@ -301,6 +319,22 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
         }
 
         @SubscribeEvent
+        public static void onRegisterShaders(RegisterShadersEvent event) {
+            for (var shader : SHADERS) {
+                try {
+                    ShaderInstance instance = new ShaderInstance(
+                            event.getResourceProvider(),
+                            shader.id(),
+                            shader.vertexFormat()
+                    );
+                    event.registerShader(instance, shader.loadCallback());
+                } catch (Exception e) {
+                    OELib.LOGGER.error("Failed to register shader {}", shader.id(), e);
+                }
+            }
+        }
+
+        @SubscribeEvent
         public static void onClientSetup(FMLClientSetupEvent event) {
             event.enqueueWork(() -> {
                 for (var rt : RENDER_BLOCKS) {
@@ -376,6 +410,28 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
             if (stack.isEmpty()) return;
             int time = FUEL_TIMES.getOrDefault(stack.getItem(), Integer.MIN_VALUE);
             if (time != Integer.MIN_VALUE) event.setBurnTime(time);
+        }
+
+        @SubscribeEvent
+        public static void onRegisterCommands(RegisterCommandsEvent event) {
+            for (var cra : SERVER_COMMANDS) {
+                cra.registrar().register(
+                        event.getDispatcher(),
+                        event.getBuildContext(),
+                        event.getCommandSelection()
+                );
+            }
+        }
+
+        @SubscribeEvent
+        public static void onRegisterClientCommands(RegisterClientCommandsEvent event) {
+            for (var cra : CLIENT_COMMANDS) {
+                cra.registrar().register(
+                        event.getDispatcher(),
+                        event.getBuildContext(),
+                        Commands.CommandSelection.INTEGRATED
+                );
+            }
         }
     }
 }

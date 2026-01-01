@@ -1,5 +1,11 @@
 {
   "itemGroup.oelib.general": "OELib",
   "item.oelib.example_item": "Example Item",
-  "block.oelib.example_block": "Example Block"
+  "block.oelib.example_block": "Example Block",
+  "overlay.exampletoast.spirit.title": "Double Ninth Clouds \u00b7 Reaching Higher",
+  "overlay.exampletoast.spirit.line1": "On the Double Ninth Festival, may your heart rise above the clouds.",
+  "overlay.exampletoast.spirit.line2": "The Tower of Sighs team stands with you\u2014looking far, yet close at hand.",
+  "overlay.exampletoast.new_year.title": "New Year's Blessing \u00b7 Tower of Sighs",
+  "overlay.exampletoast.new_year.line1": "The Tower of Sighs team wishes you a peaceful, prosperous new year.",
+  "overlay.exampletoast.new_year.line2": "May your journeys in both blocky and real worlds be bright and fulfilled."
 }

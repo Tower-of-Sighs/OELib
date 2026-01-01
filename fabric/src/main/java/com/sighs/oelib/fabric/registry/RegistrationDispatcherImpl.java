@@ -1,5 +1,7 @@
 package com.sighs.oelib.fabric.registry;
 
+import com.mojang.brigadier.CommandDispatcher;
+import com.sighs.oelib.OELib;
 import com.sighs.oelib.registry.RegisterSupplier;
 import com.sighs.oelib.registry.action.*;
 import com.sighs.oelib.registry.api.CreativeTabModifyCallback;
@@ -7,12 +9,11 @@ import com.sighs.oelib.registry.api.CreativeTabOutput;
 import com.sighs.oelib.registry.spi.IRegistrationDispatcher;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.EntityModelLayerRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.TooltipComponentCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.*;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
 import net.fabricmc.fabric.api.object.builder.v1.trade.TradeOfferHelper;
@@ -24,6 +25,9 @@ import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent
 import net.minecraft.client.model.geom.ModelLayerLocation;
 import net.minecraft.client.model.geom.builders.LayerDefinition;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.commands.CommandBuildContext;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
 import net.minecraft.core.Registry;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -40,6 +44,7 @@ import net.minecraft.world.level.ItemLike;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.material.Fluid;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +63,12 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
     private static final Map<ResourceLocation, List<CreativeTabModifyCallback>> TAB_MODIFIERS = new ConcurrentHashMap<>();
     private static final Map<RegisterSupplier<?>, List<Consumer<?>>> ENTRY_LISTENERS = new ConcurrentHashMap<>();
     private static volatile boolean creativeTabEventsInstalled = false;
+    private static final List<CommandRegisterAction> SERVER_COMMANDS = new CopyOnWriteArrayList<>();
+    private static final List<CommandRegisterAction> CLIENT_COMMANDS = new CopyOnWriteArrayList<>();
+    private static final List<ShaderRegisterAction> SHADER_REGISTRATIONS = new CopyOnWriteArrayList<>();
+    private static volatile boolean serverCommandEventsInstalled = false;
+    private static volatile boolean clientCommandEventsInstalled = false;
+    private static volatile boolean shaderEventsInstalled = false;
 
     @SuppressWarnings("unchecked")
     @Override
@@ -65,6 +76,19 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
         if (action instanceof RegistryBatchAction<?>) {
             RegistryBatchAction<Object> batchRaw = (RegistryBatchAction<Object>) action;
             performRegistryBatch(batchRaw);
+            return;
+        }
+
+        if (action instanceof CommandRegisterAction cra) {
+            if (cra.clientOnly()) {
+                if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+                    ensureClientCommandEvents();
+                    CLIENT_COMMANDS.add(cra);
+                }
+            } else {
+                ensureServerCommandEvents();
+                SERVER_COMMANDS.add(cra);
+            }
             return;
         }
 
@@ -109,6 +133,11 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
         }
 
         if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+            if (action instanceof ShaderRegisterAction shader) {
+                ensureShaderEventRegistered();
+                SHADER_REGISTRATIONS.add(shader);
+                return;
+            }
             if (action instanceof ColorItemAction(
                     ItemColor color, Supplier<? extends ItemLike>[] items
             )) {
@@ -309,6 +338,65 @@ public final class RegistrationDispatcherImpl implements IRegistrationDispatcher
                         }
                     });
                     creativeTabEventsInstalled = true;
+                }
+            }
+        }
+    }
+
+    private void ensureServerCommandEvents() {
+        if (!serverCommandEventsInstalled) {
+            synchronized (SERVER_COMMANDS) {
+                if (!serverCommandEventsInstalled) {
+                    CommandRegistrationCallback.EVENT.register(this::handleServerCommandRegistration);
+                    serverCommandEventsInstalled = true;
+                }
+            }
+        }
+    }
+
+    private void ensureClientCommandEvents() {
+        if (!clientCommandEventsInstalled) {
+            synchronized (CLIENT_COMMANDS) {
+                if (!clientCommandEventsInstalled) {
+                    ClientCommandRegistrationCallback.EVENT.register(this::handleClientCommandRegistration);
+                    clientCommandEventsInstalled = true;
+                }
+            }
+        }
+    }
+
+    private void handleServerCommandRegistration(CommandDispatcher<CommandSourceStack> dispatcher,
+                                                 CommandBuildContext context,
+                                                 Commands.CommandSelection environment) {
+        for (var cra : SERVER_COMMANDS) {
+            cra.registrar().register(dispatcher, context, environment);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleClientCommandRegistration(CommandDispatcher<?> dispatcher,
+                                                 CommandBuildContext context) {
+        CommandDispatcher<CommandSourceStack> casted = (CommandDispatcher<CommandSourceStack>) dispatcher;
+        Commands.CommandSelection environment = Commands.CommandSelection.INTEGRATED;
+        for (var cra : CLIENT_COMMANDS) {
+            cra.registrar().register(casted, context, environment);
+        }
+    }
+
+    private void ensureShaderEventRegistered() {
+        if (!shaderEventsInstalled) {
+            synchronized (SHADER_REGISTRATIONS) {
+                if (!shaderEventsInstalled) {
+                    CoreShaderRegistrationCallback.EVENT.register(context -> {
+                        for (var shader : SHADER_REGISTRATIONS) {
+                            try {
+                                context.register(shader.id(), shader.vertexFormat(), shader.loadCallback());
+                            } catch (IOException e) {
+                                OELib.LOGGER.error("Failed to register shader {}", shader.id(), e);
+                            }
+                        }
+                    });
+                    shaderEventsInstalled = true;
                 }
             }
         }

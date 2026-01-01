@@ -10,7 +10,7 @@ import net.minecraft.world.level.block.Block;
 
 import java.util.function.Supplier;
 
-public class ColorRegister {
+public final class ColorRegister {
     private ColorRegister() {
     }
 
