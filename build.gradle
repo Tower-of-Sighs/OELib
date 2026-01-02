@@ -43,11 +43,15 @@ subprojects {
         mappings loom.officialMojangMappings()
 
         implementation("cn.6tail:lunar:1.7.3")
+        implementation "com.electronwill.night-config:toml:3.8.3"
+        implementation "de.marhali:json5-java:3.0.0"
 
         if (project.name == "fabric") {
             api("org.mvel:mvel2:2.5.0.Final")
             include("org.mvel:mvel2:2.5.0.Final")
             include("cn.6tail:lunar:1.7.3")
+            include("com.electronwill.night-config:toml:3.8.3")
+            include("de.marhali:json5-java:3.0.0")
         }
         if (project.name == "neoforge" || project.name == "forge") {
             api("org.mvel:mvel2:2.5.0.Final")
@@ -55,9 +59,12 @@ subprojects {
             include("cn.6tail:lunar:1.7.3")
             forgeRuntimeLibrary("org.mvel:mvel2:2.5.0.Final")
             forgeRuntimeLibrary("cn.6tail:lunar:1.7.3")
+            include("de.marhali:json5-java:3.0.0")
+            forgeRuntimeLibrary("de.marhali:json5-java:3.0.0")
         }
         if (project.name == "common-api") {
             implementation "org.mvel:mvel2:2.5.0.Final"
+            implementation "de.marhali:json5-java:3.0.0"
         }
 
         if (project.name != "common-api") {

@@ -1,8 +1,8 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "com.sighs.oelib.fabric.mixin",
-  "plugin": "com.sighs.oelib.fabric.mixin.MixinPlugin",
+  "package": "cc.sighs.oelib.fabric.mixin",
+  "plugin": "cc.sighs.oelib.fabric.mixin.MixinPlugin",
   "compatibilityLevel": "JAVA_17",
   "mixins": [
   ],
