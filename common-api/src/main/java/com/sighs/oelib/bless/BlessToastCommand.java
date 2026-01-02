@@ -5,6 +5,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.sighs.oelib.bless.render.ChongYangOverlay;
 import com.sighs.oelib.bless.render.NewYearOverlay;
+import com.sighs.oelib.bless.render.ValentineOverlay;
 import com.sighs.oelib.platform.Platform;
 import com.sighs.oelib.registry.extra.CommandRegister;
 import net.minecraft.commands.CommandBuildContext;
@@ -30,6 +31,13 @@ public class BlessToastCommand {
             dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("new_year_toast")
                     .executes(ctx -> {
                         if (ShaderToastResources.getNewYearShader() != null) NewYearOverlay.INSTANCE.show();
+
+                        return Command.SINGLE_SUCCESS;
+                    }));
+
+            dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("valentine_toast")
+                    .executes(ctx -> {
+                        if (ShaderToastResources.getValentineShader() != null) ValentineOverlay.INSTANCE.show();
 
                         return Command.SINGLE_SUCCESS;
                     }));

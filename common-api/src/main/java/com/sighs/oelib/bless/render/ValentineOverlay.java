@@ -1,27 +1,24 @@
 package com.sighs.oelib.bless.render;
 
 import com.sighs.oelib.bless.ShaderToastResources;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 
-@Environment(EnvType.CLIENT)
-public class NewYearOverlay extends AbstractShaderOverlay {
-    public static final NewYearOverlay INSTANCE = new NewYearOverlay();
-    public static final String FESTIVAL_ID = "new_year";
-    public static final String FESTIVAL_NAME = "春节";
+public class ValentineOverlay extends AbstractShaderOverlay {
+    public static final ValentineOverlay INSTANCE = new ValentineOverlay();
+    public static final String FESTIVAL_ID = "valentine";
+    public static final String FESTIVAL_NAME = "情人节";
 
-    private NewYearOverlay() {
+    private ValentineOverlay() {
         super(5000L, 600L, 400L);
     }
 
     @Override
     protected ShaderInstance getShader() {
-        return ShaderToastResources.getNewYearShader();
+        return ShaderToastResources.getValentineShader();
     }
 
     @Override
@@ -53,26 +50,14 @@ public class NewYearOverlay extends AbstractShaderOverlay {
         shader.safeGetUniform("Time").set(timeSeconds);
         shader.safeGetUniform("Resolution").set((float) overlayWidth, (float) overlayHeight);
         shader.safeGetUniform("ToastAlpha").set(alpha);
-
-        var mouseUniform = shader.safeGetUniform("MouseUV");
-        float baseX = baseX(screenWidth, overlayWidth);
-        float baseY = baseY(screenHeight, overlayHeight);
-        float localX = (mouseX - baseX) / (float) overlayWidth;
-        float localY = (mouseY - baseY) / (float) overlayHeight;
-
-        if (localX < 0.0F || localX > 1.0F || localY < 0.0F || localY > 1.0F) {
-            mouseUniform.set(-1.0F, -1.0F);
-        } else {
-            mouseUniform.set(localX, localY);
-        }
     }
 
     @Override
     protected Component[] textLines(Minecraft minecraft) {
         return new Component[]{
-                Component.translatable("overlay.exampletoast.new_year.title"),
-                Component.translatable("overlay.exampletoast.new_year.line1"),
-                Component.translatable("overlay.exampletoast.new_year.line2")
+                Component.translatable("overlay.exampletoast.valentine.title"),
+                Component.translatable("overlay.exampletoast.valentine.line1"),
+                Component.translatable("overlay.exampletoast.valentine.line2")
         };
     }
 
@@ -87,11 +72,6 @@ public class NewYearOverlay extends AbstractShaderOverlay {
     }
 
     @Override
-    public boolean isChineseFestival() {
-        return true;
-    }
-
-    @Override
     public String festivalId() {
         return FESTIVAL_ID;
     }
@@ -101,3 +81,4 @@ public class NewYearOverlay extends AbstractShaderOverlay {
         return FESTIVAL_NAME;
     }
 }
+

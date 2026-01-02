@@ -15,5 +15,8 @@ public class ShaderEvents {
 
         ShaderRegister.register(ResourceLocation.fromNamespaceAndPath(OELib.MODID, "new_year"),
                 DefaultVertexFormat.POSITION_TEX, ShaderToastResources::setNewYearShader);
+
+        ShaderRegister.register(ResourceLocation.fromNamespaceAndPath(OELib.MODID, "valentine"),
+                DefaultVertexFormat.POSITION_TEX, ShaderToastResources::setValentineShader);
     }
 }

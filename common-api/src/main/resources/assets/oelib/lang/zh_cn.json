@@ -2,10 +2,14 @@
   "itemGroup.oelib.general": "OELib",
   "item.oelib.example_item": "示例物品",
   "block.oelib.example_block": "示例方块",
+
   "overlay.exampletoast.spirit.title": "重阳云海·登高望远",
   "overlay.exampletoast.spirit.line1": "佳节重阳，愿你乘仙气而上，心境如云海般澄澈。",
   "overlay.exampletoast.spirit.line2": "叹息之塔团队陪你在高空远眺，也在身边守护。",
   "overlay.exampletoast.new_year.title": "新岁瑞气·叹息之塔",
   "overlay.exampletoast.new_year.line1": "叹息之塔团队祝你新岁平安，万事顺遂。",
-  "overlay.exampletoast.new_year.line2": "愿你在方块世界与现实旅程中皆得所愿、所爱长存。"
+  "overlay.exampletoast.new_year.line2": "愿你在方块世界与现实旅程中皆得所愿、所爱长存。",
+  "overlay.exampletoast.valentine.title": "心心相映·情人节",
+  "overlay.exampletoast.valentine.line1": "愿你在这一日，被真心看见，被温柔拥抱。",
+  "overlay.exampletoast.valentine.line2": "无论独行还是并肩，叹息之塔团队都在为你点亮一盏心灯。"
 }

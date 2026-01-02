@@ -6,6 +6,7 @@ import com.google.gson.JsonSyntaxException;
 import com.sighs.oelib.OELib;
 import com.sighs.oelib.bless.render.ChongYangOverlay;
 import com.sighs.oelib.bless.render.NewYearOverlay;
+import com.sighs.oelib.bless.render.ValentineOverlay;
 import com.sighs.oelib.platform.Platform;
 
 import java.io.IOException;
@@ -101,6 +102,7 @@ public final class FestivalToastConfig {
         }
         festival(NewYearOverlay.FESTIVAL_ID);
         festival(ChongYangOverlay.FESTIVAL_ID);
+        festival(ValentineOverlay.FESTIVAL_ID);
     }
 
     public static final class FestivalPreferences {

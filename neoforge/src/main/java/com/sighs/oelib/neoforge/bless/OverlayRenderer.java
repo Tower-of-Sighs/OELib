@@ -1,13 +1,14 @@
 package com.sighs.oelib.neoforge.bless;
 
 import com.sighs.oelib.OELib;
-import com.sighs.oelib.bless.render.ChongYangOverlay;
-import com.sighs.oelib.bless.render.NewYearOverlay;
+import com.sighs.oelib.bless.render.AbstractShaderOverlay;
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
+
+import static com.sighs.oelib.bless.OverlayRegistry.REGISTERED_OVERLAYS;
 
 @EventBusSubscriber(modid = OELib.MODID, value = Dist.CLIENT)
 public class OverlayRenderer {
@@ -36,12 +37,10 @@ public class OverlayRenderer {
 
         float partialTick = event.getPartialTick().getGameTimeDeltaTicks();
 
-        if (ChongYangOverlay.INSTANCE.isActive()) {
-            ChongYangOverlay.INSTANCE.render(guiGraphics, partialTick, (int) mouseX, (int) mouseY, width, height);
-        }
-
-        if (NewYearOverlay.INSTANCE.isActive()) {
-            NewYearOverlay.INSTANCE.render(guiGraphics, partialTick, (int) mouseX, (int) mouseY, width, height);
+        for (AbstractShaderOverlay overlay : REGISTERED_OVERLAYS) {
+            if (overlay.isActive()) {
+                overlay.render(guiGraphics, partialTick, (int) mouseX, (int) mouseY, width, height);
+            }
         }
 
         pose.popPose();

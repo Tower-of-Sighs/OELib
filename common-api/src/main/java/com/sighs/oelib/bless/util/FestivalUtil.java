@@ -35,7 +35,7 @@ public class FestivalUtil {
         var id = overlay.festivalId();
         var name = overlay.festivalName();
         return switch (id) {
-            case NewYearOverlay.FESTIVAL_ID, ChongYangOverlay.FESTIVAL_ID -> solar.getFestivals().contains(name);
+            case NewYearOverlay.FESTIVAL_ID, ChongYangOverlay.FESTIVAL_ID -> lunar.getFestivals().contains(name);
             default -> false;
         };
     }

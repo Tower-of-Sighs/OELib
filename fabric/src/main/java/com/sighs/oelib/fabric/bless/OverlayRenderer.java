@@ -1,11 +1,12 @@
 package com.sighs.oelib.fabric.bless;
 
-import com.sighs.oelib.bless.render.ChongYangOverlay;
-import com.sighs.oelib.bless.render.NewYearOverlay;
+import com.sighs.oelib.bless.render.AbstractShaderOverlay;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+
+import static com.sighs.oelib.bless.OverlayRegistry.REGISTERED_OVERLAYS;
 
 public class OverlayRenderer {
     public static void register() {
@@ -31,12 +32,10 @@ public class OverlayRenderer {
 
         float partialTick = deltaTracker.getGameTimeDeltaTicks();
 
-        if (ChongYangOverlay.INSTANCE.isActive()) {
-            ChongYangOverlay.INSTANCE.render(guiGraphics, partialTick, (int) mouseX, (int) mouseY, width, height);
-        }
-
-        if (NewYearOverlay.INSTANCE.isActive()) {
-            NewYearOverlay.INSTANCE.render(guiGraphics, partialTick, (int) mouseX, (int) mouseY, width, height);
+        for (AbstractShaderOverlay overlay : REGISTERED_OVERLAYS) {
+            if (overlay.isActive()) {
+                overlay.render(guiGraphics, partialTick, (int) mouseX, (int) mouseY, width, height);
+            }
         }
 
         pose.popPose();

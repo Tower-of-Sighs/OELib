@@ -173,7 +173,7 @@ public abstract class AbstractShaderOverlay {
     }
 
     protected float bodyScale() {
-        return 0.85F;
+        return 0.78F;
     }
 
     public boolean isChineseFestival() {
@@ -185,18 +185,10 @@ public abstract class AbstractShaderOverlay {
     public abstract String festivalName();
 
     private void drawScaledCenteredString(GuiGraphics guiGraphics, Font font, Component text, float centerX, float y, int color, int maxWidth, float baseScale) {
-        int width = font.width(text);
-        if (width <= 0) {
-            return;
-        }
-        float scale = baseScale;
-        if (maxWidth > 0 && (float) width * scale > (float) maxWidth) {
-            scale = (float) maxWidth / (float) width;
-        }
         var pose = guiGraphics.pose();
         pose.pushPose();
         pose.translate(centerX, y, 0.0F);
-        pose.scale(scale, scale, 1.0F);
+        pose.scale(baseScale, baseScale, 1.0F);
         guiGraphics.drawCenteredString(font, text, 0, 0, color);
         pose.popPose();
     }
