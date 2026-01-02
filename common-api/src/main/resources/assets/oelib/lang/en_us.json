@@ -2,14 +2,13 @@
   "itemGroup.oelib.general": "OELib",
   "item.oelib.example_item": "Example Item",
   "block.oelib.example_block": "Example Block",
-
-  "overlay.exampletoast.spirit.title": "Double Ninth Clouds \u00b7 Reaching Higher",
-  "overlay.exampletoast.spirit.line1": "On the Double Ninth Festival, may your heart rise above the clouds.",
-  "overlay.exampletoast.spirit.line2": "The Tower of Sighs team stands with you\u2014looking far, yet close at hand.",
-  "overlay.exampletoast.new_year.title": "New Year's Blessing \u00b7 Tower of Sighs",
-  "overlay.exampletoast.new_year.line1": "The Tower of Sighs team wishes you a peaceful, prosperous new year.",
-  "overlay.exampletoast.new_year.line2": "May your journeys in both blocky and real worlds be bright and fulfilled.",
-  "overlay.exampletoast.valentine.title": "Hearts Afloat \u00b7 Valentine's Day",
+  "overlay.exampletoast.chongyang.title": "Ascending with the Clouds · Double Ninth Festival",
+  "overlay.exampletoast.chongyang.line1": "May your spirit rise with the autumn heights, clear as the endless sky.",
+  "overlay.exampletoast.chongyang.line2": "The Tower of Sighs team walks beside you—near in heart, even when far apart.",
+  "overlay.exampletoast.new_year.title": "A Fresh Dawn · Spring Festival",
+  "overlay.exampletoast.new_year.line1": "Wishing you joy that lingers, peace that deepens, and a year full of light.",
+  "overlay.exampletoast.new_year.line2": "The Tower of Sighs team celebrates with you—in blocky worlds and beyond.",
+  "overlay.exampletoast.valentine.title": "Hearts Afloat · Valentine's Day",
   "overlay.exampletoast.valentine.line1": "May your heart be gently seen, warmly held, never left behind.",
   "overlay.exampletoast.valentine.line2": "Whether solo or side by side, the Tower of Sighs team walks with you."
 }

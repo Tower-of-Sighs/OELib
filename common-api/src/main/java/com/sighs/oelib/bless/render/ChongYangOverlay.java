@@ -58,9 +58,9 @@ public class ChongYangOverlay extends AbstractShaderOverlay {
     @Override
     protected Component[] textLines(Minecraft minecraft) {
         return new Component[]{
-                Component.translatable("overlay.exampletoast.spirit.title"),
-                Component.translatable("overlay.exampletoast.spirit.line1"),
-                Component.translatable("overlay.exampletoast.spirit.line2")
+                Component.translatable("overlay.exampletoast.chongyang.title"),
+                Component.translatable("overlay.exampletoast.chongyang.line1"),
+                Component.translatable("overlay.exampletoast.chongyang.line2")
         };
     }
 
