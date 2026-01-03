@@ -1,6 +1,6 @@
 package cc.sighs.oelib.fabric.example;
 
-import cc.sighs.oelib.example.FluidRenderExampleMenu;
+import cc.sighs.oelib.dev.example.FluidRenderExampleMenu;
 import cc.sighs.oelib.renderer.FluidRenderers;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
 import net.minecraft.client.gui.GuiGraphics;

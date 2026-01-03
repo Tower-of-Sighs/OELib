@@ -15,15 +15,11 @@ public final class ConfigValueMeta {
     private final String key;
     private final String comment;
     private final ConfigUiHint uiHint;
-    private final ConfigScope scope;
-    private final int permissionLevel;
 
     private ConfigValueMeta(Builder builder) {
         this.key = builder.key;
         this.comment = builder.comment;
         this.uiHint = builder.uiHint;
-        this.scope = builder.scope;
-        this.permissionLevel = builder.permissionLevel;
     }
 
     public static Builder builder(String key) {
@@ -43,20 +39,10 @@ public final class ConfigValueMeta {
         return Optional.ofNullable(uiHint);
     }
 
-    public ConfigScope scope() {
-        return scope;
-    }
-
-    public int permissionLevel() {
-        return permissionLevel;
-    }
-
     public static final class Builder {
         private final String key;
         private String comment;
         private ConfigUiHint uiHint;
-        private ConfigScope scope = ConfigScope.CLIENT;
-        private int permissionLevel;
 
         private Builder(String key) {
             this.key = key;
@@ -69,16 +55,6 @@ public final class ConfigValueMeta {
 
         public Builder uiHint(ConfigUiHint uiHint) {
             this.uiHint = uiHint;
-            return this;
-        }
-
-        public Builder scope(ConfigScope scope) {
-            this.scope = scope;
-            return this;
-        }
-
-        public Builder permissionLevel(int permissionLevel) {
-            this.permissionLevel = permissionLevel;
             return this;
         }
 

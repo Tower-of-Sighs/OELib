@@ -6,15 +6,12 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Declares a custom {@code StreamCodec} to use for a record component.
+ * Declares a custom {@code StreamCodec} for a record component.
  * <p>
- * The codec is obtained reflectively from a static field on the given holder
- * type. A typical usage looks like:
- * </p>
- * <pre>{@code
- * @NetFieldCodec(holder = BlockPos.class, field = "STREAM_CODEC")
- * BlockPos pos
- * }</pre>
+ * The resolver first attempts to read the static field named by {@link #field()}
+ * on the {@link #holder()} class. If not found or invalid, it falls back to
+ * scanning all public static final {@code StreamCodec} fields in the holder
+ * and picks the best match via type and name heuristics.
  */
 @Target(ElementType.RECORD_COMPONENT)
 @Retention(RetentionPolicy.RUNTIME)
@@ -22,16 +19,12 @@ public @interface NetFieldCodec {
 
     /**
      * Type that holds the static codec field.
-     *
-     * @return holder type
      */
     Class<?> holder();
 
     /**
      * Name of the static codec field.
-     *
-     * @return field name, defaults to {@code "STREAM_CODEC"}
+     * Defaults to {@code "STREAM_CODEC"}.
      */
-    String field();
+    String field() default "STREAM_CODEC";
 }
-

@@ -48,14 +48,12 @@ subprojects {
 
         if (project.name == "fabric") {
             api("org.mvel:mvel2:2.5.0.Final")
-            include("org.mvel:mvel2:2.5.0.Final")
             include("cn.6tail:lunar:1.7.3")
             include("com.electronwill.night-config:toml:3.8.3")
             include("de.marhali:json5-java:3.0.0")
         }
         if (project.name == "neoforge" || project.name == "forge") {
             api("org.mvel:mvel2:2.5.0.Final")
-            include("org.mvel:mvel2:2.5.0.Final")
             include("cn.6tail:lunar:1.7.3")
             include("de.marhali:json5-java:3.0.0")
             forgeRuntimeLibrary("org.mvel:mvel2:2.5.0.Final")
@@ -90,7 +88,14 @@ subprojects {
 
     publishing {
         repositories {
-            def publishUrl = System.getenv("SIGHS_PUBLISH_URL")
+            def modVersion = project.findProperty('mod_version') ?: 'unknown'
+            boolean isSnapshot = modVersion.toLowerCase().matches(/.*(?:alpha|beta|rc|snapshot|M\d+).*/)
+            def publishUrl
+            if (isSnapshot) {
+                publishUrl = "https://maven.sighs.cc/repository/maven-snapshots/"
+            } else {
+                publishUrl = "https://maven.sighs.cc/repository/maven-releases/"
+            }
             def publishUser = System.getenv("SIGHS_PUBLISH_USER")
             def publishPassword = System.getenv("SIGHS_PUBLISH_PASSWORD")
 

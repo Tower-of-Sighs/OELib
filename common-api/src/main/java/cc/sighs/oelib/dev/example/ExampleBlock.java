@@ -1,4 +1,4 @@
-package cc.sighs.oelib.example;
+package cc.sighs.oelib.dev.example;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;

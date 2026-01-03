@@ -8,4 +8,3 @@ public interface INetworkAutoRegistration {
 
     Set<Class<? extends INetworkPacket<?>>> findAnnotatedPackets(Set<String> basePackages);
 }
-

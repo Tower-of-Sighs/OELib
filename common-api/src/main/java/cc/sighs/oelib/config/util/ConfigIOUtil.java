@@ -7,15 +7,10 @@ import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import cc.sighs.oelib.config.net.ConfigSyncPacket;
 import cc.sighs.oelib.network.api.NetworkManager;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.mojang.serialization.DataResult;
-import de.marhali.json5.Json5;
 import net.minecraft.server.level.ServerPlayer;
 
 public final class ConfigIOUtil {
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Json5 JSON5 = Json5.builder(builder -> builder.parseComments().build());
 
     private ConfigIOUtil() {
     }
@@ -25,16 +20,14 @@ public final class ConfigIOUtil {
             OELib.LOGGER.warn("Rejected update for non-server config {}", unit.id());
             return;
         }
-        int required = unit.meta().permissionLevel();
-        var fields = unit.codec().fields();
-        if (fields != null) {
-            int fieldMax = fields.stream().mapToInt(f -> f.permissionLevel()).max().orElse(0);
-            if (fieldMax > 0) {
-                required = fieldMax;
-            }
+        var checkerOpt = cc.sighs.oelib.config.ServerConfigManager.getPermissionChecker(unit.id());
+        if (checkerOpt.isEmpty()) {
+            OELib.LOGGER.warn("No permission checker for server config {}; rejecting client update", unit.id());
+            return;
         }
-        if (required > 0 && !player.hasPermissions(required)) {
-            OELib.LOGGER.warn("Player {} lacks permission {} to update config {}", player.getGameProfile().getName(), required, unit.id());
+        var checker = checkerOpt.get();
+        if (!checker.canUpdate(player)) {
+            OELib.LOGGER.warn("Player {} not permitted to update config {}", player.getGameProfile().getName(), unit.id());
             return;
         }
 
@@ -45,11 +38,14 @@ public final class ConfigIOUtil {
                 return;
             }
             result.result().ifPresent(v -> {
+                OELib.LOGGER.info("Server applying update for config {} requested by {} with format {} (save={})",
+                        unit.id(), player.getGameProfile().getName(), format, save);
                 unit.setValue(v);
                 if (save) {
                     unit.save();
                 }
                 ConfigManager.encodeToString(unit.id()).ifPresent(encoded -> {
+                    OELib.LOGGER.info("Broadcasting config {} to clients", unit.id());
                     NetworkManager.sendToAll(new ConfigSyncPacket(unit.id(), encoded.payload(), encoded.format()));
                 });
             });

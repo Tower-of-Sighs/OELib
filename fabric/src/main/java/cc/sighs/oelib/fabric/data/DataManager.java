@@ -38,18 +38,9 @@ import java.util.stream.Collectors;
 public class DataManager<T> implements SimpleResourceReloadListener<Map<ResourceLocation, JsonElement>> {
     private static final Gson GSON = new GsonBuilder().setLenient().create();
     private static final Map<Class<?>, DataManager<?>> managers = new ConcurrentHashMap<>();
-    private static boolean serverStarted = false;
     private static final Map<Class<?>, Set<String>> runtimeRegisteredNamespaces = new ConcurrentHashMap<>();
+    private static boolean serverStarted = false;
     private static MinecraftServer currentServer = null;
-    private final Class<T> dataClass;
-    private final DataDriven annotation;
-    private final Codec<T> codec;
-    private final Map<ResourceLocation, T> loadedData = new ConcurrentHashMap<>();
-    private final Map<ResourceLocation, T> deferredData = new ConcurrentHashMap<>();
-    private final Map<String, Set<T>> cache = new ConcurrentHashMap<>();
-    private final Map<String, Class<? extends DataValidator<?>>> namespaceValidatorClasses = new ConcurrentHashMap<>();
-    private final Map<String, DataValidator<T>> namespaceValidators = new ConcurrentHashMap<>();
-    private final DataValidator<T> defaultValidator;
 
     static {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
@@ -74,6 +65,16 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
         });
 
     }
+
+    private final Class<T> dataClass;
+    private final DataDriven annotation;
+    private final Codec<T> codec;
+    private final Map<ResourceLocation, T> loadedData = new ConcurrentHashMap<>();
+    private final Map<ResourceLocation, T> deferredData = new ConcurrentHashMap<>();
+    private final Map<String, Set<T>> cache = new ConcurrentHashMap<>();
+    private final Map<String, Class<? extends DataValidator<?>>> namespaceValidatorClasses = new ConcurrentHashMap<>();
+    private final Map<String, DataValidator<T>> namespaceValidators = new ConcurrentHashMap<>();
+    private final DataValidator<T> defaultValidator;
 
     private DataManager(Class<T> dataClass) {
         this.dataClass = dataClass;
@@ -134,6 +135,20 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
         if (mgr != null && namespace != null && !namespace.isBlank() && validatorClass != null) {
             mgr.namespaceValidatorClasses.put(namespace, validatorClass);
         }
+    }
+
+    public static MinecraftServer getCurrentServer() {
+        return currentServer;
+    }
+
+    private static String getFolder(Class<?> dataClass) {
+        DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
+        return annotation.folder();
+    }
+
+    private static String getModId(Class<?> dataClass) {
+        DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
+        return annotation.modid();
     }
 
     @Override
@@ -458,21 +473,6 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
             }
         }
     }
-
-    public static MinecraftServer getCurrentServer() {
-        return currentServer;
-    }
-
-    private static String getFolder(Class<?> dataClass) {
-        DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
-        return annotation.folder();
-    }
-
-    private static String getModId(Class<?> dataClass) {
-        DataDriven annotation = dataClass.getAnnotation(DataDriven.class);
-        return annotation.modid();
-    }
-
 
     @SuppressWarnings("unchecked")
     private DataValidator<T> createValidator(Class<? extends DataValidator<?>> validatorClass) {

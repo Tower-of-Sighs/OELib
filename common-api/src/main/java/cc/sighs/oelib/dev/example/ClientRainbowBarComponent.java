@@ -1,4 +1,4 @@
-package cc.sighs.oelib.example;
+package cc.sighs.oelib.dev.example;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;

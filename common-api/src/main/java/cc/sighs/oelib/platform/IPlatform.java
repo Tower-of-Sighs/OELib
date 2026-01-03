@@ -6,4 +6,8 @@ public interface IPlatform {
     Path getConfigPath();
 
     boolean isDevelopmentEnv();
+
+    boolean isClient();
+
+    boolean isServer();
 }

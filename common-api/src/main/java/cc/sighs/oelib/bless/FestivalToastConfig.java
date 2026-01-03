@@ -7,7 +7,6 @@ import cc.sighs.oelib.bless.render.ValentineOverlay;
 import cc.sighs.oelib.config.ConfigField;
 import cc.sighs.oelib.config.ConfigManager;
 import cc.sighs.oelib.config.ConfigUnit;
-import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import cc.sighs.oelib.config.ui.ConfigUiHint;
 import com.mojang.serialization.Codec;
@@ -20,7 +19,7 @@ import java.util.Map;
 
 public final class FestivalToastConfig {
     private static final String FILE_NAME = "oelib_festivals";
-    public static final ConfigUnit<FestivalToastConfig> UNIT = ConfigManager.register(
+    public static final ConfigUnit<FestivalToastConfig> UNIT = ConfigManager.registerClient(
             ResourceLocation.fromNamespaceAndPath(OELib.MODID, "festival_toast"),
             instance -> instance.group(
                     ConfigField.bool("enabled")
@@ -40,7 +39,6 @@ public final class FestivalToastConfig {
                     .directory(OELib.MODID)
                     .fileName(FILE_NAME)
                     .format(ConfigStorageFormat.TOML)
-                    .side(ConfigSide.CLIENT)
     );
     public boolean enabled;
     public boolean chineseFestivalsOnlyForChineseLanguage;

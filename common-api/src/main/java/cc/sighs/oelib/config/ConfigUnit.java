@@ -3,7 +3,10 @@ package cc.sighs.oelib.config;
 import cc.sighs.oelib.OELib;
 import cc.sighs.oelib.config.api.ConfigEvents;
 import cc.sighs.oelib.config.model.ConfigMeta;
+import cc.sighs.oelib.config.model.ConfigSide;
+import cc.sighs.oelib.config.net.ConfigUpdateRequestPacket;
 import cc.sighs.oelib.config.util.ConfigSerializationUtil;
+import cc.sighs.oelib.network.api.NetworkManager;
 import cc.sighs.oelib.platform.Platform;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -61,11 +64,30 @@ public class ConfigUnit<T> {
         }
     }
 
+    public void initializeIfMissing() {
+        var path = resolveSavePath();
+        try {
+            if (!Files.exists(path)) {
+                T value = defaultValue;
+                var meta = configCodec.meta();
+                boolean success = ConfigSerializationUtil.saveToFile(path, value, meta.format(), configCodec.codec(), configCodec.fields());
+                if (success) {
+                    OELib.LOGGER.info("Initialized config {} at {}", meta.id(), path);
+                } else {
+                    OELib.LOGGER.error("Failed to initialize config {} at {}", meta.id(), path);
+                }
+            }
+        } catch (Exception e) {
+            OELib.LOGGER.error("Exception during config initialization {}", configCodec.meta().id(), e);
+        }
+    }
+
     private T load() {
         var meta = configCodec.meta();
         var path = resolveLoadPath();
         var loaded = ConfigSerializationUtil.loadFromFile(path, meta.format(), configCodec.codec(), defaultValue);
         T value = loaded.orElse(defaultValue);
+        OELib.LOGGER.info("Loaded config {} from {}", meta.id(), path);
         ConfigEvents.onLoad(this, value);
         return value;
     }
@@ -74,12 +96,22 @@ public class ConfigUnit<T> {
         T value = currentValue != null ? currentValue : defaultValue;
         var meta = configCodec.meta();
         var path = resolveSavePath();
+        if (meta.side() == ConfigSide.SERVER && Platform.isClient()) {
+            var encoded = ConfigSerializationUtil.encodeToString(value, meta.format(), configCodec.codec(), configCodec.fields());
+            if (encoded.isEmpty()) {
+                OELib.LOGGER.error("Failed to encode server config {} for client update", meta.id());
+                return;
+            }
+            NetworkManager.sendToServer(new ConfigUpdateRequestPacket(meta.id(), encoded.get(), meta.format(), true));
+            return;
+        }
         try {
             ConfigEvents.beforeSave(this, value);
             boolean success = ConfigSerializationUtil.saveToFile(path, value, meta.format(), configCodec.codec(), configCodec.fields());
             if (!success) {
                 throw new IllegalStateException("Failed to save config: " + meta.id());
             }
+            OELib.LOGGER.info("Saved config {} to {}", meta.id(), path);
             ConfigEvents.afterSave(this, value);
         } catch (Exception e) {
             OELib.LOGGER.error("Failed to save config {}", meta.id(), e);
@@ -102,6 +134,7 @@ public class ConfigUnit<T> {
     public void setValue(T value) {
         T old = this.currentValue;
         this.currentValue = value;
+        OELib.LOGGER.info("Config {} changed", configCodec.meta().id());
         ConfigEvents.onChanged(this, old, value);
     }
 

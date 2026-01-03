@@ -1,6 +1,5 @@
 package cc.sighs.oelib.config;
 
-import cc.sighs.oelib.config.model.ConfigScope;
 import cc.sighs.oelib.config.model.ConfigValueMeta;
 import cc.sighs.oelib.config.ui.ConfigUiHint;
 import com.mojang.serialization.Codec;
@@ -84,13 +83,7 @@ public final class ConfigField {
             return this;
         }
 
-        public IntBuilder scope(ConfigScope scope) {
-            metaBuilder.scope(scope);
-            return this;
-        }
-
         public IntBuilder permissionLevel(int level) {
-            metaBuilder.permissionLevel(level);
             return this;
         }
 
@@ -142,13 +135,7 @@ public final class ConfigField {
             return this;
         }
 
-        public DoubleBuilder scope(ConfigScope scope) {
-            metaBuilder.scope(scope);
-            return this;
-        }
-
         public DoubleBuilder permissionLevel(int level) {
-            metaBuilder.permissionLevel(level);
             return this;
         }
 
@@ -191,13 +178,7 @@ public final class ConfigField {
             return this;
         }
 
-        public BoolBuilder scope(ConfigScope scope) {
-            metaBuilder.scope(scope);
-            return this;
-        }
-
         public BoolBuilder permissionLevel(int level) {
-            metaBuilder.permissionLevel(level);
             return this;
         }
 
@@ -240,13 +221,7 @@ public final class ConfigField {
             return this;
         }
 
-        public StringBuilder scope(ConfigScope scope) {
-            metaBuilder.scope(scope);
-            return this;
-        }
-
         public StringBuilder permissionLevel(int level) {
-            metaBuilder.permissionLevel(level);
             return this;
         }
 
@@ -289,13 +264,7 @@ public final class ConfigField {
             return this;
         }
 
-        public EnumBuilder<E> scope(ConfigScope scope) {
-            metaBuilder.scope(scope);
-            return this;
-        }
-
         public EnumBuilder<E> permissionLevel(int level) {
-            metaBuilder.permissionLevel(level);
             return this;
         }
 
@@ -338,13 +307,7 @@ public final class ConfigField {
             return this;
         }
 
-        public CustomBuilder<T> scope(ConfigScope scope) {
-            metaBuilder.scope(scope);
-            return this;
-        }
-
         public CustomBuilder<T> permissionLevel(int level) {
-            metaBuilder.permissionLevel(level);
             return this;
         }
 
@@ -387,13 +350,7 @@ public final class ConfigField {
             return this;
         }
 
-        public DynamicBuilder scope(ConfigScope scope) {
-            metaBuilder.scope(scope);
-            return this;
-        }
-
         public DynamicBuilder permissionLevel(int level) {
-            metaBuilder.permissionLevel(level);
             return this;
         }
 

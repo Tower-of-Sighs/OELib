@@ -7,7 +7,10 @@ import net.minecraft.server.level.ServerPlayer;
 import java.util.Arrays;
 import java.util.UUID;
 
-public class NetworkUtil {
+public final class NetworkUtil {
+    private NetworkUtil() {
+    }
+
     public static void sendChunkedPacket(byte[] data, String packetClassName, Iterable<ServerPlayer> players, int chunkSize) {
         try {
             var sessionId = UUID.randomUUID();

@@ -1,10 +1,11 @@
 package cc.sighs.oelib.fabric;
 
 import cc.sighs.oelib.OELibClient;
-import cc.sighs.oelib.example.ExampleMenus;
+import cc.sighs.oelib.dev.DevConfig;
+import cc.sighs.oelib.dev.example.ExampleMenus;
 import cc.sighs.oelib.fabric.bless.FestivalToastManager;
 import cc.sighs.oelib.fabric.bless.OverlayRenderer;
-import cc.sighs.oelib.fabric.config.HotReloadListener;
+import cc.sighs.oelib.fabric.config.ClientConfigHotReloadListeners;
 import cc.sighs.oelib.fabric.example.FluidRenderExampleClient;
 import cc.sighs.oelib.fabric.example.FluidRenderExampleScreen;
 import cc.sighs.oelib.fabric.network.NetworkManagerImpl;
@@ -20,11 +21,13 @@ public final class OELibFabricClient implements ClientModInitializer {
         FestivalToastManager.init();
         OverlayRenderer.register();
         NetworkManagerImpl.initializeClient();
-        ResourceManagerHelper.get(PackType.CLIENT_RESOURCES).registerReloadListener(new HotReloadListener());
-        MenuScreens.register(
-                ExampleMenus.FLUID_RENDER_EXAMPLE.get(),
-                FluidRenderExampleScreen::new
-        );
+        ResourceManagerHelper.get(PackType.CLIENT_RESOURCES).registerReloadListener(new ClientConfigHotReloadListeners());
+        if (DevConfig.UNIT.get().enableExampleContent) {
+            MenuScreens.register(
+                    ExampleMenus.FLUID_RENDER_EXAMPLE.get(),
+                    FluidRenderExampleScreen::new
+            );
+        }
         FluidRenderExampleClient.init();
     }
 }

@@ -15,4 +15,12 @@ public class Platform {
     public static boolean isDevelopmentEnv() {
         return INSTANCE.isDevelopmentEnv();
     }
+
+    public static boolean isClient() {
+        return INSTANCE.isClient();
+    }
+
+    public static boolean isServer() {
+        return INSTANCE.isServer();
+    }
 }

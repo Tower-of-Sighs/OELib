@@ -1,4 +1,4 @@
-## OELib Config System Developer Guide
+## OELib Config System Developer Guide（已过时）
 
 推荐阅读顺序：
 

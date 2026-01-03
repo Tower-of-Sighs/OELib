@@ -17,7 +17,6 @@ public final class ConfigMeta {
     private final String fileName;
     private final ConfigStorageFormat format;
     private final ConfigSide side;
-    private final int permissionLevel;
     private final String directory;
 
     private ConfigMeta(Builder builder) {
@@ -25,7 +24,6 @@ public final class ConfigMeta {
         this.fileName = builder.fileName;
         this.format = builder.format;
         this.side = builder.side;
-        this.permissionLevel = builder.permissionLevel;
         this.directory = builder.directory;
     }
 
@@ -50,10 +48,6 @@ public final class ConfigMeta {
         return side;
     }
 
-    public int permissionLevel() {
-        return permissionLevel;
-    }
-
     public String directory() {
         return directory;
     }
@@ -62,8 +56,7 @@ public final class ConfigMeta {
         private final ResourceLocation id;
         private String fileName;
         private ConfigStorageFormat format = ConfigStorageFormat.TOML;
-        private ConfigSide side = ConfigSide.BOTH;
-        private int permissionLevel;
+        private ConfigSide side = ConfigSide.SERVER;
         private String directory;
 
         private Builder(ResourceLocation id) {
@@ -83,11 +76,6 @@ public final class ConfigMeta {
 
         public Builder side(ConfigSide side) {
             this.side = side;
-            return this;
-        }
-
-        public Builder permissionLevel(int permissionLevel) {
-            this.permissionLevel = permissionLevel;
             return this;
         }
 

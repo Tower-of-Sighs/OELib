@@ -5,6 +5,7 @@ import cc.sighs.oelib.data.api.DataDriven;
 import cc.sighs.oelib.data.api.DataValidator;
 import cc.sighs.oelib.data.mvel.ExpressionEngine;
 import cc.sighs.oelib.data.mvel.FunctionUsageAnalyzer;
+import cc.sighs.oelib.util.ClassUtil;
 import cc.sighs.oelib.util.CodecUtils;
 import com.mojang.serialization.Codec;
 import net.minecraft.resources.ResourceLocation;
@@ -117,6 +118,11 @@ public final class DataRegistry {
 
     @SuppressWarnings({"unchecked", "ConstantConditions"})
     public static void initializeExpressionEngine() {
+        if (!ClassUtil.isClassPresent("org.mvel2.MVEL")) {
+            OELib.LOGGER.warn("MVEL2 not found in classpath. Expression engine will be disabled.");
+            expressionEngineInitialized = false;
+            return;
+        }
         ExpressionEngine.clear();
         expressionEngineInitialized = false;
 

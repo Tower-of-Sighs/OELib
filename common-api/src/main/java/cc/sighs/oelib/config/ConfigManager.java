@@ -1,19 +1,15 @@
 package cc.sighs.oelib.config;
 
 import cc.sighs.oelib.OELib;
-import cc.sighs.oelib.config.api.ConfigEvents;
+import cc.sighs.oelib.config.api.IConfigPermissionChecker;
 import cc.sighs.oelib.config.model.ConfigMeta;
 import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
-import cc.sighs.oelib.config.util.ConfigSerializationUtil;
 import com.mojang.datafixers.kinds.App;
-import com.mojang.serialization.DataResult;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.ResourceLocation;
 
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -25,7 +21,6 @@ import java.util.function.Function;
  * </p>
  */
 public final class ConfigManager {
-    private static final Map<ResourceLocation, ConfigUnit<?>> CONFIGS = new ConcurrentHashMap<>();
 
     private ConfigManager() {
     }
@@ -38,7 +33,7 @@ public final class ConfigManager {
      * @param defaultValue   default object to use when file does not exist
      * @param metaCustomizer optional customizer for {@link ConfigMeta} (filename, format, side, permission, directory)
      */
-    public static <T> ConfigUnit<T> register(
+    public static <T> ConfigUnit<T> registerClient(
             ResourceLocation configId,
             Function<RecordCodecBuilder.Instance<T>, ? extends App<RecordCodecBuilder.Mu<T>, T>> codecBuilder,
             T defaultValue,
@@ -49,8 +44,28 @@ public final class ConfigManager {
         if (metaCustomizer != null) {
             metaCustomizer.accept(builder);
         }
+        builder.side(ConfigSide.CLIENT);
         ConfigCodec<T> finalCodec = new ConfigCodec<>(base.codec(), builder.build(), base.fields());
         return register(finalCodec, defaultValue);
+    }
+
+    public static <T> ConfigUnit<T> registerServer(
+            ResourceLocation configId,
+            Function<RecordCodecBuilder.Instance<T>, ? extends App<RecordCodecBuilder.Mu<T>, T>> codecBuilder,
+            T defaultValue,
+            Consumer<ConfigMeta.Builder> metaCustomizer,
+            IConfigPermissionChecker permissionChecker
+    ) {
+        var base = ConfigRecordCodecBuilder.create(configId, codecBuilder);
+        var builder = ConfigMeta.builder(base.meta().id());
+        if (metaCustomizer != null) {
+            metaCustomizer.accept(builder);
+        }
+        builder.side(ConfigSide.SERVER);
+        ConfigCodec<T> finalCodec = new ConfigCodec<>(base.codec(), builder.build(), base.fields());
+        var unit = ConfigUnit.of(finalCodec, defaultValue);
+        registerUnitServer(unit, permissionChecker);
+        return unit;
     }
 
     public static <T> ConfigUnit<T> register(ConfigCodec<T> codec, T defaultValue) {
@@ -60,30 +75,52 @@ public final class ConfigManager {
     }
 
     public static void registerUnit(ConfigUnit<?> unit) {
-        CONFIGS.put(unit.id(), unit);
-        if (unit.meta().side().equals(ConfigSide.CLIENT) && unit.codec().fields() != null) {
-            boolean hasPerm = unit.codec().fields().stream().anyMatch(f -> f.permissionLevel() > 0);
-            if (hasPerm) {
-                OELib.LOGGER.warn("Client-side config {} contains permissionLevel on fields, which will be ignored", unit.id());
-            }
+        var meta = unit.meta();
+        if (meta.fileName() == null || meta.fileName().isBlank()) {
+            OELib.LOGGER.error("Config {} has empty filename; please set meta.fileName()", meta.id());
         }
+        if (meta.format() == null) {
+            OELib.LOGGER.error("Config {} has null format; please set meta.format()", meta.id());
+        }
+        if (meta.side() == null) {
+            OELib.LOGGER.error("Config {} has null side; please set meta.side()", meta.id());
+        }
+        OELib.LOGGER.info("Registered config {} from mod {} side {} format {} filename {} directory {}",
+                meta.id(), meta.id().getNamespace(), meta.side(), meta.format(), meta.fileName(), meta.directory());
+        if (meta.side() == ConfigSide.CLIENT) {
+            ClientConfigManager.registerUnit(unit);
+        } else if (meta.side() == ConfigSide.SERVER) {
+            registerUnitServer(unit, null);
+        }
+    }
+
+    public static void registerUnitServer(ConfigUnit<?> unit, IConfigPermissionChecker permissionChecker) {
+        ServerConfigManager.registerUnit(unit, permissionChecker);
     }
 
     public static Optional<ConfigUnit<?>> get(ResourceLocation id) {
-        return Optional.ofNullable(CONFIGS.get(id));
+        var server = ServerConfigManager.get(id);
+        if (server.isPresent()) {
+            return server;
+        }
+        return ClientConfigManager.get(id);
     }
 
     public static void reload(ResourceLocation id) {
-        var unit = CONFIGS.get(id);
-        if (unit != null) {
-            unit.reload();
-        }
+        get(id).ifPresent(ConfigUnit::reload);
     }
 
     public static void reloadAll() {
-        for (ConfigUnit<?> unit : CONFIGS.values()) {
-            unit.reload();
-        }
+        reloadAllServer();
+        reloadAllClient();
+    }
+
+    public static void reloadAllServer() {
+        ServerConfigManager.reloadAll();
+    }
+
+    public static void reloadAllClient() {
+        ClientConfigManager.reloadAll();
     }
 
     /**
@@ -94,23 +131,7 @@ public final class ConfigManager {
      * @param format  payload format
      */
     public static void applyRemoteUpdate(ResourceLocation id, String payload, ConfigStorageFormat format) {
-        var unit = CONFIGS.get(id);
-        if (unit == null) {
-            return;
-        }
-        applyRemoteUpdate1(unit, payload, format);
-    }
-
-    private static <T> void applyRemoteUpdate1(ConfigUnit<T> unit, String payload, ConfigStorageFormat format) {
-        DataResult<T> result = ConfigSerializationUtil.parse(payload, format, unit.codec().codec());
-        if (result.error().isPresent()) {
-            OELib.LOGGER.error("Failed to apply remote config {}: {}", unit.id(), result.error().get().message());
-            return;
-        }
-        result.result().ifPresent(v -> {
-            unit.setValue(v);
-            ConfigEvents.onSync(unit, v, true);
-        });
+        ServerConfigManager.applyRemoteUpdate(id, payload, format);
     }
 
     /**
@@ -120,17 +141,7 @@ public final class ConfigManager {
      * @return payload + format
      */
     public static Optional<EncodedPayload> encodeToString(ResourceLocation id) {
-        var unit = CONFIGS.get(id);
-        if (unit == null) {
-            return Optional.empty();
-        }
-        return encodeToString0(unit);
-    }
-
-    private static <T> Optional<EncodedPayload> encodeToString0(ConfigUnit<T> unit) {
-        var format = unit.meta().format();
-        var encoded = ConfigSerializationUtil.encodeToString(unit.get(), format, unit.codec().codec(), unit.codec().fields());
-        return encoded.map(s -> new EncodedPayload(format, s));
+        return ServerConfigManager.encodeToString(id);
     }
 
     public record EncodedPayload(ConfigStorageFormat format, String payload) {

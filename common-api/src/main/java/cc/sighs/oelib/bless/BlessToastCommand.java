@@ -3,7 +3,7 @@ package cc.sighs.oelib.bless;
 import cc.sighs.oelib.bless.render.ChongYangOverlay;
 import cc.sighs.oelib.bless.render.NewYearOverlay;
 import cc.sighs.oelib.bless.render.ValentineOverlay;
-import cc.sighs.oelib.platform.Platform;
+import cc.sighs.oelib.dev.DevConfig;
 import cc.sighs.oelib.registry.extra.CommandRegister;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
@@ -21,7 +21,7 @@ public class BlessToastCommand {
                                               CommandBuildContext context,
                                               Commands.CommandSelection environment) {
 
-        if (Platform.isDevelopmentEnv()) {
+        if (DevConfig.UNIT.get().enableExampleContent) {
             dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("chongyang_toast")
                     .executes(ctx -> {
                         if (ShaderToastResources.getSpiritToastShader() != null) ChongYangOverlay.INSTANCE.show();

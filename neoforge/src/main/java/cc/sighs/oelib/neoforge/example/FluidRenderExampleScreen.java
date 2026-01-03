@@ -1,6 +1,6 @@
 package cc.sighs.oelib.neoforge.example;
 
-import cc.sighs.oelib.example.FluidRenderExampleMenu;
+import cc.sighs.oelib.dev.example.FluidRenderExampleMenu;
 import cc.sighs.oelib.renderer.FluidRenderers;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;

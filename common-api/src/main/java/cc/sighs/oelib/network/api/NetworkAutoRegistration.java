@@ -14,7 +14,7 @@ public final class NetworkAutoRegistration {
     static {
         BASE_PACKAGES.add("cc.sighs.oelib.config.net");
         BASE_PACKAGES.add("cc.sighs.oelib.data.net");
-        BASE_PACKAGES.add("cc.sighs.oelib.example");
+        BASE_PACKAGES.add("cc.sighs.oelib.dev.example.net");
     }
 
     private NetworkAutoRegistration() {

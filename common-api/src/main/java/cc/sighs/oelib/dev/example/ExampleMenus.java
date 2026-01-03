@@ -1,4 +1,4 @@
-package cc.sighs.oelib.example;
+package cc.sighs.oelib.dev.example;
 
 import cc.sighs.oelib.OELib;
 import cc.sighs.oelib.registry.DeferredRegister;
