@@ -88,12 +88,6 @@ public class ConfigUnit<T> {
         T value = currentValue != null ? currentValue : defaultValue;
         var meta = configCodec.meta();
         var path = resolveSavePath();
-        if (meta.side() == ConfigSide.SERVER && Platform.isClient()) {
-            if (ConfigManager.isUpdatingFromServer()) {
-                OELib.LOGGER.debug("Skipping client-side save for server config {} during server sync", meta.id());
-            }
-            return;
-        }
         try {
             ConfigEvents.beforeSave(this, value);
             boolean success = ConfigSerializationUtil.saveToFile(path, value, meta.format(), configCodec.codec(), configCodec.fields());

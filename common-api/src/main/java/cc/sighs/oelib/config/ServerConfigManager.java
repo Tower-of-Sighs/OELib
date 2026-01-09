@@ -5,7 +5,10 @@ import cc.sighs.oelib.config.api.ConfigEvents;
 import cc.sighs.oelib.config.api.IConfigPermissionChecker;
 import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
+import cc.sighs.oelib.config.net.ConfigSyncPacket;
 import cc.sighs.oelib.config.util.ConfigSerializationUtil;
+import cc.sighs.oelib.network.api.NetworkManager;
+import cc.sighs.oelib.platform.Platform;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
@@ -60,6 +63,15 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
     static void reloadAll() {
         for (ConfigUnit<?> unit : CONFIGS.values()) {
             unit.reload();
+            if (Platform.isServer()) {
+                var id = unit.id();
+                var payloadOpt = encodeToString(id);
+                payloadOpt.ifPresent(encoded -> {
+                    NetworkManager.sendToAll(
+                            new ConfigSyncPacket(id, encoded.payload(), encoded.format())
+                    );
+                });
+            }
         }
     }
 

@@ -249,32 +249,7 @@ public class ConfigScreen extends Screen {
 
     private void onSave() {
         applyEdits();
-        for (ConfigCtx ctx : contexts) {
-            var parse = ctx.codec.codec().parse(JsonOps.INSTANCE, ctx.working);
-            if (parse.error().isPresent()) {
-                OELib.LOGGER.error("Failed to parse edited config {}: {}", ctx.id, parse.error().get().message());
-                continue;
-            }
-            parse.result().ifPresent(v -> {
-                var side = ctx.codec.meta().side();
-                if (side == ConfigSide.CLIENT) {
-                    ctx.unit.setValue(v);
-                    try {
-                        ctx.unit.save();
-                    } catch (Throwable t) {
-                        OELib.LOGGER.error("Save failed for client config {}: {}", ctx.id, t.getMessage());
-                    }
-                } else if (side == ConfigSide.SERVER) {
-                    var format = ctx.codec.meta().format();
-                    var encoded = ConfigSerializationUtil.encodeToString(v, format, ctx.codec.codec(), ctx.codec.fields());
-                    if (encoded.isEmpty()) {
-                        OELib.LOGGER.error("Failed to encode server config {} for update request", ctx.id);
-                        return;
-                    }
-                    NetworkManager.sendToServer(new ConfigUpdateRequestPacket(ctx.id, encoded.get(), format, true));
-                }
-            });
-        }
+        syncAndSaveConfigs();
         dirty = false;
         Minecraft.getInstance().setScreen(null);
     }
@@ -293,29 +268,48 @@ public class ConfigScreen extends Screen {
         Minecraft.getInstance().setScreen(new ConfirmScreen(confirm -> {
             if (confirm) {
                 applyEdits();
-                for (ConfigCtx ctx : contexts) {
-                    var parsed = ctx.codec.codec().parse(JsonOps.INSTANCE, ctx.working);
-                    parsed.result().ifPresent(v -> {
-                        var side = ctx.codec.meta().side();
-                        if (side == ConfigSide.CLIENT) {
-                            ctx.unit.setValue(v);
-                            ctx.unit.save();
-                        } else if (side == ConfigSide.SERVER) {
-                            var format = ctx.codec.meta().format();
-                            var encoded = ConfigSerializationUtil.encodeToString(v, format, ctx.codec.codec(), ctx.codec.fields());
-                            if (encoded.isEmpty()) {
-                                OELib.LOGGER.error("Failed to encode server config {} for update request", ctx.id);
-                                return;
-                            }
-                            NetworkManager.sendToServer(new ConfigUpdateRequestPacket(ctx.id, encoded.get(), format, true));
-                        }
-                    });
-                }
-                Minecraft.getInstance().setScreen(null);
-            } else {
-                Minecraft.getInstance().setScreen(null);
+                syncAndSaveConfigs();
             }
+            Minecraft.getInstance().setScreen(null);
         }, Component.translatable("config.oelib.unsaved.title"), Component.translatable("config.oelib.unsaved.message")));
+    }
+
+    private void syncAndSaveConfigs() {
+        for (ConfigCtx ctx : contexts) {
+            var parseResult = ctx.codec.codec().parse(JsonOps.INSTANCE, ctx.working);
+            if (parseResult.error().isPresent()) {
+                OELib.LOGGER.error("Failed to parse edited config {}: {}", ctx.id, parseResult.error().get().message());
+                continue;
+            }
+
+            parseResult.result().ifPresent(value -> {
+                var side = ctx.codec.meta().side();
+                if (side == ConfigSide.CLIENT) {
+                    ctx.unit.setValue(value);
+                    try {
+                        ctx.unit.save();
+                    } catch (Throwable t) {
+                        OELib.LOGGER.error("Save failed for client config {}: {}", ctx.id, t.getMessage(), t);
+                    }
+                } else if (side == ConfigSide.SERVER) {
+                    ctx.unit.setValue(value);
+                    try {
+                        ctx.unit.save();
+                    } catch (Throwable t) {
+                        OELib.LOGGER.error("Save failed for server config {}: {}", ctx.id, t.getMessage(), t);
+                    }
+                    if (Minecraft.getInstance().getConnection() != null) {
+                        var format = ctx.codec.meta().format();
+                        var encoded = ConfigSerializationUtil.encodeToString(value, format, ctx.codec.codec(), ctx.codec.fields());
+                        if (encoded.isEmpty()) {
+                            OELib.LOGGER.error("Failed to encode server config {} for update request", ctx.id);
+                            return;
+                        }
+                        NetworkManager.sendToServer(new ConfigUpdateRequestPacket(ctx.id, encoded.get(), format, true));
+                    }
+                }
+            });
+        }
     }
 
     private void renderBg(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {

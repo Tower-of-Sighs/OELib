@@ -55,6 +55,7 @@ public class NetworkManagerImpl implements INetworkManager {
 
         CustomPacketPayload.Type<T> type = NetworkPacketTypes.typeOf(clazz);
         Side side = meta.side();
+        OELib.LOGGER.debug("Registering packet: {} | Side: {} | Type ID: {}", clazz.getSimpleName(), side, type.id());
 
         if (phase == RegistrationPhase.COMMON) {
             StreamCodec<RegistryFriendlyByteBuf, T> codec = NetworkSerialization.autoCodec(clazz);
@@ -136,12 +137,6 @@ public class NetworkManagerImpl implements INetworkManager {
     private enum RegistrationPhase {
         COMMON,
         CLIENT
-    }
-
-    private record RegistrationContext<T>(
-            Class<T> packetClass,
-            StreamCodec<RegistryFriendlyByteBuf, T> codec
-    ) {
     }
 
     private record PacketInfo<T extends INetworkPacket<T> & CustomPacketPayload>(

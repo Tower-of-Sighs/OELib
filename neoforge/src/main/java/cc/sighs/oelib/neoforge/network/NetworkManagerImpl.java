@@ -34,7 +34,7 @@ public class NetworkManagerImpl implements INetworkManager {
 
     @SubscribeEvent
     public static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
-        final PayloadRegistrar registrar = event.registrar(OELib.MODID).versioned(PROTOCOL_VERSION);
+        final var registrar = event.registrar(OELib.MODID).versioned(PROTOCOL_VERSION);
         NetworkManagerImpl impl = new NetworkManagerImpl();
 
         for (Class<? extends INetworkPacket<?>> packetClass : NetworkAutoRegistration.findAllAnnotatedPackets()) {
@@ -53,14 +53,16 @@ public class NetworkManagerImpl implements INetworkManager {
     @SuppressWarnings("unchecked")
     private <T extends INetworkPacket<T> & CustomPacketPayload> void registerAnnotated(Class<? extends INetworkPacket<?>> rawClass, PayloadRegistrar registrar) {
         Class<T> clazz = (Class<T>) rawClass;
-        NetworkPacket meta = clazz.getAnnotation(NetworkPacket.class);
+        var meta = clazz.getAnnotation(NetworkPacket.class);
         if (meta == null || !clazz.isRecord()) return;
 
         CustomPacketPayload.Type<T> type = NetworkPacketTypes.typeOf(clazz);
         StreamCodec<RegistryFriendlyByteBuf, T> codec = NetworkSerialization.autoCodec(clazz);
         registeredPackets.put(type, new PacketInfo<>(type, codec));
 
-        switch (meta.side()) {
+        var side = meta.side();
+        OELib.LOGGER.debug("Registering packet: {} | Side: {} | Type ID: {}", clazz.getSimpleName(), side, type.id());
+        switch (side) {
             case CLIENT -> registrar.playToClient(type, codec, this::handle);
             case SERVER -> registrar.playToServer(type, codec, this::handle);
             case BOTH -> registrar.playBidirectional(type, codec, this::handle);
