@@ -75,6 +75,7 @@ public final class FabricNetworkAutoRegistration implements INetworkAutoRegistra
                 return;
             }
             result.add((Class<? extends INetworkPacket<?>>) clazz);
+            OELib.LOGGER.debug("Discovered annotated packet class: {}", className);
         } catch (ClassNotFoundException | NoClassDefFoundError ignored) {
         }
     }
@@ -106,4 +107,3 @@ public final class FabricNetworkAutoRegistration implements INetworkAutoRegistra
         return result;
     }
 }
-

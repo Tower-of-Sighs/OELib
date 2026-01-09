@@ -31,6 +31,15 @@ dependencies {
 
     modImplementation("mezz.jei:jei-$rootProject.minecraft_version-neoforge:${jei_version}")
 
+    implementation "cn.6tail:lunar:1.7.3"
+    implementation "de.marhali:json5-java:3.0.0"
+    shadowCommon "cn.6tail:lunar:1.7.3"
+    shadowCommon "de.marhali:json5-java:3.0.0"
+    modLocalRuntime("cn.6tail:lunar:1.7.3")
+    modLocalRuntime("de.marhali:json5-java:3.0.0")
+    forgeRuntimeLibrary(shadowCommon("cn.6tail:lunar:1.7.3"))
+    forgeRuntimeLibrary(shadowCommon("de.marhali:json5-java:3.0.0"))
+
     common(project(path: ':common-api', configuration: 'namedElements')) { transitive false }
     shadowCommon (project(path: ':common-api', configuration: 'transformProductionNeoForge')) { transitive false }
 }
@@ -44,6 +53,8 @@ processResources {
 }
 
 shadowJar {
+    relocate "cn.6tail.lunar", "${rootProject.maven_group}.oelib.shadowed.cn.6tail.lunar"
+    relocate "de.marhali.json5", "${rootProject.maven_group}.oelib.shadowed.de.marhali.json5"
     configurations = [project.configurations.shadowCommon]
     archiveClassifier = "dev-shadow"
 }

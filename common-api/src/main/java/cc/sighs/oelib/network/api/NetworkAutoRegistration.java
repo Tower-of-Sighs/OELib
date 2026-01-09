@@ -25,10 +25,12 @@ public final class NetworkAutoRegistration {
             return;
         }
         BASE_PACKAGES.add(basePackage);
+        OELib.LOGGER.debug("Added base package for packet scan: {}", basePackage);
     }
 
     public static Set<Class<? extends INetworkPacket<?>>> findAllAnnotatedPackets() {
         Set<Class<? extends INetworkPacket<?>>> result = new LinkedHashSet<>();
+        OELib.LOGGER.debug("Scanning for annotated packets in base packages: {}", BASE_PACKAGES);
         ServiceLoader<INetworkAutoRegistration> loader = ServiceLoader.load(INetworkAutoRegistration.class);
         for (INetworkAutoRegistration impl : loader) {
             try {

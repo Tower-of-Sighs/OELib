@@ -50,19 +50,26 @@ public class NetworkManagerImpl implements INetworkManager {
     @SuppressWarnings("unchecked")
     private <T extends INetworkPacket<T> & CustomPacketPayload> void registerAnnotated(Class<? extends INetworkPacket<?>> rawClass, RegistrationPhase phase) {
         Class<T> clazz = (Class<T>) rawClass;
-        NetworkPacket meta = clazz.getAnnotation(NetworkPacket.class);
+        var meta = clazz.getAnnotation(NetworkPacket.class);
         if (meta == null || !clazz.isRecord()) return;
 
         CustomPacketPayload.Type<T> type = NetworkPacketTypes.typeOf(clazz);
-        Side side = meta.side();
-        OELib.LOGGER.debug("Registering packet: {} | Side: {} | Type ID: {}", clazz.getSimpleName(), side, type.id());
+        var side = meta.side();
+        OELib.LOGGER.debug("Registering packet: {} | Phase: {} | Side: {} | Type ID: {}", clazz.getSimpleName(), phase, side, type.id());
 
         if (phase == RegistrationPhase.COMMON) {
-            StreamCodec<RegistryFriendlyByteBuf, T> codec = NetworkSerialization.autoCodec(clazz);
-            if (side == Side.SERVER || side == Side.CLIENT || side == Side.BOTH)
-                PayloadTypeRegistry.playS2C().register(type, codec);
-            if (side == Side.SERVER || side == Side.BOTH) PayloadTypeRegistry.playC2S().register(type, codec);
-            registeredPackets.put(type, new PacketInfo<>(type, codec));
+            var codec = NetworkSerialization.autoCodec(clazz);
+            if (!registeredPackets.containsKey(type)) {
+                if (side == Side.SERVER || side == Side.CLIENT || side == Side.BOTH) {
+                    PayloadTypeRegistry.playS2C().register(type, codec);
+                    PayloadTypeRegistry.playC2S().register(type, codec);
+                }
+                if (side == Side.SERVER || side == Side.BOTH) {
+                    PayloadTypeRegistry.playS2C().register(type, codec);
+                    PayloadTypeRegistry.playC2S().register(type, codec);
+                }
+                registeredPackets.put(type, new PacketInfo<>(type, codec));
+            }
 
             if (side == Side.SERVER || side == Side.BOTH) {
                 ServerPlayNetworking.registerGlobalReceiver(type, (packet, context) ->
@@ -70,6 +77,13 @@ public class NetworkManagerImpl implements INetworkManager {
             }
         } else {
             if (side == Side.CLIENT || side == Side.BOTH) {
+                PacketInfo<T> info = (PacketInfo<T>) registeredPackets.get(type);
+                if (info == null) {
+                    var codec = NetworkSerialization.autoCodec(clazz);
+                    PayloadTypeRegistry.playS2C().register(type, codec);
+                    PayloadTypeRegistry.playC2S().register(type, codec);
+                    registeredPackets.put(type, new PacketInfo<>(type, codec));
+                }
                 ClientPlayNetworking.registerGlobalReceiver(type, (packet, context) ->
                         context.client().execute(() -> packet.handle(new FabricClientNetworkContext(context))));
             }
