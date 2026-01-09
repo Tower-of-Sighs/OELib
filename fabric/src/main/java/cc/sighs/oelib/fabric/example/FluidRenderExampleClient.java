@@ -16,7 +16,7 @@ public final class FluidRenderExampleClient {
     private static KeyMapping openExampleKey;
 
     public static void init() {
-        if (DevConfig.UNIT.get().enableExampleContent) {
+        if (DevConfig.UNIT.get().enableExampleContent()) {
             openExampleKey = new KeyMapping("key.oelib.open_fluid_example", GLFW.GLFW_KEY_G, "key.categories.oelib");
             KeyMappingRegister.register(openExampleKey);
             ClientTickEvents.END_CLIENT_TICK.register(client -> {

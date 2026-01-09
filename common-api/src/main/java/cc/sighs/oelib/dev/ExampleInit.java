@@ -8,7 +8,7 @@ import net.minecraft.client.renderer.RenderType;
 
 public class ExampleInit {
     public static void init() {
-        if (DevConfig.UNIT.get().enableExampleContent) {
+        if (DevConfig.UNIT.get().enableExampleContent()) {
             ExampleRegistry.init();
             ExampleCreativeTab.init();
             ExampleCreativeTab.registerCreativeTabEntries();
@@ -19,7 +19,7 @@ public class ExampleInit {
     }
 
     public static void initClient() {
-        if (DevConfig.UNIT.get().enableExampleContent) {
+        if (DevConfig.UNIT.get().enableExampleContent()) {
             BlessToastCommand.register();
             RenderTypeRegister.registerBlocks(RenderType.cutout(), ExampleRegistry.EXAMPLE_BLOCK);
             ClientTooltipComponentRegister.register(

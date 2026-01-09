@@ -2,19 +2,14 @@ package cc.sighs.oelib.config;
 
 import cc.sighs.oelib.OELib;
 import cc.sighs.oelib.config.api.IConfigPermissionChecker;
-import cc.sighs.oelib.config.model.ConfigMeta;
 import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import com.google.gson.JsonObject;
-import com.mojang.datafixers.kinds.App;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
-import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.Optional;
-import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -31,46 +26,12 @@ public final class ConfigManager {
     private ConfigManager() {
     }
 
-    /**
-     * Simplified registration helper using group/apply codec style and a meta customizer.
-     *
-     * @param configId       textual id "namespace:path"
-     * @param codecBuilder   RecordCodecBuilder group/apply builder
-     * @param metaCustomizer optional customizer for {@link ConfigMeta} (filename, format, side, permission, directory)
-     */
-    public static <T> ConfigUnit<T> registerClient(
-            ResourceLocation configId,
-            Function<RecordCodecBuilder.Instance<T>, ? extends App<RecordCodecBuilder.Mu<T>, T>> codecBuilder,
-            Consumer<ConfigMeta.Builder> metaCustomizer
-    ) {
-        var base = ConfigRecordCodecBuilder.create(configId, codecBuilder);
-        var builder = ConfigMeta.builder(base.meta().id());
-        if (metaCustomizer != null) {
-            metaCustomizer.accept(builder);
-        }
-        builder.side(ConfigSide.CLIENT);
-        ConfigCodec<T> finalCodec = new ConfigCodec<>(base.codec(), builder.build(), base.fields());
-        var defaultValue = deriveDefault(finalCodec.codec());
-        return register(finalCodec, defaultValue);
+    public static void registerClient(ConfigUnit<?> unit) {
+        registerUnit(unit);
     }
 
-    public static <T> ConfigUnit<T> registerServer(
-            ResourceLocation configId,
-            Function<RecordCodecBuilder.Instance<T>, ? extends App<RecordCodecBuilder.Mu<T>, T>> codecBuilder,
-            Consumer<ConfigMeta.Builder> metaCustomizer,
-            IConfigPermissionChecker permissionChecker
-    ) {
-        var base = ConfigRecordCodecBuilder.create(configId, codecBuilder);
-        var builder = ConfigMeta.builder(base.meta().id());
-        if (metaCustomizer != null) {
-            metaCustomizer.accept(builder);
-        }
-        builder.side(ConfigSide.SERVER);
-        ConfigCodec<T> finalCodec = new ConfigCodec<>(base.codec(), builder.build(), base.fields());
-        var defaultValue = deriveDefault(finalCodec.codec());
-        var unit = ConfigUnit.of(finalCodec, defaultValue);
+    public static void registerServer(ConfigUnit<?> unit, IConfigPermissionChecker permissionChecker) {
         registerUnitServer(unit, permissionChecker);
-        return unit;
     }
 
     public static <T> ConfigUnit<T> register(ConfigCodec<T> codec, T defaultValue) {

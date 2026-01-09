@@ -5,6 +5,7 @@ import cc.sighs.oelib.bless.render.ChongYangOverlay;
 import cc.sighs.oelib.bless.render.NewYearOverlay;
 import cc.sighs.oelib.bless.render.ValentineOverlay;
 import cc.sighs.oelib.config.ConfigManager;
+import cc.sighs.oelib.config.ConfigRecordCodecBuilder;
 import cc.sighs.oelib.config.ConfigUnit;
 import cc.sighs.oelib.config.field.ConfigField;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
@@ -28,7 +29,7 @@ public record FestivalToastConfig(
 ) {
     private static final String FILE_NAME = "oelib_festivals";
 
-    public static final ConfigUnit<FestivalToastConfig> UNIT = ConfigManager.registerClient(
+    public static final ConfigUnit<FestivalToastConfig> UNIT = ConfigRecordCodecBuilder.createClient(
             ResourceLocation.fromNamespaceAndPath(OELib.MODID, "festival_toast"),
             instance -> instance.group(
                     ConfigField.bool("enabled")
@@ -79,6 +80,10 @@ public record FestivalToastConfig(
 
     public static void save() {
         UNIT.save();
+    }
+
+    public static void register() {
+        ConfigManager.registerClient(UNIT);
     }
 
     private static Map<String, FestivalEntry> defaultFestivals() {

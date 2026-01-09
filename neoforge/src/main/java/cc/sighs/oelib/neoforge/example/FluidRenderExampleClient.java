@@ -21,7 +21,7 @@ public final class FluidRenderExampleClient {
     private static KeyMapping openExample;
 
     public static void onRegisterKeys() {
-        if (DevConfig.UNIT.get().enableExampleContent) {
+        if (DevConfig.UNIT.get().enableExampleContent()) {
             openExample = new KeyMapping("key.oelib.open_fluid_example", GLFW.GLFW_KEY_G, "key.categories.oelib");
             KeyMappingRegister.register(openExample);
         }
@@ -29,7 +29,7 @@ public final class FluidRenderExampleClient {
 
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
-        if (DevConfig.UNIT.get().enableExampleContent) {
+        if (DevConfig.UNIT.get().enableExampleContent()) {
             if (openExample != null && openExample.consumeClick()) {
                 var mc = Minecraft.getInstance();
                 if (mc.level != null && mc.hitResult instanceof BlockHitResult blockHitResult) {

@@ -21,7 +21,7 @@ public class BlessToastCommand {
                                               CommandBuildContext context,
                                               Commands.CommandSelection environment) {
 
-        if (DevConfig.UNIT.get().enableExampleContent) {
+        if (DevConfig.UNIT.get().enableExampleContent()) {
             dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("chongyang_toast")
                     .executes(ctx -> {
                         if (ShaderToastResources.getSpiritToastShader() != null && FestivalToastConfig.get().enabled() && FestivalToastConfig.get().chineseFestivalsOnlyForChineseLanguage())

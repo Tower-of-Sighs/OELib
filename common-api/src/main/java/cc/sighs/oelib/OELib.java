@@ -1,6 +1,7 @@
 package cc.sighs.oelib;
 
 import cc.sighs.oelib.data.DataRegistry;
+import cc.sighs.oelib.dev.DevConfig;
 import cc.sighs.oelib.dev.ExampleInit;
 import cc.sighs.oelib.icon.DynamicIconRegistry;
 import org.slf4j.Logger;
@@ -11,6 +12,7 @@ public class OELib {
     public static final Logger LOGGER = LoggerFactory.getLogger(MODID);
 
     public static void init() {
+        DevConfig.register();
         DynamicIconRegistry.forMod(MODID)
                 .addNameFabric("icon1.png", 1)
                 .addNameFabric("icon2.png", 1)
