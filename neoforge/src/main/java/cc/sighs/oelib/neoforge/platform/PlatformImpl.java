@@ -27,4 +27,14 @@ public class PlatformImpl implements IPlatform {
     public boolean isServer() {
         return FMLEnvironment.dist == Dist.DEDICATED_SERVER;
     }
+
+    @Override
+    public boolean isFabric() {
+        return false;
+    }
+
+    @Override
+    public boolean isNeoForge() {
+        return true;
+    }
 }

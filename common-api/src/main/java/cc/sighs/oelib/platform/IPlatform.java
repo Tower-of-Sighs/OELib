@@ -10,4 +10,8 @@ public interface IPlatform {
     boolean isClient();
 
     boolean isServer();
+
+    boolean isFabric();
+
+    boolean isNeoForge();
 }

@@ -26,4 +26,14 @@ public class PlatformImpl implements IPlatform {
     public boolean isServer() {
         return FabricLoader.getInstance().getEnvironmentType().equals(EnvType.SERVER);
     }
+
+    @Override
+    public boolean isFabric() {
+        return true;
+    }
+
+    @Override
+    public boolean isNeoForge() {
+        return false;
+    }
 }
