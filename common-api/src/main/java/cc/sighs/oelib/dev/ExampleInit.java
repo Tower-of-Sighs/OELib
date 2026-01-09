@@ -26,6 +26,7 @@ public class ExampleInit {
                     RainbowBarComponent.class,
                     ClientRainbowBarComponent::new
             );
+            ExampleMenus.registerScreens();
         }
     }
 }

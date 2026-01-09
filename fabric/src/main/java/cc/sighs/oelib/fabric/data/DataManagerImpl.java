@@ -6,6 +6,7 @@ import cc.sighs.oelib.data.spi.IDataManager;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.PackType;
 
 import java.util.List;
@@ -103,5 +104,10 @@ public final class DataManagerImpl implements IDataManager {
     @Override
     public boolean isModLoaded(String modId) {
         return FabricLoader.getInstance().isModLoaded(modId);
+    }
+
+    @Override
+    public MinecraftServer getServer() {
+        return DataManager.getCurrentServer();
     }
 }

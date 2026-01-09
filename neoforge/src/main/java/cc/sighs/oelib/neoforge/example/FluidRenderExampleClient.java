@@ -2,7 +2,6 @@ package cc.sighs.oelib.neoforge.example;
 
 import cc.sighs.oelib.OELib;
 import cc.sighs.oelib.dev.DevConfig;
-import cc.sighs.oelib.dev.example.ExampleMenus;
 import cc.sighs.oelib.dev.example.net.OpenGuiPacket;
 import cc.sighs.oelib.registry.extra.KeyMappingRegister;
 import net.minecraft.client.KeyMapping;
@@ -15,7 +14,6 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import org.lwjgl.glfw.GLFW;
 
 @EventBusSubscriber(modid = OELib.MODID, value = Dist.CLIENT)
@@ -48,16 +46,6 @@ public final class FluidRenderExampleClient {
                     }
                 }
             }
-        }
-    }
-
-    @SubscribeEvent
-    public static void registerMenus(RegisterMenuScreensEvent event) {
-        if (DevConfig.UNIT.get().enableExampleContent) {
-            event.register(
-                    ExampleMenus.FLUID_RENDER_EXAMPLE.get(),
-                    FluidRenderExampleScreen::new
-            );
         }
     }
 }

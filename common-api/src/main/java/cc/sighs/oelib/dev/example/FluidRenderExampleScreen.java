@@ -1,14 +1,11 @@
-package cc.sighs.oelib.neoforge.example;
+package cc.sighs.oelib.dev.example;
 
-import cc.sighs.oelib.dev.example.FluidRenderExampleMenu;
 import cc.sighs.oelib.renderer.FluidRenderers;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.level.material.Fluids;
-import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.FluidType;
 
 public class FluidRenderExampleScreen extends AbstractContainerScreen<FluidRenderExampleMenu> {
 
@@ -24,15 +21,13 @@ public class FluidRenderExampleScreen extends AbstractContainerScreen<FluidRende
     }
 
     @Override
-    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
+    protected void renderBg(GuiGraphics guiGraphics, float partialTick, int mouseX, int mouseY) {
         int left = this.leftPos;
         int top = this.topPos;
+        guiGraphics.fill(left, top, left + imageWidth, top + imageHeight, 0x66000000);
 
-        graphics.fill(left, top, left + imageWidth, top + imageHeight, 0x66000000);
-
-        long capacity = FluidType.BUCKET_VOLUME;
-        FluidStack water = new FluidStack(Fluids.WATER, 1000);
-        FluidStack lava = new FluidStack(Fluids.LAVA, 1000);
+        long capacity = 1000;
+        long amount = 1000;
 
         int fluidWidth = 16;
         int fluidHeight = 64;
@@ -41,10 +36,10 @@ public class FluidRenderExampleScreen extends AbstractContainerScreen<FluidRende
         int startX = left + (imageWidth - totalWidth) / 2;
         int startY = top + (imageHeight - fluidHeight) / 2;
 
-        FluidRenderers.render(graphics, water, water.getAmount(), capacity,
+        FluidRenderers.render(guiGraphics, FluidRenderers.of(Fluids.WATER), amount, capacity,
                 startX, startY, fluidWidth, fluidHeight);
 
-        FluidRenderers.render(graphics, lava, lava.getAmount(), capacity,
+        FluidRenderers.render(guiGraphics, FluidRenderers.of(Fluids.LAVA), amount, capacity,
                 startX + fluidWidth + gap, startY, fluidWidth, fluidHeight);
     }
 }

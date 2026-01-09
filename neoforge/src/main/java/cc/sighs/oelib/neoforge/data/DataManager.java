@@ -41,8 +41,8 @@ import java.util.stream.Collectors;
 public class DataManager<T> extends SimpleJsonResourceReloadListener {
     private static final Gson GSON = new GsonBuilder().setLenient().create();
     private static final Map<Class<?>, DataManager<?>> managers = new ConcurrentHashMap<>();
-    private static boolean serverStarted = false;
     private static final Map<Class<?>, Set<String>> runtimeRegisteredNamespaces = new ConcurrentHashMap<>();
+    private static boolean serverStarted = false;
     private final Class<T> dataClass;
     private final DataDriven annotation;
     private final Codec<T> codec;
@@ -120,6 +120,25 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         return annotation.folder();
     }
 
+    public static MinecraftServer getCurrentServer() {
+        return ServerLifecycleHooks.getCurrentServer();
+    }
+
+    @SubscribeEvent
+    public static void onServerStarted(ServerStartedEvent event) {
+        serverStarted = true;
+    }
+
+    @SubscribeEvent
+    public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            for (DataManager<?> manager : managers.values()) {
+                if (manager.annotation.syncToClient()) {
+                    manager.syncToPlayer(player);
+                }
+            }
+        }
+    }
 
     /**
      * 获取所有已加载的数据。
@@ -229,7 +248,6 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
             }
         }
     }
-
 
     @Override
     protected void apply(Map<ResourceLocation, JsonElement> object, ResourceManager resourceManager, ProfilerFiller profiler) {
@@ -356,11 +374,6 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         addToCache("all", data);
     }
 
-
-    public static MinecraftServer getCurrentServer() {
-        return ServerLifecycleHooks.getCurrentServer();
-    }
-
     @SuppressWarnings("unchecked")
     private DataValidator<T> getValidatorForNamespace(String namespace) {
         if (namespace == null) return defaultValidator;
@@ -401,23 +414,6 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         } catch (Exception e) {
             OELib.LOGGER.warn("Failed to create validator {}, using no validator", validatorClass.getSimpleName(), e);
             return (DataValidator<T>) new DataValidator.NoValidator();
-        }
-    }
-
-
-    @SubscribeEvent
-    public static void onServerStarted(ServerStartedEvent event) {
-        serverStarted = true;
-    }
-
-    @SubscribeEvent
-    public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player) {
-            for (DataManager<?> manager : managers.values()) {
-                if (manager.annotation.syncToClient()) {
-                    manager.syncToPlayer(player);
-                }
-            }
         }
     }
 }

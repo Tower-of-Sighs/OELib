@@ -2,6 +2,7 @@ package cc.sighs.oelib.data.spi;
 
 import cc.sighs.oelib.data.api.DataValidator;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 
 import java.util.List;
 import java.util.Map;
@@ -31,4 +32,6 @@ public interface IDataManager {
     void updateClientDataRaw(Class<?> dataClass, Map<ResourceLocation, ?> data);
 
     boolean isModLoaded(String modId);
+
+    MinecraftServer getServer();
 }

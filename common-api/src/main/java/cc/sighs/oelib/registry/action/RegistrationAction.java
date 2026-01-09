@@ -8,5 +8,5 @@ public sealed interface RegistrationAction
         ParticleProviderAction, FuelAction, EntityAttributeAction,
         SpawnPlacementAction, TradeVillagerAction,
         TradeWandererAction, ListenAction, CreativeTabModifyAction, CreativeTabAppendStackAction,
-        CommandRegisterAction, ShaderRegisterAction {
+        CommandRegisterAction, ShaderRegisterAction, MenuAction {
 }

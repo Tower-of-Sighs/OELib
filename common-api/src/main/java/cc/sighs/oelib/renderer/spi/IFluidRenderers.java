@@ -1,8 +1,8 @@
 package cc.sighs.oelib.renderer.spi;
 
-import net.minecraft.client.gui.GuiGraphics;
+import cc.sighs.oelib.renderer.FluidRef;
+import cc.sighs.oelib.renderer.FluidRenderAttributes;
 
 public interface IFluidRenderers {
-    void render(GuiGraphics graphics, Object fluidRef, long amount, long capacity,
-                int x, int y, int width, int height);
+    FluidRenderAttributes resolve(FluidRef ref);
 }
