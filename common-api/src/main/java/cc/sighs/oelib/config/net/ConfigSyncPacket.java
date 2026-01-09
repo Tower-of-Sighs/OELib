@@ -17,9 +17,6 @@ public record ConfigSyncPacket(
 ) implements INetworkPacket<ConfigSyncPacket> {
     @Override
     public void handle(INetworkContext context) {
-        if (!context.isClientSide()) {
-            return;
-        }
-        ConfigManager.applyRemoteUpdate(configId, payload, format);
+        ConfigManager.runWithServerUpdate(() -> ConfigManager.applyRemoteUpdate(configId, payload, format));
     }
 }

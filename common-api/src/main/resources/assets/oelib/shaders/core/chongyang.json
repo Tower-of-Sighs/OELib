@@ -4,7 +4,7 @@
     "srcrgb": "srcalpha",
     "dstrgb": "one_minus_srcalpha"
   },
-  "vertex": "oelib:chongyang",
+  "vertex": "oelib:festival",
   "fragment": "oelib:chongyang",
   "attributes": [
     "Position",

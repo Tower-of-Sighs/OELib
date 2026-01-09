@@ -1,9 +1,9 @@
 package cc.sighs.oelib.dev;
 
 import cc.sighs.oelib.OELib;
-import cc.sighs.oelib.config.ConfigField;
 import cc.sighs.oelib.config.ConfigManager;
 import cc.sighs.oelib.config.ConfigUnit;
+import cc.sighs.oelib.config.field.ConfigField;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import net.minecraft.resources.ResourceLocation;
 
@@ -15,9 +15,9 @@ public class DevConfig {
             instance -> instance.group(
                     ConfigField.bool("enableExampleContent")
                             .comment("是否启用示例/测试内容")
+                            .defaultValue(false)
                             .forGetter(cfg -> cfg.enableExampleContent)
             ).apply(instance, DevConfig::new),
-            new DevConfig(false),
             meta -> meta
                     .directory(OELib.MODID)
                     .fileName(FILE_NAME)

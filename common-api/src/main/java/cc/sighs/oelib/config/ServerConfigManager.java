@@ -1,11 +1,11 @@
 package cc.sighs.oelib.config;
 
 import cc.sighs.oelib.OELib;
+import cc.sighs.oelib.config.api.ConfigEvents;
 import cc.sighs.oelib.config.api.IConfigPermissionChecker;
 import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import cc.sighs.oelib.config.util.ConfigSerializationUtil;
-import com.mojang.serialization.DataResult;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
@@ -49,6 +49,10 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
         return Optional.ofNullable(CONFIGS.get(id));
     }
 
+    public static Map<ResourceLocation, ConfigUnit<?>> all() {
+        return Map.copyOf(CONFIGS);
+    }
+
     public static Optional<IConfigPermissionChecker> getPermissionChecker(ResourceLocation id) {
         return Optional.ofNullable(PERMISSIONS.get(id));
     }
@@ -76,7 +80,7 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
         if (unit == null) {
             return;
         }
-        DataResult<?> result = ConfigSerializationUtil.parse(payload, format, unit.codec().codec());
+        var result = ConfigSerializationUtil.parse(payload, format, unit.codec().codec());
         if (result.error().isPresent()) {
             OELib.LOGGER.error("Failed to apply remote server config {}: {}", unit.id(), result.error().get().message());
             return;
@@ -86,7 +90,7 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
             ConfigUnit<Object> cast = (ConfigUnit<Object>) unit;
             OELib.LOGGER.info("Applying remote update for server config {} with format {}", unit.id(), format);
             cast.setValue(v);
-            cc.sighs.oelib.config.api.ConfigEvents.onSync(cast, v, true);
+            ConfigEvents.onSync(cast, v, true);
             OELib.LOGGER.info("Applied remote update for server config {}", unit.id());
         });
     }
@@ -97,4 +101,3 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
         OELib.LOGGER.info("Successfully reload {} server config(s).", CONFIGS.size());
     }
 }
-

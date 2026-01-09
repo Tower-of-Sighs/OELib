@@ -24,20 +24,23 @@ public class BlessToastCommand {
         if (DevConfig.UNIT.get().enableExampleContent) {
             dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("chongyang_toast")
                     .executes(ctx -> {
-                        if (ShaderToastResources.getSpiritToastShader() != null) ChongYangOverlay.INSTANCE.show();
+                        if (ShaderToastResources.getSpiritToastShader() != null && FestivalToastConfig.get().enabled() && FestivalToastConfig.get().chineseFestivalsOnlyForChineseLanguage())
+                            ChongYangOverlay.INSTANCE.show();
                         return Command.SINGLE_SUCCESS;
                     }));
 
             dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("new_year_toast")
                     .executes(ctx -> {
-                        if (ShaderToastResources.getNewYearShader() != null) NewYearOverlay.INSTANCE.show();
+                        if (ShaderToastResources.getNewYearShader() != null && FestivalToastConfig.get().enabled() && FestivalToastConfig.get().chineseFestivalsOnlyForChineseLanguage())
+                            NewYearOverlay.INSTANCE.show();
 
                         return Command.SINGLE_SUCCESS;
                     }));
 
             dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("valentine_toast")
                     .executes(ctx -> {
-                        if (ShaderToastResources.getValentineShader() != null) ValentineOverlay.INSTANCE.show();
+                        if (ShaderToastResources.getValentineShader() != null && FestivalToastConfig.get().enabled())
+                            ValentineOverlay.INSTANCE.show();
 
                         return Command.SINGLE_SUCCESS;
                     }));

@@ -4,7 +4,7 @@
     "srcrgb": "srcalpha",
     "dstrgb": "one_minus_srcalpha"
   },
-  "vertex": "oelib:valentine",
+  "vertex": "oelib:festival",
   "fragment": "oelib:valentine",
   "attributes": [
     "Position",

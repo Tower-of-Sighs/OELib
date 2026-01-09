@@ -16,7 +16,7 @@ public final class DataManager {
     static {
         IMPL = ServiceLoader.load(IDataManager.class)
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("No DataManagerBridgeSPI implementation found"));
+                .orElseThrow(() -> new IllegalStateException("No IDataManager implementation found"));
     }
 
     private DataManager() {

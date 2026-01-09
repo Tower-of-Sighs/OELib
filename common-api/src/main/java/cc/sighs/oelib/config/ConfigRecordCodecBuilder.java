@@ -1,5 +1,6 @@
 package cc.sighs.oelib.config;
 
+import cc.sighs.oelib.config.field.ConfigField;
 import cc.sighs.oelib.config.model.ConfigMeta;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import cc.sighs.oelib.config.model.ConfigValueMeta;
@@ -39,11 +40,13 @@ public class ConfigRecordCodecBuilder {
         Objects.requireNonNull(builder);
         List<ConfigValueMeta> fields = new ArrayList<>();
         ConfigField.CURRENT_FIELDS.set(fields);
+        ConfigField.CURRENT_CONFIG_ID.set(configId);
         Codec<T> codec;
         try {
             codec = RecordCodecBuilder.create(builder);
         } finally {
             ConfigField.CURRENT_FIELDS.remove();
+            ConfigField.CURRENT_CONFIG_ID.remove();
         }
         ConfigMeta meta = ConfigMeta.builder(configId)
                 .format(ConfigStorageFormat.TOML)

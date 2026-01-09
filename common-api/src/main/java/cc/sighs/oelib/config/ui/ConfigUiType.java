@@ -7,7 +7,5 @@ public enum ConfigUiType {
     SLIDER,
     TEXT,
     TOGGLE,
-    DROPDOWN,
-    COLOR_PICKER,
-    CUSTOM
+    DROPDOWN
 }

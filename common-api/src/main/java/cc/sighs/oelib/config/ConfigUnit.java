@@ -4,13 +4,8 @@ import cc.sighs.oelib.OELib;
 import cc.sighs.oelib.config.api.ConfigEvents;
 import cc.sighs.oelib.config.model.ConfigMeta;
 import cc.sighs.oelib.config.model.ConfigSide;
-import cc.sighs.oelib.config.net.ConfigUpdateRequestPacket;
 import cc.sighs.oelib.config.util.ConfigSerializationUtil;
-import cc.sighs.oelib.network.api.NetworkManager;
 import cc.sighs.oelib.platform.Platform;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import de.marhali.json5.Json5;
 import net.minecraft.resources.ResourceLocation;
 
 import java.nio.file.Files;
@@ -26,8 +21,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * </p>
  */
 public class ConfigUnit<T> {
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Json5 JSON5 = Json5.builder(builder -> builder.parseComments().build());
     private final ConfigCodec<T> configCodec;
     private final T defaultValue;
     private final AtomicBoolean loaded = new AtomicBoolean();
@@ -68,9 +61,8 @@ public class ConfigUnit<T> {
         var path = resolveSavePath();
         try {
             if (!Files.exists(path)) {
-                T value = defaultValue;
                 var meta = configCodec.meta();
-                boolean success = ConfigSerializationUtil.saveToFile(path, value, meta.format(), configCodec.codec(), configCodec.fields());
+                boolean success = ConfigSerializationUtil.saveToFile(path, defaultValue, meta.format(), configCodec.codec(), configCodec.fields());
                 if (success) {
                     OELib.LOGGER.info("Initialized config {} at {}", meta.id(), path);
                 } else {
@@ -97,12 +89,9 @@ public class ConfigUnit<T> {
         var meta = configCodec.meta();
         var path = resolveSavePath();
         if (meta.side() == ConfigSide.SERVER && Platform.isClient()) {
-            var encoded = ConfigSerializationUtil.encodeToString(value, meta.format(), configCodec.codec(), configCodec.fields());
-            if (encoded.isEmpty()) {
-                OELib.LOGGER.error("Failed to encode server config {} for client update", meta.id());
-                return;
+            if (ConfigManager.isUpdatingFromServer()) {
+                OELib.LOGGER.debug("Skipping client-side save for server config {} during server sync", meta.id());
             }
-            NetworkManager.sendToServer(new ConfigUpdateRequestPacket(meta.id(), encoded.get(), meta.format(), true));
             return;
         }
         try {
@@ -132,8 +121,11 @@ public class ConfigUnit<T> {
     }
 
     public void setValue(T value) {
-        T old = this.currentValue;
+        var old = this.currentValue;
         this.currentValue = value;
+        if (Platform.isClient() && configCodec.meta().side() == ConfigSide.SERVER && ConfigManager.isUpdatingFromServer()) {
+            return;
+        }
         OELib.LOGGER.info("Config {} changed", configCodec.meta().id());
         ConfigEvents.onChanged(this, old, value);
     }

@@ -81,11 +81,11 @@ public final class ConfigSerializationUtil {
                         logEncodeError(format, result.error().get().message());
                         yield Optional.empty();
                     }
-                    JsonElement element = result.result().orElse(null);
+                    var element = result.result().orElse(null);
                     if (element == null) {
                         yield Optional.empty();
                     }
-                    String json5 = writeJson5WithComments(element, fields);
+                    var json5 = writeJson5WithComments(element, fields);
                     yield Optional.of(json5);
                 }
                 case TOML -> {

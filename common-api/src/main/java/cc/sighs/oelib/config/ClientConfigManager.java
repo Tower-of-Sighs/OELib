@@ -40,6 +40,10 @@ public class ClientConfigManager implements ResourceManagerReloadListener {
         return Optional.ofNullable(CONFIGS.get(id));
     }
 
+    public static Map<ResourceLocation, ConfigUnit<?>> all() {
+        return Map.copyOf(CONFIGS);
+    }
+
     static void reloadAll() {
         for (ConfigUnit<?> unit : CONFIGS.values()) {
             unit.reload();
@@ -53,4 +57,3 @@ public class ClientConfigManager implements ResourceManagerReloadListener {
         OELib.LOGGER.info("Successfully reload {} client config(s).", CONFIGS.size());
     }
 }
-

@@ -15,11 +15,17 @@ public final class ConfigValueMeta {
     private final String key;
     private final String comment;
     private final ConfigUiHint uiHint;
+    private final String translationKey;
+    private final String tooltip;
+    private final boolean hidden;
 
     private ConfigValueMeta(Builder builder) {
         this.key = builder.key;
         this.comment = builder.comment;
         this.uiHint = builder.uiHint;
+        this.translationKey = builder.translationKey;
+        this.tooltip = builder.tooltip;
+        this.hidden = builder.hidden;
     }
 
     public static Builder builder(String key) {
@@ -39,10 +45,25 @@ public final class ConfigValueMeta {
         return Optional.ofNullable(uiHint);
     }
 
+    public Optional<String> translationKey() {
+        return Optional.ofNullable(translationKey);
+    }
+
+    public Optional<String> tooltip() {
+        return Optional.ofNullable(tooltip);
+    }
+
+    public boolean hidden() {
+        return hidden;
+    }
+
     public static final class Builder {
         private final String key;
         private String comment;
         private ConfigUiHint uiHint;
+        private String translationKey;
+        private String tooltip;
+        private boolean hidden;
 
         private Builder(String key) {
             this.key = key;
@@ -55,6 +76,21 @@ public final class ConfigValueMeta {
 
         public Builder uiHint(ConfigUiHint uiHint) {
             this.uiHint = uiHint;
+            return this;
+        }
+
+        public Builder translationKey(String translationKey) {
+            this.translationKey = translationKey;
+            return this;
+        }
+
+        public Builder tooltip(String tooltip) {
+            this.tooltip = tooltip;
+            return this;
+        }
+
+        public Builder hidden(boolean hidden) {
+            this.hidden = hidden;
             return this;
         }
 

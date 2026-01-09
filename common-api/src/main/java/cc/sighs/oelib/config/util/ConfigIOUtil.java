@@ -3,11 +3,11 @@ package cc.sighs.oelib.config.util;
 import cc.sighs.oelib.OELib;
 import cc.sighs.oelib.config.ConfigManager;
 import cc.sighs.oelib.config.ConfigUnit;
+import cc.sighs.oelib.config.ServerConfigManager;
 import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import cc.sighs.oelib.config.net.ConfigSyncPacket;
 import cc.sighs.oelib.network.api.NetworkManager;
-import com.mojang.serialization.DataResult;
 import net.minecraft.server.level.ServerPlayer;
 
 public final class ConfigIOUtil {
@@ -20,7 +20,7 @@ public final class ConfigIOUtil {
             OELib.LOGGER.warn("Rejected update for non-server config {}", unit.id());
             return;
         }
-        var checkerOpt = cc.sighs.oelib.config.ServerConfigManager.getPermissionChecker(unit.id());
+        var checkerOpt = ServerConfigManager.getPermissionChecker(unit.id());
         if (checkerOpt.isEmpty()) {
             OELib.LOGGER.warn("No permission checker for server config {}; rejecting client update", unit.id());
             return;
@@ -32,7 +32,7 @@ public final class ConfigIOUtil {
         }
 
         try {
-            DataResult<T> result = ConfigSerializationUtil.parse(payload, format, unit.codec().codec());
+            var result = ConfigSerializationUtil.parse(payload, format, unit.codec().codec());
             if (result.error().isPresent()) {
                 OELib.LOGGER.error("Failed to parse update for config {}: {}", unit.id(), result.error().get().message());
                 return;

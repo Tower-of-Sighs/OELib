@@ -5,13 +5,17 @@ import cc.sighs.oelib.config.api.IConfigPermissionChecker;
 import cc.sighs.oelib.config.model.ConfigMeta;
 import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
+import com.google.gson.JsonObject;
 import com.mojang.datafixers.kinds.App;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Global registry and utilities for configuration units.
@@ -22,6 +26,8 @@ import java.util.function.Function;
  */
 public final class ConfigManager {
 
+    private static final ThreadLocal<Boolean> UPDATING_FROM_SERVER = ThreadLocal.withInitial(() -> Boolean.FALSE);
+
     private ConfigManager() {
     }
 
@@ -30,13 +36,11 @@ public final class ConfigManager {
      *
      * @param configId       textual id "namespace:path"
      * @param codecBuilder   RecordCodecBuilder group/apply builder
-     * @param defaultValue   default object to use when file does not exist
      * @param metaCustomizer optional customizer for {@link ConfigMeta} (filename, format, side, permission, directory)
      */
     public static <T> ConfigUnit<T> registerClient(
             ResourceLocation configId,
             Function<RecordCodecBuilder.Instance<T>, ? extends App<RecordCodecBuilder.Mu<T>, T>> codecBuilder,
-            T defaultValue,
             Consumer<ConfigMeta.Builder> metaCustomizer
     ) {
         var base = ConfigRecordCodecBuilder.create(configId, codecBuilder);
@@ -46,13 +50,13 @@ public final class ConfigManager {
         }
         builder.side(ConfigSide.CLIENT);
         ConfigCodec<T> finalCodec = new ConfigCodec<>(base.codec(), builder.build(), base.fields());
+        var defaultValue = deriveDefault(finalCodec.codec());
         return register(finalCodec, defaultValue);
     }
 
     public static <T> ConfigUnit<T> registerServer(
             ResourceLocation configId,
             Function<RecordCodecBuilder.Instance<T>, ? extends App<RecordCodecBuilder.Mu<T>, T>> codecBuilder,
-            T defaultValue,
             Consumer<ConfigMeta.Builder> metaCustomizer,
             IConfigPermissionChecker permissionChecker
     ) {
@@ -63,6 +67,7 @@ public final class ConfigManager {
         }
         builder.side(ConfigSide.SERVER);
         ConfigCodec<T> finalCodec = new ConfigCodec<>(base.codec(), builder.build(), base.fields());
+        var defaultValue = deriveDefault(finalCodec.codec());
         var unit = ConfigUnit.of(finalCodec, defaultValue);
         registerUnitServer(unit, permissionChecker);
         return unit;
@@ -96,6 +101,12 @@ public final class ConfigManager {
 
     public static void registerUnitServer(ConfigUnit<?> unit, IConfigPermissionChecker permissionChecker) {
         ServerConfigManager.registerUnit(unit, permissionChecker);
+    }
+
+    private static <T> T deriveDefault(Codec<T> codec) {
+        var element = new JsonObject();
+        var res = codec.parse(JsonOps.INSTANCE, element);
+        return res.result().orElseThrow(() -> new IllegalStateException("Missing defaults for config; please specify defaultValue for all fields"));
     }
 
     public static Optional<ConfigUnit<?>> get(ResourceLocation id) {
@@ -132,6 +143,30 @@ public final class ConfigManager {
      */
     public static void applyRemoteUpdate(ResourceLocation id, String payload, ConfigStorageFormat format) {
         ServerConfigManager.applyRemoteUpdate(id, payload, format);
+    }
+
+    public static boolean isUpdatingFromServer() {
+        return UPDATING_FROM_SERVER.get();
+    }
+
+    public static void runWithServerUpdate(Runnable runnable) {
+        boolean previous = UPDATING_FROM_SERVER.get();
+        UPDATING_FROM_SERVER.set(Boolean.TRUE);
+        try {
+            runnable.run();
+        } finally {
+            UPDATING_FROM_SERVER.set(previous);
+        }
+    }
+
+    public static <T> T callWithServerUpdate(Supplier<T> supplier) {
+        boolean previous = UPDATING_FROM_SERVER.get();
+        UPDATING_FROM_SERVER.set(Boolean.TRUE);
+        try {
+            return supplier.get();
+        } finally {
+            UPDATING_FROM_SERVER.set(previous);
+        }
     }
 
     /**

@@ -1,6 +1,7 @@
 package cc.sighs.oelib.fabric;
 
 import cc.sighs.oelib.OELibClient;
+import cc.sighs.oelib.bless.FestivalToastConfig;
 import cc.sighs.oelib.dev.DevConfig;
 import cc.sighs.oelib.dev.example.ExampleMenus;
 import cc.sighs.oelib.fabric.bless.FestivalToastManager;
@@ -18,6 +19,7 @@ public final class OELibFabricClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         OELibClient.initClient();
+        FestivalToastConfig.get();
         FestivalToastManager.init();
         OverlayRenderer.register();
         NetworkManagerImpl.initializeClient();

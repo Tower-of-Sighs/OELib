@@ -42,9 +42,9 @@ subprojects {
         minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
         mappings loom.officialMojangMappings()
 
-        implementation("cn.6tail:lunar:1.7.3")
-        implementation "com.electronwill.night-config:toml:3.8.3"
-        implementation "de.marhali:json5-java:3.0.0"
+        api("cn.6tail:lunar:1.7.3")
+        api "com.electronwill.night-config:toml:3.8.3"
+        api "de.marhali:json5-java:3.0.0"
 
         if (project.name == "fabric") {
             api("org.mvel:mvel2:2.5.0.Final")

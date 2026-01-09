@@ -9,21 +9,21 @@ import java.util.Objects;
  * Encodes control type and parameters such as slider ranges or text inputs.
  * </p>
  */
-public final class ConfigUiHint {
+public class ConfigUiHint {
     private final ConfigUiType type;
     private final Double min;
     private final Double max;
     private final Double step;
     private final List<String> options;
-    private final String customRenderer;
+    private final String tooltip;
 
-    private ConfigUiHint(ConfigUiType type, Double min, Double max, Double step, List<String> options, String customRenderer) {
+    private ConfigUiHint(ConfigUiType type, Double min, Double max, Double step, List<String> options, String tooltip) {
         this.type = type;
         this.min = min;
         this.max = max;
         this.step = step;
         this.options = options;
-        this.customRenderer = customRenderer;
+        this.tooltip = tooltip;
     }
 
     public static ConfigUiHint slider(double min, double max, double step) {
@@ -43,13 +43,8 @@ public final class ConfigUiHint {
         return new ConfigUiHint(ConfigUiType.DROPDOWN, null, null, null, options, null);
     }
 
-    public static ConfigUiHint colorPicker() {
-        return new ConfigUiHint(ConfigUiType.COLOR_PICKER, null, null, null, null, null);
-    }
-
-    public static ConfigUiHint custom(String rendererId) {
-        Objects.requireNonNull(rendererId);
-        return new ConfigUiHint(ConfigUiType.CUSTOM, null, null, null, null, rendererId);
+    public ConfigUiHint withTooltip(String tooltip) {
+        return new ConfigUiHint(this.type, this.min, this.max, this.step, this.options, tooltip);
     }
 
     public ConfigUiType type() {
@@ -72,7 +67,7 @@ public final class ConfigUiHint {
         return options;
     }
 
-    public String customRenderer() {
-        return customRenderer;
+    public String tooltip() {
+        return tooltip;
     }
 }

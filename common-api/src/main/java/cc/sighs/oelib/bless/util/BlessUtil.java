@@ -11,25 +11,40 @@ import com.nlf.calendar.Solar;
 import net.minecraft.client.Minecraft;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 
 public class BlessUtil {
     public static void checkFestival(AbstractShaderOverlay overlay, LocalDate today, Solar solar, Lunar lunar, boolean chineseLanguage, FestivalToastConfig config) {
         var id = overlay.festivalId();
-        var preferences = config.festival(id);
-        if (!preferences.enabled) {
+        var entry = config.festivals().get(id);
+        boolean enabled = entry == null || entry.enabled();
+        if (!enabled) {
             return;
         }
-        if (overlay.isChineseFestival() && config.chineseFestivalsOnlyForChineseLanguage && !chineseLanguage) {
+        if (overlay.isChineseFestival() && config.chineseFestivalsOnlyForChineseLanguage() && !chineseLanguage) {
             return;
         }
         boolean match = isFestivalMatch(overlay, solar, lunar);
         if (!match) {
             return;
         }
-        if (config.hasShownToday(id, today)) {
+        var lastDate = entry != null ? entry.lastShownDate() : "";
+        if (today.toString().equals(lastDate)) {
             return;
         }
-        config.markShownToday(id, today);
+        var map = new HashMap<>(config.festivals());
+        map.put(id, new FestivalToastConfig.FestivalEntry(true, today.toString()));
+        FestivalToastConfig.UNIT.setValue(new FestivalToastConfig(
+                config.enabled(),
+                config.chineseFestivalsOnlyForChineseLanguage(),
+                map,
+                null,
+                null,
+                0.0,
+                0,
+                null
+        ));
+        FestivalToastConfig.save();
         overlay.show();
     }
 
@@ -56,7 +71,7 @@ public class BlessUtil {
         if (minecraft.player == null) return;
 
         var config = FestivalToastConfig.get();
-        if (!config.enabled) return;
+        if (!config.enabled()) return;
 
         var today = LocalDate.now();
         boolean chineseLanguage = isChineseLanguage(minecraft, config);
@@ -73,7 +88,5 @@ public class BlessUtil {
                     overlay, today, solar, lunar, chineseLanguage, config
             );
         }
-
-        FestivalToastConfig.save();
     }
 }
