@@ -23,4 +23,16 @@ public class Platform {
     public static boolean isServer() {
         return INSTANCE.isServer();
     }
+
+    public static boolean isFabric() {
+        return INSTANCE.isFabric();
+    }
+
+    public static boolean isNeoForge() {
+        return INSTANCE.isNeoForge();
+    }
+
+    public static boolean isModLoaded(String modId) {
+        return INSTANCE.isModLoaded(modId);
+    }
 }

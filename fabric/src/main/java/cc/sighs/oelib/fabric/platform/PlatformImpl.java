@@ -36,4 +36,9 @@ public class PlatformImpl implements IPlatform {
     public boolean isNeoForge() {
         return false;
     }
+
+    @Override
+    public boolean isModLoaded(String modId) {
+        return FabricLoader.getInstance().isModLoaded(modId);
+    }
 }

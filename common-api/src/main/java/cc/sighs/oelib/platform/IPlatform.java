@@ -14,4 +14,6 @@ public interface IPlatform {
     boolean isFabric();
 
     boolean isNeoForge();
+
+    boolean isModLoaded(String modId);
 }

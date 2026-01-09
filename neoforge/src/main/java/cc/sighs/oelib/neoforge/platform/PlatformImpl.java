@@ -2,6 +2,7 @@ package cc.sighs.oelib.neoforge.platform;
 
 import cc.sighs.oelib.platform.IPlatform;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.loading.FMLPaths;
 
@@ -36,5 +37,10 @@ public class PlatformImpl implements IPlatform {
     @Override
     public boolean isNeoForge() {
         return true;
+    }
+
+    @Override
+    public boolean isModLoaded(String modId) {
+        return ModList.get().isLoaded(modId);
     }
 }
