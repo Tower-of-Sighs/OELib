@@ -43,7 +43,7 @@ public class BlessUtil {
         var name = overlay.festivalName();
         return switch (id) {
             case NewYearOverlay.FESTIVAL_ID, ChongYangOverlay.FESTIVAL_ID -> lunar.getFestivals().contains(name);
-            case ValentineOverlay.FESTIVAL_ID -> true;
+            case ValentineOverlay.FESTIVAL_ID -> solar.getFestivals().contains(name);
             default -> false;
         };
     }

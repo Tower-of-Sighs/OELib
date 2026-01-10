@@ -31,6 +31,9 @@ dependencies {
 
     modImplementation("mezz.jei:jei-$rootProject.minecraft_version-neoforge:${jei_version}")
 
+    include("cn.6tail:lunar:1.7.3")
+    include("de.marhali:json5-java:3.0.0")
+
     implementation "cn.6tail:lunar:1.7.3"
     implementation "de.marhali:json5-java:3.0.0"
     modLocalRuntime("cn.6tail:lunar:1.7.3")
