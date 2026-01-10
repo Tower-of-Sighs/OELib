@@ -138,9 +138,11 @@ public class ConfigScreen extends Screen {
         int initialScroll = listWidget != null ? listWidget.getScrollOffset() : 0;
         contexts.clear();
         int sidebar = sidebarWidth();
-        int labelWidth = 180;
+        int labelWidth = 160;
         int left = sidebar + 16;
-        int controlWidth = Math.min(260, this.width - left - 40 - labelWidth);
+        int controlWidth = Math.min(220, this.width - left - 40 - labelWidth);
+        int listControlWidth = controlWidth;
+        int fieldControlWidth = Math.min(200, this.width - left - 60 - labelWidth);
         int y = contentTop;
         searchBox = new EditBox(Minecraft.getInstance().font, left, y, this.width - left - 20, 20, Component.empty());
         searchBox.setSuggestion(Component.translatable("config.oelib.search").getString());
@@ -195,15 +197,15 @@ public class ConfigScreen extends Screen {
                 var label = meta.translationKey().map(Component::translatable).orElse(Component.literal(meta.key()));
                 var v = ConfigGuiUtil.getPath(workingJson, meta.key());
                 if (v != null && v.isJsonArray()) {
-                    ListEntry le = new ListEntry(meta.key(), label, workingJson, controlWidth, rowHeight);
+                    ListEntry le = new ListEntry(meta.key(), label, workingJson, listControlWidth, rowHeight);
                     items.add(le);
                     entryDefaults.put(le, defaultsJson);
                 } else if (v != null && v.isJsonObject()) {
-                    MapEntry me = new MapEntry(meta.key(), label, workingJson, controlWidth, rowHeight);
+                    MapEntry me = new MapEntry(meta.key(), label, workingJson, listControlWidth, rowHeight);
                     items.add(me);
                     entryDefaults.put(me, defaultsJson);
                 } else {
-                    FieldEntry fe = new FieldEntry(meta, workingJson, labelWidth, controlWidth, rowHeight);
+                    FieldEntry fe = new FieldEntry(meta, workingJson, labelWidth, fieldControlWidth, rowHeight);
                     items.add(fe);
                     entryDefaults.put(fe, defaultsJson);
                 }

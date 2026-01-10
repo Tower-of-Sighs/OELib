@@ -77,7 +77,7 @@ public class DynamicEntryListWidget extends DynamicElementListWidget {
 
         private double clamp(double v) {
             if (v < 0) return 0;
-            if (max > 0 && v > max) return max;
+            if (v > max) return max;
             return v;
         }
 

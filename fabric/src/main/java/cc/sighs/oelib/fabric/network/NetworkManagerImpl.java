@@ -50,22 +50,20 @@ public class NetworkManagerImpl implements INetworkManager {
     @SuppressWarnings("unchecked")
     private <T extends INetworkPacket<T> & CustomPacketPayload> void registerAnnotated(Class<? extends INetworkPacket<?>> rawClass, RegistrationPhase phase) {
         Class<T> clazz = (Class<T>) rawClass;
-        var meta = clazz.getAnnotation(NetworkPacket.class);
+        NetworkPacket meta = clazz.getAnnotation(NetworkPacket.class);
         if (meta == null || !clazz.isRecord()) return;
 
         CustomPacketPayload.Type<T> type = NetworkPacketTypes.typeOf(clazz);
-        var side = meta.side();
+        Side side = meta.side();
         OELib.LOGGER.debug("Registering packet: {} | Phase: {} | Side: {} | Type ID: {}", clazz.getSimpleName(), phase, side, type.id());
 
         if (phase == RegistrationPhase.COMMON) {
-            var codec = NetworkSerialization.autoCodec(clazz);
+            StreamCodec<RegistryFriendlyByteBuf, T> codec = NetworkSerialization.autoCodec(clazz);
             if (!registeredPackets.containsKey(type)) {
                 if (side == Side.SERVER || side == Side.CLIENT || side == Side.BOTH) {
                     PayloadTypeRegistry.playS2C().register(type, codec);
-                    PayloadTypeRegistry.playC2S().register(type, codec);
                 }
                 if (side == Side.SERVER || side == Side.BOTH) {
-                    PayloadTypeRegistry.playS2C().register(type, codec);
                     PayloadTypeRegistry.playC2S().register(type, codec);
                 }
                 registeredPackets.put(type, new PacketInfo<>(type, codec));

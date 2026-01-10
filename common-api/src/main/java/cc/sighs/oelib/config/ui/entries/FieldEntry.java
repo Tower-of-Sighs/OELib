@@ -195,24 +195,33 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
 
     @Override
     public void render(GuiGraphics graphics, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean isHovered, float delta) {
-        graphics.drawString(Minecraft.getInstance().font, label, x + 4, y + 6, 0xFFFFFFFF);
+        var font = Minecraft.getInstance().font;
+        graphics.drawString(font, label, x + 4, y + 6, 0xFFFFFFFF);
         int resetX = Minecraft.getInstance().screen.width - 80;
-        int controlX = resetX - 8 - controlWidth;
-        if (toggle != null) toggle.setPosition(resetX - 28, y);
+        int labelTextWidth = font.width(label.getVisualOrderText());
+        int reservedLabelWidth = Math.max(this.labelWidth, labelTextWidth + 12);
+        int dynamicControlX = x + reservedLabelWidth;
+        int availableWidth = Math.max(60, resetX - 8 - dynamicControlX);
+        int dynamicControlWidth = Math.max(100, Math.min(this.controlWidth, availableWidth));
+
+        if (toggle != null) {
+            toggle.setPosition(dynamicControlX, y);
+            toggle.setWidth(20);
+        }
         if (textBox != null) {
-            textBox.setX(controlX);
+            textBox.setX(dynamicControlX);
             textBox.setY(y);
-            textBox.setWidth(controlWidth);
+            textBox.setWidth(dynamicControlWidth);
         }
         if (slider != null) {
-            slider.setX(controlX);
+            slider.setX(dynamicControlX);
             slider.setY(y);
-            slider.setWidth(controlWidth);
+            slider.setWidth(dynamicControlWidth);
         }
         if (dropdown != null) {
-            dropdown.setX(controlX);
+            dropdown.setX(dynamicControlX);
             dropdown.setY(y);
-            dropdown.setWidth(controlWidth);
+            dropdown.setWidth(dynamicControlWidth);
         }
         if (resetButton != null) {
             resetButton.setX(resetX);
