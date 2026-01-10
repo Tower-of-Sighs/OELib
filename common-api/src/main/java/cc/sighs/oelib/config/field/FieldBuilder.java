@@ -8,7 +8,7 @@ public interface FieldBuilder<T> {
 
     FieldBuilder<T> comment(String text);
 
-    FieldBuilder<T> tooltip(String text);
+    FieldBuilder<T> tooltip();
 
     FieldBuilder<T> defaultValue(T value);
 

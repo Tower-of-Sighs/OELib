@@ -7,10 +7,7 @@ import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.ResourceLocation;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.Function;
 
 public final class ConfigField {
@@ -131,7 +128,7 @@ public final class ConfigField {
         public EnumBuilder(String key, Codec<E> codec, Class<E> enumClass) {
             super(key, codec);
             this.enumClass = enumClass;
-            java.util.List<String> names = java.util.Arrays.stream(enumClass.getEnumConstants()).map(Enum::name).toList();
+            List<String> names = Arrays.stream(enumClass.getEnumConstants()).map(Enum::name).toList();
             metaBuilder.uiHint(ConfigUiHint.dropdown(names));
         }
     }
@@ -156,7 +153,9 @@ public final class ConfigField {
             if (cfgId != null) {
                 String autoKey = "config." + cfgId.getNamespace() + "." + cfgId.getPath() + "." + key;
                 metaBuilder.translationKey(autoKey);
-                metaBuilder.tooltip(autoKey + ".tooltip");
+                if (this.tooltipEnabled) {
+                    metaBuilder.tooltip(autoKey + ".tooltip");
+                }
             }
             var meta = metaBuilder.build();
             recordMeta(meta);
@@ -186,7 +185,9 @@ public final class ConfigField {
             if (cfgId != null) {
                 String autoKey = "config." + cfgId.getNamespace() + "." + cfgId.getPath() + "." + key;
                 metaBuilder.translationKey(autoKey);
-                metaBuilder.tooltip(autoKey + ".tooltip");
+                if (this.tooltipEnabled) {
+                    metaBuilder.tooltip(autoKey + ".tooltip");
+                }
             }
             var meta = metaBuilder.build();
             recordMeta(meta);
@@ -217,6 +218,9 @@ public final class ConfigField {
             if (cfgId != null) {
                 String autoKey = "config." + cfgId.getNamespace() + "." + cfgId.getPath() + "." + key;
                 metaBuilder.translationKey(autoKey);
+                if (this.tooltipEnabled) {
+                    metaBuilder.tooltip(autoKey + ".tooltip");
+                }
             }
             var meta = metaBuilder.build();
             recordMeta(meta);

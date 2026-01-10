@@ -21,9 +21,8 @@ public class CategoryTextEntry extends AbstractConfigEntry<Object> {
     @Override
     public void render(GuiGraphics graphics, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean isHovered, float delta) {
         int centerX = x + entryWidth / 2;
-        Component title = category;
         graphics.fill(x, y + entryHeight - 1, x + entryWidth, y + entryHeight, 0x80FFFFFF);
-        graphics.drawCenteredString(Minecraft.getInstance().font, title, centerX, y + 6, 0xFFFFFFFF);
+        graphics.drawCenteredString(Minecraft.getInstance().font, category, centerX, y + 6, 0xFFFFFFFF);
     }
 
     @Override

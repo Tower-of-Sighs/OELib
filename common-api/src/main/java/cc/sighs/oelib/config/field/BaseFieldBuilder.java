@@ -18,6 +18,7 @@ public abstract class BaseFieldBuilder<T, B extends BaseFieldBuilder<T, B>> impl
     protected Consumer<ConfigValueMeta.Builder> beforeMetaHook;
     protected Consumer<ConfigValueMeta> afterMetaHook;
     protected Component validatorDescription;
+    protected boolean tooltipEnabled;
 
     protected BaseFieldBuilder(String key, Codec<T> codec) {
         this.key = key;
@@ -30,8 +31,8 @@ public abstract class BaseFieldBuilder<T, B extends BaseFieldBuilder<T, B>> impl
         return (B) this;
     }
 
-    public B tooltip(String text) {
-        metaBuilder.tooltip(text);
+    public B tooltip() {
+        this.tooltipEnabled = true;
         return (B) this;
     }
 
@@ -64,7 +65,9 @@ public abstract class BaseFieldBuilder<T, B extends BaseFieldBuilder<T, B>> impl
         if (cfgId != null && metaBuilder != null) {
             String autoKey = "config." + cfgId.getNamespace() + "." + cfgId.getPath() + "." + key;
             metaBuilder.translationKey(autoKey);
-            metaBuilder.tooltip(autoKey + ".tooltip");
+            if (tooltipEnabled) {
+                metaBuilder.tooltip(autoKey + ".tooltip");
+            }
         }
         var meta = metaBuilder.build();
         ConfigField.recordMeta(meta);

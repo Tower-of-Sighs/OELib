@@ -33,7 +33,7 @@ public class ClientConfigManager implements ResourceManagerReloadListener {
         if (existing != null) {
             OELib.LOGGER.warn("Duplicate client config registration for {}, replacing previous unit", unit.id());
         }
-        unit.initializeIfMissing();
+        unit.applyAutoMigrationOnRegister();
     }
 
     static Optional<ConfigUnit<?>> get(ResourceLocation id) {

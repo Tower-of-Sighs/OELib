@@ -329,6 +329,9 @@ public class ConfigScreen extends Screen {
 
     @Override
     public void render(GuiGraphics gui, int mouseX, int mouseY, float partialTick) {
+        lastTooltip = null;
+        mouseXLast = -1;
+        mouseYLast = -1;
         refScroller.update(partialTick);
         sideSlider.update(partialTick);
         renderBg(gui, mouseX, mouseY, partialTick);
@@ -391,15 +394,9 @@ public class ConfigScreen extends Screen {
         Rectangle contentRect = new Rectangle(0, headerBottom, this.width, bottomBarTop - headerBottom);
         ScissorsHandler.INSTANCE.scissor(contentRect);
         renderNoneBg(gui, mouseX, mouseY, partialTick);
-        if (!errors.isEmpty()) {
-            for (Map.Entry<String, Component> entry : errors.entrySet()) {
-                gui.drawString(this.font, entry.getValue(), contentLeft + 16, this.height - 40, 0xFFFF4040);
-            }
+        if (listWidget != null) {
+            listWidget.render(gui, mouseX, mouseY, partialTick);
         }
-        if (lastTooltip != null && mouseXLast >= 0) {
-            gui.renderTooltip(this.font, lastTooltip, mouseXLast, mouseYLast);
-        }
-        listWidget.render(gui, mouseX, mouseY, partialTick);
         ScissorsHandler.INSTANCE.removeLastScissor();
         gui.blit(DynamicEntryListWidget.VERTICAL_HEADER_SEPARATOR, sliderX - 1, 0, 0.0F, 0.0F, 1, this.height, 2, 32);
         gui.fill(sliderX, headerBottom - 1, this.width, headerBottom, 0x80FFFFFF);
@@ -410,6 +407,20 @@ public class ConfigScreen extends Screen {
         if (cancelButton != null) {
             cancelButton.render(gui, mouseX, mouseY, partialTick);
         }
+        if (!errors.isEmpty()) {
+            for (Map.Entry<String, Component> entry : errors.entrySet()) {
+                gui.drawString(this.font, entry.getValue(), contentLeft + 16, this.height - 40, 0xFFFF4040);
+            }
+        }
+        if (lastTooltip != null && mouseXLast >= 0) {
+            gui.renderTooltip(this.font, lastTooltip, mouseXLast, mouseYLast);
+        }
+    }
+
+    public void setHoverTooltip(Component tooltip, int mouseX, int mouseY) {
+        this.lastTooltip = tooltip;
+        this.mouseXLast = mouseX;
+        this.mouseYLast = mouseY;
     }
 
     @Override

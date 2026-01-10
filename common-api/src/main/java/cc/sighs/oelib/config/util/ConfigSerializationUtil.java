@@ -7,12 +7,10 @@ import cc.sighs.oelib.config.serialization.TomlOps;
 import cc.sighs.oelib.config.serialization.TomlTreeAdapter;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import com.electronwill.nightconfig.toml.TomlFormat;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
+import com.google.gson.*;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
+import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
 import de.marhali.json5.Json5;
 
@@ -28,8 +26,91 @@ public final class ConfigSerializationUtil {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Json5 JSON5_PARSER = Json5.builder(builder -> builder.parseComments().build());
+    private static final ConfigEncoder JSON_ENCODER = new ConfigEncoder() {
+        @Override
+        public <T> Optional<String> encode(T value, Codec<T> codec, List<ConfigValueMeta> fields, int version) {
+            try {
+                var result = codec.encodeStart(JsonOps.INSTANCE, value);
+                if (result.error().isPresent()) {
+                    logEncodeError(ConfigStorageFormat.JSON, result.error().get().message());
+                    return Optional.empty();
+                }
+                var element = result.result().orElse(null);
+                if (element == null) {
+                    return Optional.empty();
+                }
+                if (version >= 0) {
+                    element = addVersion(element, version);
+                }
+                var jsonStr = GSON.toJson(element);
+                return Optional.of(jsonStr);
+            } catch (Exception e) {
+                OELib.LOGGER.error("Failed to encode config to JSON string", e);
+                return Optional.empty();
+            }
+        }
+    };
+    private static final ConfigEncoder JSON5_ENCODER = new ConfigEncoder() {
+        @Override
+        public <T> Optional<String> encode(T value, Codec<T> codec, List<ConfigValueMeta> fields, int version) {
+            try {
+                var result = codec.encodeStart(JsonOps.INSTANCE, value);
+                if (result.error().isPresent()) {
+                    logEncodeError(ConfigStorageFormat.JSON5, result.error().get().message());
+                    return Optional.empty();
+                }
+                var element = result.result().orElse(null);
+                if (element == null) {
+                    return Optional.empty();
+                }
+                if (version >= 0) {
+                    element = addVersion(element, version);
+                }
+                var json5 = writeJson5WithComments(element, fields);
+                return Optional.of(json5);
+            } catch (Exception e) {
+                OELib.LOGGER.error("Failed to encode config to JSON5 string", e);
+                return Optional.empty();
+            }
+        }
+    };
+    private static final ConfigEncoder TOML_ENCODER = new ConfigEncoder() {
+        @Override
+        public <T> Optional<String> encode(T value, Codec<T> codec, List<ConfigValueMeta> fields, int version) {
+            try {
+                var result = codec.encodeStart(TomlOps.INSTANCE, value);
+                if (result.error().isPresent()) {
+                    logEncodeError(ConfigStorageFormat.TOML, result.error().get().message());
+                    return Optional.empty();
+                }
+                var tree = result.result().orElse(null);
+                if (tree == null) {
+                    return Optional.empty();
+                }
+                var config = CommentedConfig.inMemory();
+                TomlTreeAdapter.writeTree(config, tree, fields);
+                if (version >= 0) {
+                    config.set("__cfg_version", version);
+                }
+                StringWriter writer = new StringWriter();
+                TomlFormat.instance().createWriter().write(config, writer);
+                return Optional.of(writer.toString());
+            } catch (Exception e) {
+                OELib.LOGGER.error("Failed to encode config to TOML string", e);
+                return Optional.empty();
+            }
+        }
+    };
 
     private ConfigSerializationUtil() {
+    }
+
+    public static ConfigEncoder getEncoder(ConfigStorageFormat format) {
+        return switch (format) {
+            case JSON -> JSON_ENCODER;
+            case JSON5 -> JSON5_ENCODER;
+            case TOML -> TOML_ENCODER;
+        };
     }
 
     public static <T> DataResult<T> parse(String payload, ConfigStorageFormat format, Codec<T> codec) {
@@ -59,56 +140,50 @@ public final class ConfigSerializationUtil {
         }
     }
 
-    public static <T> Optional<String> encodeToString(T value, ConfigStorageFormat format, Codec<T> codec, List<ConfigValueMeta> fields) {
+    public static Dynamic<?> parseToDynamic(String payload, ConfigStorageFormat format) {
         try {
             return switch (format) {
                 case JSON -> {
-                    var result = codec.encodeStart(JsonOps.INSTANCE, value);
-                    if (result.error().isPresent()) {
-                        logEncodeError(format, result.error().get().message());
-                        yield Optional.empty();
-                    }
-                    var element = result.result().orElse(null);
-                    if (element == null) {
-                        yield Optional.empty();
-                    }
-                    var jsonStr = GSON.toJson(element);
-                    yield Optional.of(jsonStr);
+                    var element = JsonParser.parseString(payload);
+                    yield new Dynamic<>(JsonOps.INSTANCE, element);
                 }
                 case JSON5 -> {
-                    var result = codec.encodeStart(JsonOps.INSTANCE, value);
-                    if (result.error().isPresent()) {
-                        logEncodeError(format, result.error().get().message());
-                        yield Optional.empty();
-                    }
-                    var element = result.result().orElse(null);
-                    if (element == null) {
-                        yield Optional.empty();
-                    }
-                    var json5 = writeJson5WithComments(element, fields);
-                    yield Optional.of(json5);
+                    var json5Element = JSON5_PARSER.parse(payload);
+                    var normalized = JSON5_PARSER.serialize(json5Element);
+                    var element = JsonParser.parseString(normalized);
+                    yield new Dynamic<>(JsonOps.INSTANCE, element);
                 }
                 case TOML -> {
-                    var result = codec.encodeStart(TomlOps.INSTANCE, value);
-                    if (result.error().isPresent()) {
-                        logEncodeError(format, result.error().get().message());
-                        yield Optional.empty();
+                    try (StringReader reader = new StringReader(payload)) {
+                        var config = TomlFormat.instance().createParser().parse(reader);
+                        var tree = TomlTreeAdapter.readTree(config);
+                        yield new Dynamic<>(TomlOps.INSTANCE, tree);
                     }
-                    var tree = result.result().orElse(null);
-                    if (tree == null) {
-                        yield Optional.empty();
-                    }
-                    var config = CommentedConfig.inMemory();
-                    TomlTreeAdapter.writeTree(config, tree, fields);
-                    StringWriter writer = new StringWriter();
-                    TomlFormat.instance().createWriter().write(config, writer);
-                    yield Optional.of(writer.toString());
                 }
             };
         } catch (Exception e) {
-            OELib.LOGGER.error("Failed to encode config to {} string", format, e);
-            return Optional.empty();
+            OELib.LOGGER.error("Exception during dynamic parse with format {}", format, e);
+            return new Dynamic<>(JsonOps.INSTANCE, new JsonObject());
         }
+    }
+
+    public static <T> Optional<String> encodeToString(T value, ConfigStorageFormat format, Codec<T> codec, List<ConfigValueMeta> fields) {
+        return getEncoder(format).encode(value, codec, fields, -1);
+    }
+
+    public static <T> Optional<String> encodeToStringWithVersion(T value, int version, ConfigStorageFormat format, Codec<T> codec, List<ConfigValueMeta> fields) {
+        return getEncoder(format).encode(value, codec, fields, version);
+    }
+
+    private static JsonElement addVersion(JsonElement element, int version) {
+        if (element.isJsonObject()) {
+            element.getAsJsonObject().addProperty("__cfg_version", version);
+            return element;
+        }
+        var obj = new JsonObject();
+        obj.addProperty("__cfg_version", version);
+        obj.add("value", element);
+        return obj;
     }
 
     public static <T> Optional<T> loadFromFile(Path path, ConfigStorageFormat format, Codec<T> codec, T defaultValue) {
@@ -238,4 +313,10 @@ public final class ConfigSerializationUtil {
     private static void logEncodeError(ConfigStorageFormat format, String message) {
         OELib.LOGGER.error("Failed to encode config to {}: {}", format, message);
     }
+
+    public interface ConfigEncoder {
+        <T> Optional<String> encode(T value, Codec<T> codec, List<ConfigValueMeta> fields, int version);
+    }
+
+
 }

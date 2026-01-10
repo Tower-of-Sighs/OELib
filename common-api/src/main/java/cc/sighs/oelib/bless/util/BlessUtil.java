@@ -34,17 +34,7 @@ public class BlessUtil {
         }
         var map = new HashMap<>(config.festivals());
         map.put(id, new FestivalToastConfig.FestivalEntry(true, today.toString()));
-        FestivalToastConfig.UNIT.setValue(new FestivalToastConfig(
-                config.enabled(),
-                config.chineseFestivalsOnlyForChineseLanguage(),
-                map,
-                null,
-                null,
-                0.0,
-                0,
-                null
-        ));
-        FestivalToastConfig.save();
+        FestivalToastConfig.ACCESS.set(FestivalToastConfig::festivals, map);
         overlay.show();
     }
 
@@ -53,7 +43,7 @@ public class BlessUtil {
         var name = overlay.festivalName();
         return switch (id) {
             case NewYearOverlay.FESTIVAL_ID, ChongYangOverlay.FESTIVAL_ID -> lunar.getFestivals().contains(name);
-            case ValentineOverlay.FESTIVAL_ID -> solar.getFestivals().contains(name);
+            case ValentineOverlay.FESTIVAL_ID -> true;
             default -> false;
         };
     }

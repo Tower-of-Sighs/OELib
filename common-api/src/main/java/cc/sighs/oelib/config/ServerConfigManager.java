@@ -45,7 +45,7 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
         if (permissionChecker != null) {
             PERMISSIONS.put(unit.id(), permissionChecker);
         }
-        unit.initializeIfMissing();
+        unit.applyAutoMigrationOnRegister();
     }
 
     static Optional<ConfigUnit<?>> get(ResourceLocation id) {

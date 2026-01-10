@@ -48,75 +48,107 @@ public abstract class AbstractShaderOverlay {
         if (shader == null) {
             return;
         }
+
+        AnimationState animationState = calculateAnimationState(width, height);
+        if (!animationState.shouldRender()) {
+            active = false;
+            var minecraft = Minecraft.getInstance();
+            onHide(minecraft);
+            return;
+        }
+
+        renderShaderBackground(guiGraphics, shader, animationState, mouseX, mouseY, width, height);
+
+        renderTextContent(guiGraphics, animationState);
+    }
+
+    private AnimationState calculateAnimationState(int screenWidth, int screenHeight) {
         long now = Util.getMillis();
         long visibleTime = Math.max(now - startTime, 0L);
         boolean leaving = visibleTime >= showDuration;
         long fadeTime = leaving ? visibleTime - showDuration : visibleTime;
         float fade = Mth.clamp((float) fadeTime / (float) fadeDuration, 0.0F, 1.0F);
         float alpha = leaving ? 1.0F - fade : fade;
+
         if (leaving && alpha <= 0.0F) {
-            active = false;
-            var minecraft = Minecraft.getInstance();
-            onHide(minecraft);
-            return;
+            return new AnimationState(false, 0, 0, 0, 0, 0, 0);
         }
+
         int overlayWidth = overlayWidth();
         int overlayHeight = overlayHeight();
-        float baseX = baseX(width, overlayWidth);
-        float baseY = baseY(height, overlayHeight);
+        float baseX = baseX(screenWidth, overlayWidth);
+        float baseY = baseY(screenHeight, overlayHeight);
 
-        float slideT;
-        if (visibleTime <= slideDuration) {
-            slideT = (float) visibleTime / (float) slideDuration;
-        } else if (visibleTime >= showDuration) {
-            long leaveElapsed = Math.min(visibleTime - showDuration, slideDuration);
-            slideT = 1.0F - (float) leaveElapsed / (float) slideDuration;
-        } else {
-            slideT = 1.0F;
-        }
-        slideT = Mth.clamp(slideT, 0.0F, 1.0F);
+        float slideT = calculateSlideT(visibleTime);
         float slideOffset = (1.0F - slideT) * (float) overlayWidth;
         float x = baseX + slideOffset;
         float y = baseY;
 
-        float timeSeconds = (float) (now % 100000L) / 1000.0F;
+        return new AnimationState(true, x, y, alpha, overlayWidth, overlayHeight, visibleTime);
+    }
+
+    private float calculateSlideT(long visibleTime) {
+        if (visibleTime <= slideDuration) {
+            return (float) visibleTime / (float) slideDuration;
+        } else if (visibleTime >= showDuration) {
+            long leaveElapsed = Math.min(visibleTime - showDuration, slideDuration);
+            return 1.0F - (float) leaveElapsed / (float) slideDuration;
+        } else {
+            return 1.0F;
+        }
+    }
+
+    private void renderShaderBackground(GuiGraphics guiGraphics, ShaderInstance shader,
+                                        AnimationState state, int mouseX, int mouseY,
+                                        int screenWidth, int screenHeight) {
+        float timeSeconds = (float) (Util.getMillis() % 100000L) / 1000.0F;
+
         guiGraphics.flush();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         RenderSystem.setShader(this::getShader);
+
         var pose = guiGraphics.pose();
         pose.pushPose();
-        pose.translate(x, y, 0.0F);
+        pose.translate(state.x, state.y, 0.0F);
         var currentPose = pose.last().pose();
 
-        applyUniforms(shader, timeSeconds, alpha, overlayWidth, overlayHeight, mouseX, mouseY, width, height);
+        applyUniforms(shader, timeSeconds, state.alpha, state.overlayWidth,
+                state.overlayHeight, mouseX, mouseY, screenWidth, screenHeight);
 
         var tesselator = Tesselator.getInstance();
         var bufferBuilder = tesselator.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
         bufferBuilder.addVertex(currentPose, 0.0F, 0.0F, 0.0F).setUv(0.0F, 0.0F);
-        bufferBuilder.addVertex(currentPose, 0.0F, (float) overlayHeight, 0.0F).setUv(0.0F, 1.0F);
-        bufferBuilder.addVertex(currentPose, (float) overlayWidth, (float) overlayHeight, 0.0F).setUv(1.0F, 1.0F);
-        bufferBuilder.addVertex(currentPose, (float) overlayWidth, 0.0F, 0.0F).setUv(1.0F, 0.0F);
+        bufferBuilder.addVertex(currentPose, 0.0F, (float) state.overlayHeight, 0.0F).setUv(0.0F, 1.0F);
+        bufferBuilder.addVertex(currentPose, (float) state.overlayWidth, (float) state.overlayHeight, 0.0F).setUv(1.0F, 1.0F);
+        bufferBuilder.addVertex(currentPose, (float) state.overlayWidth, 0.0F, 0.0F).setUv(1.0F, 0.0F);
         BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
         pose.popPose();
+    }
 
+    private void renderTextContent(GuiGraphics guiGraphics, AnimationState state) {
         var minecraft = Minecraft.getInstance();
         var font = minecraft.font;
         var lines = textLines(minecraft);
+
         if (lines.length > 0) {
             int color = textColor();
-            float centerX = x + (float) overlayWidth / 2.0F;
-            float innerWidth = (float) overlayWidth - horizontalPadding() * 2.0F;
+            float centerX = state.x + (float) state.overlayWidth / 2.0F;
+            float innerWidth = (float) state.overlayWidth - horizontalPadding() * 2.0F;
             if (innerWidth < 0.0F) {
                 innerWidth = 0.0F;
             }
+
             float titleScale = titleScale();
             float bodyScale = bodyScale();
-            float currentY = y + 8.0F;
+            float currentY = state.y + 8.0F;
+
             var title = lines[0];
-            drawScaledCenteredString(guiGraphics, font, title, centerX, currentY, color, (int) innerWidth, titleScale);
+            drawScaledCenteredString(guiGraphics, font, title, centerX, currentY,
+                    color, (int) innerWidth, titleScale);
             currentY += (float) font.lineHeight * titleScale + 2.0F;
+
             if (hasSeparator() && lines.length > 1) {
                 float factor = Mth.clamp(separatorLengthFactor(), 0.0F, 1.0F);
                 float length = innerWidth * factor;
@@ -127,12 +159,24 @@ public abstract class AbstractShaderOverlay {
                 guiGraphics.fill(startX, lineY, endX, lineY + 1, color);
                 currentY += (float) font.lineHeight * bodyScale + 2.0F;
             }
+
             for (int i = 1; i < lines.length; i++) {
-                drawScaledCenteredString(guiGraphics, font, lines[i], centerX, currentY, color, (int) innerWidth, bodyScale);
+                drawScaledCenteredString(guiGraphics, font, lines[i], centerX, currentY,
+                        color, (int) innerWidth, bodyScale);
                 currentY += (float) font.lineHeight * bodyScale + 2.0F;
             }
         }
     }
+
+    private record AnimationState(
+            boolean shouldRender,
+            float x,
+            float y,
+            float alpha,
+            int overlayWidth,
+            int overlayHeight,
+            long visibleTime
+    ) {}
 
     protected float baseX(int screenWidth, int overlayWidth) {
         return (float) screenWidth - (float) overlayWidth - 10.0F;

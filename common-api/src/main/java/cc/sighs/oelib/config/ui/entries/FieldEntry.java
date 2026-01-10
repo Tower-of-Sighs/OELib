@@ -2,7 +2,7 @@ package cc.sighs.oelib.config.ui.entries;
 
 import cc.sighs.oelib.config.model.ConfigValueMeta;
 import cc.sighs.oelib.config.ui.ConfigUiHint;
-import cc.sighs.oelib.config.ui.ConfigUiType;
+import cc.sighs.oelib.config.ui.screen.ConfigScreen;
 import cc.sighs.oelib.config.util.ConfigGuiUtil;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -61,142 +61,174 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
         var value = ConfigGuiUtil.getPath(working, meta.key());
         defaultValueElement = ConfigGuiUtil.getPath(defaults, meta.key());
 
-        switch (hint.type()) {
-            case TOGGLE -> {
-                boolean val = value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean() && value.getAsBoolean();
-                toggle = Checkbox.builder(Component.empty(), Minecraft.getInstance().font)
-                        .selected(val)
-                        .onValueChange((box, selected) -> {
-                            ConfigGuiUtil.setPath(working, meta.key(), new JsonPrimitive(selected));
-                            updateResetButtonState();
-                        })
-                        .build();
-                toggle.setPosition(resetX - 28, y);
-                toggle.setWidth(20);
-                screen.addRenderableWidget(toggle);
-            }
-            case SLIDER -> {
-                double min = hint.min() != null ? hint.min() : 0.0;
-                double max = hint.max() != null ? hint.max() : 1.0;
-                double step = hint.step() != null ? hint.step() : 0.01;
-                double cur = value != null && value.isJsonPrimitive() ? value.getAsJsonPrimitive().getAsDouble() : min;
-                slider = new AbstractSliderButton(controlX, y, controlWidth, 20, Component.literal(String.format(Locale.ROOT, "%.2f", cur)), (cur - min) / Math.max(0.0001, (max - min))) {
-                    @Override
-                    protected void updateMessage() {
-                        double v = min + this.value * (max - min);
-                        setMessage(Component.literal(String.format(Locale.ROOT, "%.2f", v)));
-                    }
-
-                    @Override
-                    protected void applyValue() {
-                        double v = min + this.value * (max - min);
-                        double snapped = Math.round(v / step) * step;
-                        ConfigGuiUtil.setPath(working, meta.key(), new JsonPrimitive(snapped));
-                        updateResetButtonState();
-                    }
-                };
-                screen.addRenderableWidget(slider);
-            }
-            case DROPDOWN -> {
-                List<String> options = hint.options() != null ? hint.options() : List.of();
-                var cur = ConfigGuiUtil.jsonToString(value);
-                if (options.isEmpty()) cur = "";
-                else if (!options.contains(cur)) cur = options.getFirst();
-                dropdown = CycleButton.builder(this::optionComponent)
-                        .withValues(options)
-                        .displayOnlyValue()
-                        .withInitialValue(cur)
-                        .create(controlX, y, controlWidth, 20, Component.empty(), (d, v) -> {
-                            ConfigGuiUtil.setPath(working, meta.key(), new JsonPrimitive(v));
-                            updateResetButtonState();
-                        });
-                screen.addRenderableWidget(dropdown);
-            }
-            default -> {
-                textBox = ConfigGuiUtil.createEditBox(ConfigGuiUtil.jsonToString(value), controlX, y, controlWidth);
-                screen.addRenderableWidget(textBox);
-                textBox.setResponder(str -> {
-                    var currentEl = ConfigGuiUtil.getPath(working, meta.key());
-                    String prevStr = ConfigGuiUtil.jsonToString(currentEl);
-                    if (!str.equals(prevStr)) {
-                        JsonElement newEl;
-                        String s = str.trim();
-                        if (s.equalsIgnoreCase("true") || s.equalsIgnoreCase("false")) {
-                            newEl = new JsonPrimitive(Boolean.parseBoolean(s));
-                        } else if (s.matches("^-?\\d+$")) {
-                            try {
-                                newEl = new JsonPrimitive(Integer.parseInt(s));
-                            } catch (NumberFormatException ex) {
-                                newEl = new JsonPrimitive(s);
-                            }
-                        } else if (s.matches("^-?\\d+(?:\\.\\d+)?$")) {
-                            try {
-                                newEl = new JsonPrimitive(Double.parseDouble(s));
-                            } catch (NumberFormatException ex) {
-                                newEl = new JsonPrimitive(s);
-                            }
-                        } else {
-                            newEl = new JsonPrimitive(s);
-                        }
-                        ConfigGuiUtil.setPath(working, meta.key(), newEl);
-                        updateResetButtonState();
-                    }
-                });
-            }
-        }
-
-        resetButton = Button.builder(Component.translatable("config.oelib.reset"), b -> {
-            if (defaultValueElement != null) {
-                ConfigGuiUtil.setPath(working, meta.key(), defaultValueElement);
-                var defStr = ConfigGuiUtil.jsonToString(defaultValueElement);
-                if (textBox != null) textBox.setValue(defStr);
-                if (toggle != null && defaultValueElement.isJsonPrimitive() && defaultValueElement.getAsJsonPrimitive().isBoolean()) {
-                    toggle.selected = defaultValueElement.getAsBoolean();
-                }
-                if (slider != null && hint.type() == ConfigUiType.SLIDER) {
-                    double min = hint.min() != null ? hint.min() : 0.0;
-                    double max = hint.max() != null ? hint.max() : 1.0;
-                    double step = hint.step() != null ? hint.step() : 0.01;
-                    double curV = defaultValueElement.isJsonPrimitive() ? defaultValueElement.getAsJsonPrimitive().getAsDouble() : min;
-                    int sx = slider.getX();
-                    int sy = slider.getY();
-                    int sw = slider.getWidth();
-                    screen.children().remove(slider);
-                    slider.visible = false;
-                    slider = new AbstractSliderButton(sx, sy, sw, 20, Component.literal(String.format(Locale.ROOT, "%.2f", curV)), (curV - min) / Math.max(0.0001, (max - min))) {
-                        @Override
-                        protected void updateMessage() {
-                            double v = min + this.value * (max - min);
-                            setMessage(Component.literal(String.format(Locale.ROOT, "%.2f", v)));
-                        }
-
-                        @Override
-                        protected void applyValue() {
-                            double v = min + this.value * (max - min);
-                            double snapped = Math.round(v / step) * step;
-                            ConfigGuiUtil.setPath(working, meta.key(), new JsonPrimitive(snapped));
-                            updateResetButtonState();
-                        }
-                    };
-                    screen.addRenderableWidget(slider);
-                }
-                if (dropdown != null && hint.type() == ConfigUiType.DROPDOWN) {
-                    var cur = ConfigGuiUtil.jsonToString(defaultValueElement);
-                    dropdown.setValue(cur);
-                }
-            }
-            updateResetButtonState();
-        }).bounds(resetX, y, 72, 20).build();
-        screen.addRenderableWidget(resetButton);
+        createUiControl(controlX, y, value);
+        createResetButton(resetX, y);
 
         updateResetButtonState();
         created = true;
     }
 
+    private void createUiControl(int controlX, int y, JsonElement currentValue) {
+        switch (hint.type()) {
+            case TOGGLE -> createToggleControl(controlX, y, currentValue);
+            case SLIDER -> createSliderControl(controlX, y, currentValue);
+            case DROPDOWN -> createDropdownControl(controlX, y, currentValue);
+            default -> createTextBoxControl(controlX, y, currentValue);
+        }
+    }
+
+    private void createToggleControl(int controlX, int y, JsonElement currentValue) {
+        boolean val = currentValue != null && currentValue.isJsonPrimitive()
+                && currentValue.getAsJsonPrimitive().isBoolean()
+                && currentValue.getAsBoolean();
+
+        toggle = Checkbox.builder(Component.empty(), Minecraft.getInstance().font)
+                .selected(val)
+                .onValueChange((box, selected) -> {
+                    ConfigGuiUtil.setPath(working, meta.key(), new JsonPrimitive(selected));
+                    updateResetButtonState();
+                })
+                .build();
+        toggle.setPosition(controlX - 8, y);
+        toggle.setWidth(20);
+        screen.addRenderableWidget(toggle);
+    }
+
+    private void createSliderControl(int controlX, int y, JsonElement currentValue) {
+        double min = hint.min() != null ? hint.min() : 0.0;
+        double max = hint.max() != null ? hint.max() : 1.0;
+        double step = hint.step() != null ? hint.step() : 0.01;
+        double cur = getDoubleValue(currentValue, min);
+
+        slider = createSlider(controlX, y, controlWidth, min, max, step, cur);
+        screen.addRenderableWidget(slider);
+    }
+
+    private AbstractSliderButton createSlider(int x, int y, int width,
+                                              double min, double max, double step, double currentValue) {
+        return new AbstractSliderButton(x, y, width, 20,
+                Component.literal(String.format(Locale.ROOT, "%.2f", currentValue)),
+                (currentValue - min) / Math.max(0.0001, (max - min))) {
+            @Override
+            protected void updateMessage() {
+                double v = min + this.value * (max - min);
+                setMessage(Component.literal(String.format(Locale.ROOT, "%.2f", v)));
+            }
+
+            @Override
+            protected void applyValue() {
+                double v = min + this.value * (max - min);
+                double snapped = Math.round(v / step) * step;
+                ConfigGuiUtil.setPath(working, meta.key(), new JsonPrimitive(snapped));
+                updateResetButtonState();
+            }
+        };
+    }
+
+    private void createDropdownControl(int controlX, int y, JsonElement currentValue) {
+        List<String> options = hint.options() != null ? hint.options() : List.of();
+        String cur = ConfigGuiUtil.jsonToString(currentValue);
+
+        if (options.isEmpty()) {
+            cur = "";
+        } else if (!options.contains(cur)) {
+            cur = options.getFirst();
+        }
+
+        dropdown = CycleButton.builder(this::optionComponent)
+                .withValues(options)
+                .displayOnlyValue()
+                .withInitialValue(cur)
+                .create(controlX, y, controlWidth, 20, Component.empty(),
+                        (d, v) -> {
+                            ConfigGuiUtil.setPath(working, meta.key(), new JsonPrimitive(v));
+                            updateResetButtonState();
+                        });
+        screen.addRenderableWidget(dropdown);
+    }
+
+    private void createTextBoxControl(int controlX, int y, JsonElement currentValue) {
+        textBox = ConfigGuiUtil.createEditBox(ConfigGuiUtil.jsonToString(currentValue), controlX, y, controlWidth);
+        screen.addRenderableWidget(textBox);
+
+        textBox.setResponder(str -> {
+            var currentEl = ConfigGuiUtil.getPath(working, meta.key());
+            String prevStr = ConfigGuiUtil.jsonToString(currentEl);
+
+            if (!str.equals(prevStr)) {
+                JsonElement newEl = parseStringToJson(str);
+                ConfigGuiUtil.setPath(working, meta.key(), newEl);
+                updateResetButtonState();
+            }
+        });
+    }
+
+    private void createResetButton(int resetX, int y) {
+        resetButton = Button.builder(Component.translatable("config.oelib.reset"),
+                        b -> resetToDefault())
+                .bounds(resetX, y, 72, 20).build();
+        screen.addRenderableWidget(resetButton);
+    }
+
+    private void resetToDefault() {
+        if (defaultValueElement == null) return;
+
+        ConfigGuiUtil.setPath(working, meta.key(), defaultValueElement);
+        String defaultValueStr = ConfigGuiUtil.jsonToString(defaultValueElement);
+
+        updateControlValue(defaultValueStr, defaultValueElement);
+        updateResetButtonState();
+    }
+
+    private void updateControlValue(String defaultValueStr, JsonElement defaultValueElement) {
+        switch (hint.type()) {
+            case TOGGLE -> {
+                if (toggle != null && defaultValueElement.isJsonPrimitive()
+                        && defaultValueElement.getAsJsonPrimitive().isBoolean()) {
+                    toggle.selected = defaultValueElement.getAsBoolean();
+                }
+            }
+            case SLIDER -> {
+                if (slider != null) {
+                    recreateSliderWithDefaultValue(defaultValueElement);
+                }
+            }
+            case DROPDOWN -> {
+                if (dropdown != null) {
+                    dropdown.setValue(defaultValueStr);
+                }
+            }
+            default -> {
+                if (textBox != null) {
+                    textBox.setValue(defaultValueStr);
+                }
+            }
+        }
+    }
+
+    private void recreateSliderWithDefaultValue(JsonElement defaultValueElement) {
+        double min = hint.min() != null ? hint.min() : 0.0;
+        double max = hint.max() != null ? hint.max() : 1.0;
+        double step = hint.step() != null ? hint.step() : 0.01;
+        double defaultValue = getDoubleValue(defaultValueElement, min);
+
+        int sx = slider.getX();
+        int sy = slider.getY();
+        int sw = slider.getWidth();
+
+        screen.children().remove(slider);
+        slider.visible = false;
+
+        slider = createSlider(sx, sy, sw, min, max, step, defaultValue);
+        screen.addRenderableWidget(slider);
+    }
+
     @Override
-    public void render(GuiGraphics graphics, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean isHovered, float delta) {
+    public void render(GuiGraphics graphics, int index, int y, int x, int entryWidth,
+                       int entryHeight, int mouseX, int mouseY, boolean isHovered, float delta) {
         var font = Minecraft.getInstance().font;
         graphics.drawString(font, label, x + 4, y + 6, 0xFFFFFFFF);
+
         int resetX = Minecraft.getInstance().screen.width - 80;
         int labelTextWidth = font.width(label.getVisualOrderText());
         int reservedLabelWidth = Math.max(this.labelWidth, labelTextWidth + 12);
@@ -204,24 +236,32 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
         int availableWidth = Math.max(60, resetX - 8 - dynamicControlX);
         int dynamicControlWidth = Math.max(100, Math.min(this.controlWidth, availableWidth));
 
+        updateControlPositions(dynamicControlX, y, dynamicControlWidth, resetX);
+        if (isHovered && tooltip != null && screen instanceof ConfigScreen cs) {
+            cs.setHoverTooltip(tooltip, mouseX, mouseY);
+        }
+    }
+
+    private void updateControlPositions(int controlX, int y, int controlWidth, int resetX) {
+        // 更新控件位置
         if (toggle != null) {
-            toggle.setPosition(dynamicControlX, y);
+            toggle.setPosition(controlX - 8, y); // 保持与创建时相同的偏移
             toggle.setWidth(20);
         }
         if (textBox != null) {
-            textBox.setX(dynamicControlX);
+            textBox.setX(controlX);
             textBox.setY(y);
-            textBox.setWidth(dynamicControlWidth);
+            textBox.setWidth(controlWidth);
         }
         if (slider != null) {
-            slider.setX(dynamicControlX);
+            slider.setX(controlX);
             slider.setY(y);
-            slider.setWidth(dynamicControlWidth);
+            slider.setWidth(controlWidth);
         }
         if (dropdown != null) {
-            dropdown.setX(dynamicControlX);
+            dropdown.setX(controlX);
             dropdown.setY(y);
-            dropdown.setWidth(dynamicControlWidth);
+            dropdown.setWidth(controlWidth);
         }
         if (resetButton != null) {
             resetButton.setX(resetX);
@@ -246,10 +286,12 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
 
     private void updateResetButtonState() {
         if (resetButton == null) return;
+
         if (defaultValueElement == null) {
             resetButton.active = false;
             return;
         }
+
         var current = ConfigGuiUtil.getPath(working, meta.key());
         boolean same = (current == null && defaultValueElement.isJsonNull()) ||
                 (current != null && current.equals(defaultValueElement));
@@ -263,8 +305,40 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
 
     private ConfigUiHint defaultHintFor(JsonElement value) {
         if (value != null && value.isJsonPrimitive()) {
-            return value.getAsJsonPrimitive().isBoolean() ? ConfigUiHint.toggle() : ConfigUiHint.text();
+            return value.getAsJsonPrimitive().isBoolean()
+                    ? ConfigUiHint.toggle()
+                    : ConfigUiHint.text();
         }
         return ConfigUiHint.text();
+    }
+
+    private double getDoubleValue(JsonElement element, double defaultValue) {
+        return element != null && element.isJsonPrimitive()
+                ? element.getAsJsonPrimitive().getAsDouble()
+                : defaultValue;
+    }
+
+    private JsonElement parseStringToJson(String str) {
+        String s = str.trim();
+
+        if (s.equalsIgnoreCase("true") || s.equalsIgnoreCase("false")) {
+            return new JsonPrimitive(Boolean.parseBoolean(s));
+        }
+
+        if (s.matches("^-?\\d+$")) {
+            try {
+                return new JsonPrimitive(Integer.parseInt(s));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+
+        if (s.matches("^-?\\d+(?:\\.\\d+)?$")) {
+            try {
+                return new JsonPrimitive(Double.parseDouble(s));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+
+        return new JsonPrimitive(s);
     }
 }

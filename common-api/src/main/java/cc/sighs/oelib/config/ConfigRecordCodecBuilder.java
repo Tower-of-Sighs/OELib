@@ -34,8 +34,8 @@ public class ConfigRecordCodecBuilder {
     /**
      * Creates a client-side {@link ConfigUnit} by invoking {@link RecordCodecBuilder}.
      *
-     * @param configId textual id in the form "namespace:path"
-     * @param builder  codec builder using the standard group/apply pattern
+     * @param configId       textual id in the form "namespace:path"
+     * @param builder        codec builder using the standard group/apply pattern
      * @param metaCustomizer optional customizer for {@link ConfigMeta} (filename, format, directory)
      */
     public static <T> ConfigUnit<T> createClient(
@@ -49,8 +49,8 @@ public class ConfigRecordCodecBuilder {
     /**
      * Creates a server-side {@link ConfigUnit} by invoking {@link RecordCodecBuilder}.
      *
-     * @param configId textual id in the form "namespace:path"
-     * @param builder  codec builder using the standard group/apply pattern
+     * @param configId       textual id in the form "namespace:path"
+     * @param builder        codec builder using the standard group/apply pattern
      * @param metaCustomizer optional customizer for {@link ConfigMeta} (filename, format, directory)
      */
     public static <T> ConfigUnit<T> create(
@@ -64,10 +64,10 @@ public class ConfigRecordCodecBuilder {
     /**
      * Internal shared implementation for creating a {@link ConfigUnit}.
      *
-     * @param configId textual id in the form "namespace:path"
-     * @param builder codec builder using the standard group/apply pattern
+     * @param configId       textual id in the form "namespace:path"
+     * @param builder        codec builder using the standard group/apply pattern
      * @param metaCustomizer optional customizer for {@link ConfigMeta}
-     * @param side whether this config is for client or server
+     * @param side           whether this config is for client or server
      */
     private static <T> ConfigUnit<T> createInternal(
             ResourceLocation configId,
