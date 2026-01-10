@@ -34,9 +34,9 @@ dependencies {
     implementation "cn.6tail:lunar:1.7.3"
     implementation "com.electronwill.night-config:toml:3.8.3"
     implementation "de.marhali:json5-java:3.0.0"
-    shadowCommon "cn.6tail:lunar:1.7.3"
-    shadowCommon "com.electronwill.night-config:toml:3.8.3"
-    shadowCommon "de.marhali:json5-java:3.0.0"
+    include("cn.6tail:lunar:1.7.3")
+    include("com.electronwill.night-config:toml:3.8.3")
+    include("de.marhali:json5-java:3.0.0")
 
     common(project(path: ':common-api', configuration: 'namedElements')) { transitive false }
     shadowCommon (project(path: ':common-api', configuration: 'transformProductionFabric')) { transitive false }
@@ -55,9 +55,6 @@ java {
 }
 
 shadowJar {
-    relocate "cn.6tail.lunar", "${rootProject.maven_group}.oelib.shadowed.cn.6tail.lunar"
-    relocate "com.electronwill.nightconfig", "${rootProject.maven_group}.oelib.shadowed.com.electronwill.nightconfig"
-    relocate "de.marhali.json5", "${rootProject.maven_group}.oelib.shadowed.de.marhali.json5"
     configurations = [project.configurations.shadowCommon]
     archiveClassifier = "dev-shadow"
 }
@@ -78,6 +75,27 @@ publishing {
             }
             artifact(tasks.sourcesJar) {
                 classifier "sources"
+            }
+            pom.withXml {
+                def root = asNode()
+                def depsNode = root.appendNode('dependencies')
+                def addDeps = { confName, scope ->
+                    def conf = configurations.findByName(confName)
+                    if (conf != null) {
+                        conf.allDependencies.each { dep ->
+                            if (!(dep instanceof ProjectDependency) && dep.group && dep.name && dep.version) {
+                                def dn = depsNode.appendNode('dependency')
+                                dn.appendNode('groupId', dep.group)
+                                dn.appendNode('artifactId', dep.name)
+                                dn.appendNode('version', dep.version)
+                                dn.appendNode('scope', scope)
+                                logger.lifecycle("POM add dependency ${dep.group}:${dep.name}:${dep.version} (${scope})")
+                            }
+                        }
+                    }
+                }
+                addDeps('api', 'compile')
+                addDeps('implementation', 'runtime')
             }
         }
     }

@@ -197,11 +197,13 @@ public class ConfigScreen extends Screen {
                 var label = meta.translationKey().map(Component::translatable).orElse(Component.literal(meta.key()));
                 var v = ConfigGuiUtil.getPath(workingJson, meta.key());
                 if (v != null && v.isJsonArray()) {
-                    ListEntry le = new ListEntry(meta.key(), label, workingJson, listControlWidth, rowHeight);
+                    ListEntry le = new ListEntry(meta.key(), label, workingJson, listControlWidth, rowHeight,
+                            meta.tooltip().map(Component::translatable).orElse(null));
                     items.add(le);
                     entryDefaults.put(le, defaultsJson);
                 } else if (v != null && v.isJsonObject()) {
-                    MapEntry me = new MapEntry(meta.key(), label, workingJson, listControlWidth, rowHeight);
+                    MapEntry me = new MapEntry(meta.key(), label, workingJson, listControlWidth, rowHeight,
+                            meta.tooltip().map(Component::translatable).orElse(null));
                     items.add(me);
                     entryDefaults.put(me, defaultsJson);
                 } else {

@@ -1,5 +1,6 @@
 package cc.sighs.oelib.config.ui.entries;
 
+import cc.sighs.oelib.config.ui.screen.ConfigScreen;
 import cc.sighs.oelib.config.util.ConfigGuiUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -22,6 +23,7 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
     private final int controlWidth;
     private final int rowHeight;
     private final Component label;
+    private final Component tooltip;
     private final JsonArray array;
     private final List<EditBox> valueBoxes = new ArrayList<>();
     private final List<Button> delButtons = new ArrayList<>();
@@ -35,9 +37,10 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
     private boolean expanded = false;
     private int expX, expY, expW, expH;
 
-    public ListEntry(String keyPath, Component label, JsonObject working, int controlWidth, int rowHeight) {
+    public ListEntry(String keyPath, Component label, JsonObject working, int controlWidth, int rowHeight, Component tooltip) {
         this.keyPath = keyPath;
         this.label = label;
+        this.tooltip = tooltip;
         this.working = working;
         this.controlWidth = controlWidth;
         this.rowHeight = rowHeight;
@@ -198,6 +201,11 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
     @Override
     public void render(GuiGraphics graphics, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean isHovered, float delta) {
         graphics.drawString(Minecraft.getInstance().font, label, x + 4, y + 6, 0xFFFFFFFF);
+        if (isHovered && tooltip != null && screen instanceof ConfigScreen cs) {
+            if (mouseY >= y && mouseY <= y + rowHeight) {
+                cs.setHoverTooltip(tooltip, mouseX, mouseY);
+            }
+        }
         int resetX = Minecraft.getInstance().screen.width - 80;
         int addX = resetX - 24;
         expX = addX - 12;

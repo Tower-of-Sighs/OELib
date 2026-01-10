@@ -1,5 +1,6 @@
 package cc.sighs.oelib.config.ui.entries;
 
+import cc.sighs.oelib.config.ui.screen.ConfigScreen;
 import cc.sighs.oelib.config.util.ConfigGuiUtil;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -22,6 +23,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
     private final int controlWidth;
     private final int rowHeight;
     private final Component label;
+    private final Component tooltip;
     private final JsonObject mapObj;
     private final List<EditBox> keyBoxes = new ArrayList<>();
     private final List<EditBox> valBoxes = new ArrayList<>();
@@ -35,9 +37,10 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
     private JsonObject defaultMap;
     private int headerY;
 
-    public MapEntry(String keyPath, Component label, JsonObject working, int controlWidth, int rowHeight) {
+    public MapEntry(String keyPath, Component label, JsonObject working, int controlWidth, int rowHeight, Component tooltip) {
         this.keyPath = keyPath;
         this.label = label;
+        this.tooltip = tooltip;
         this.working = working;
         this.controlWidth = controlWidth;
         this.rowHeight = rowHeight;
@@ -176,6 +179,11 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
     public void render(GuiGraphics graphics, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean isHovered, float delta) {
         headerY = y;
         graphics.drawString(Minecraft.getInstance().font, label, x + 4, y + 6, 0xFFFFFFFF);
+        if (isHovered && tooltip != null && screen instanceof ConfigScreen cs) {
+            if (mouseY >= y && mouseY <= y + rowHeight) {
+                cs.setHoverTooltip(tooltip, mouseX, mouseY);
+            }
+        }
         int resetX = Minecraft.getInstance().screen.width - 80;
         int deleteX = resetX - 24;
         int addX = resetX - 24;
