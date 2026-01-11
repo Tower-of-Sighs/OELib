@@ -8,6 +8,7 @@ import com.google.gson.JsonPrimitive;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -27,6 +28,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
     private final JsonObject mapObj;
     private final List<EditBox> keyBoxes = new ArrayList<>();
     private final List<EditBox> valBoxes = new ArrayList<>();
+    private final List<Checkbox> valToggles = new ArrayList<>();
     private final List<Button> delButtons = new ArrayList<>();
     private boolean created = false;
     private Screen screen;
@@ -94,6 +96,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
         clearWidgets();
         keyBoxes.clear();
         valBoxes.clear();
+        valToggles.clear();
         delButtons.clear();
 
         List<Map.Entry<String, JsonElement>> entries = new ArrayList<>(mapObj.entrySet());
@@ -108,10 +111,23 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
             int half = width / 2 - 6;
 
             var keyBox = ConfigGuiUtil.createEditBox(e.getKey(), contentLeft, rowY, half);
-            var valBox = ConfigGuiUtil.createEditBox(ConfigGuiUtil.jsonToString(v), contentLeft + half + 12, rowY, half);
-
             screen.addRenderableWidget(keyBox);
+
+            EditBox valBox = ConfigGuiUtil.createEditBox(ConfigGuiUtil.jsonToString(v), contentLeft + half + 12, rowY, half);
             screen.addRenderableWidget(valBox);
+
+            Checkbox valToggle = null;
+            if (v != null && v.isJsonPrimitive() && v.getAsJsonPrimitive().isBoolean()) {
+                valToggle = Checkbox.builder(Component.empty(), Minecraft.getInstance().font)
+                        .selected(v.getAsBoolean())
+                        .onValueChange((box, selected) -> {
+                            mapObj.add(keyBox.getValue(), new JsonPrimitive(selected));
+                            ConfigGuiUtil.setPath(working, keyPath, mapObj);
+                            updateResetButtonState();
+                        })
+                        .build();
+                screen.addRenderableWidget(valToggle);
+            }
 
             var del = Button.builder(Component.literal("x"), b -> {
                 mapObj.remove(keyBox.getValue());
@@ -134,7 +150,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
                 var prev = mapObj.get(keyBox.getValue());
                 String prevStr = ConfigGuiUtil.jsonToString(prev);
                 if (!prevStr.equals(newVal)) {
-                    mapObj.add(keyBox.getValue(), new JsonPrimitive(newVal));
+                    mapObj.add(keyBox.getValue(), ConfigGuiUtil.parsePrimitive(newVal));
                     ConfigGuiUtil.setPath(working, keyPath, mapObj);
                     updateResetButtonState();
                 }
@@ -142,6 +158,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
 
             keyBoxes.add(keyBox);
             valBoxes.add(valBox);
+            valToggles.add(valToggle);
             delButtons.add(del);
             rowY += rowHeight;
         }
@@ -153,8 +170,16 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
             screen.children().remove(kb);
         }
         for (EditBox vb : valBoxes) {
-            vb.setVisible(false);
-            screen.children().remove(vb);
+            if (vb != null) {
+                vb.setVisible(false);
+                screen.children().remove(vb);
+            }
+        }
+        for (Checkbox cb : valToggles) {
+            if (cb != null) {
+                cb.visible = false;
+                screen.children().remove(cb);
+            }
         }
         for (Button db : delButtons) {
             db.visible = false;
@@ -212,11 +237,13 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
         for (int i = 0; i < keyBoxes.size(); i++) {
             EditBox kb = keyBoxes.get(i);
             EditBox vb = valBoxes.get(i);
+            Checkbox cb = valToggles.get(i);
             Button del = delButtons.get(i);
             int bottomBarTop = Minecraft.getInstance().screen.height - 32;
             boolean visible = expanded && rowY <= bottomBarTop - 20;
             kb.visible = visible;
-            vb.visible = visible;
+            if (vb != null) vb.visible = visible && cb == null;
+            if (cb != null) cb.visible = visible;
             del.visible = visible;
             if (visible) {
                 int width = Math.max(60, contentRight - contentLeft);
@@ -224,9 +251,16 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
                 kb.setX(contentLeft);
                 kb.setY(rowY);
                 kb.setWidth(half);
-                vb.setX(contentLeft + half + 12);
-                vb.setY(rowY);
-                vb.setWidth(half);
+                if (vb != null && cb == null) {
+                    vb.setX(contentLeft + half + 12);
+                    vb.setY(rowY);
+                    vb.setWidth(half);
+                }
+                if (cb != null) {
+                    cb.setX(contentLeft + half + 12);
+                    cb.setY(rowY);
+                    cb.setWidth(20);
+                }
                 del.setX(deleteX);
                 del.setY(rowY);
                 rowY += rowHeight;

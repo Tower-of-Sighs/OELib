@@ -136,6 +136,9 @@ public final class ConfigIOUtil {
                     }
                 }
                 OELib.LOGGER.info("Migrated and rewrote config {} to {}", meta.id(), target);
+                unit.reload();
+            } else {
+                unit.reload();
             }
         } catch (Exception e) {
             OELib.LOGGER.error("Exception during auto migration for {}", meta.id(), e);

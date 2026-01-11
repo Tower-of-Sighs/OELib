@@ -11,9 +11,9 @@ import cc.sighs.oelib.config.ui.scissor.ScissorsHandler;
 import cc.sighs.oelib.config.ui.widget.DynamicEntryListWidget;
 import cc.sighs.oelib.config.util.ConfigGuiUtil;
 import cc.sighs.oelib.config.util.ConfigSerializationUtil;
+import cc.sighs.oelib.config.util.GsonUtil;
 import cc.sighs.oelib.network.api.NetworkManager;
 import com.google.gson.JsonObject;
-import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -29,9 +29,9 @@ import net.minecraft.resources.ResourceLocation;
 import java.util.*;
 
 public class ConfigScreen extends Screen {
-    private final ResourceLocation configId;
+    public final ResourceLocation configId;
     private final ConfigUnit<Object> unit;
-    private final ConfigCodec<Object> codec;
+    public final ConfigCodec<Object> codec;
     private final List<ConfigValueMeta> fields;
     private final List<Runnable> applyActions = new ArrayList<>();
     private final Map<String, Component> errors = new HashMap<>();
@@ -80,37 +80,12 @@ public class ConfigScreen extends Screen {
             return;
         }
         var opt = ConfigManager.get(chosen);
-        var cast = opt.map(ConfigScreen::castUnit).orElse(null);
+        var cast = opt.map(ConfigGuiUtil::castUnit).orElse(null);
         this.configId = chosen;
         this.unit = cast;
         this.codec = cast.codec();
         this.fields = codec.fields();
-        this.working = toJson(unit.get());
-    }
-
-    @SuppressWarnings("unchecked")
-    private static ConfigUnit<Object> castUnit(ConfigUnit<?> unit) {
-        return (ConfigUnit<Object>) unit;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static JsonObject encodeToJsonObject(Codec<?> codec, Object value) {
-        var res = ((Codec<Object>) codec).encodeStart(JsonOps.INSTANCE, value);
-        var el = res.result().orElse(new JsonObject());
-        return el.isJsonObject() ? el.getAsJsonObject() : new JsonObject();
-    }
-
-    private JsonObject toJson(Object value) {
-        var result = codec.codec().encodeStart(JsonOps.INSTANCE, value);
-        if (result.error().isPresent()) {
-            OELib.LOGGER.error("Failed to encode config {} to JSON: {}", configId, result.error().get().message());
-            return new JsonObject();
-        }
-        var element = result.result().orElse(new JsonObject());
-        if (element.isJsonObject()) {
-            return element.getAsJsonObject();
-        }
-        return new JsonObject();
+        this.working = ConfigGuiUtil.toJson(unit.get(), this);
     }
 
     private int getSideSliderPosition() {
@@ -177,11 +152,11 @@ public class ConfigScreen extends Screen {
         for (ResourceLocation id : modConfigs) {
             var optUnit = ConfigManager.get(id);
             if (optUnit.isEmpty()) continue;
-            var u = castUnit(optUnit.get());
+            var u = ConfigGuiUtil.castUnit(optUnit.get());
             var c = u.codec();
-            var workingJson = encodeToJsonObject(c.codec(), u.get());
+            var workingJson = ConfigGuiUtil.encodeToJsonObject(c.codec(), u.get());
             var defaultObj = c.codec().parse(JsonOps.INSTANCE, new JsonObject()).result().orElse(null);
-            var defaultsJson = defaultObj != null ? encodeToJsonObject(c.codec(), defaultObj) : new JsonObject();
+            var defaultsJson = defaultObj != null ? ConfigGuiUtil.encodeToJsonObject(c.codec(), defaultObj) : new JsonObject();
             var flds = c.fields();
             contexts.add(new ConfigCtx(id, u, c, flds, workingJson, defaultsJson));
             items.add(new CategoryTextEntry(Component.translatable("config." + id.getNamespace() + "." + id.getPath() + ".title"), Component.empty()));
@@ -280,6 +255,15 @@ public class ConfigScreen extends Screen {
 
     private void syncAndSaveConfigs() {
         for (ConfigCtx ctx : contexts) {
+            for (var rootEntry : ctx.working.entrySet()) {
+                var v = rootEntry.getValue();
+                if (v.isJsonObject()) {
+                    GsonUtil.removeBlankStringValues(v.getAsJsonObject());
+                } else if (v.isJsonArray()) {
+                    GsonUtil.removeBlankStringElements(v.getAsJsonArray());
+                }
+            }
+
             var parseResult = ctx.codec.codec().parse(JsonOps.INSTANCE, ctx.working);
             if (parseResult.error().isPresent()) {
                 OELib.LOGGER.error("Failed to parse edited config {}: {}", ctx.id, parseResult.error().get().message());
@@ -316,17 +300,17 @@ public class ConfigScreen extends Screen {
         }
     }
 
-    private void renderBg(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
+    private void renderBg(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         if (minecraft.level == null) {
-            renderPanorama(guiGraphics, partialTicks);
+            renderPanorama(guiGraphics, partialTick);
         }
+        this.renderBlurredBackground(partialTick);
     }
 
-    private void renderNoneBg(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
+    private void renderNoneBg(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         for (Renderable renderable : this.renderables) {
-            renderable.render(guiGraphics, mouseX, mouseY, partialTicks);
+            renderable.render(guiGraphics, mouseX, mouseY, partialTick);
         }
-        renderBg(guiGraphics, mouseX, mouseY, partialTicks);
     }
 
     @Override

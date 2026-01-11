@@ -9,6 +9,7 @@ import com.google.gson.JsonPrimitive;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -26,6 +27,7 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
     private final Component tooltip;
     private final JsonArray array;
     private final List<EditBox> valueBoxes = new ArrayList<>();
+    private final List<Checkbox> toggleBoxes = new ArrayList<>();
     private final List<Button> delButtons = new ArrayList<>();
     private final List<Button> upButtons = new ArrayList<>();
     private final List<Button> downButtons = new ArrayList<>();
@@ -90,6 +92,7 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
 
         clearWidgets();
         valueBoxes.clear();
+        toggleBoxes.clear();
         delButtons.clear();
         upButtons.clear();
         downButtons.clear();
@@ -102,6 +105,21 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
             var el = array.get(i);
             var vb = ConfigGuiUtil.createEditBox(ConfigGuiUtil.jsonToString(el), vx, rowY, vw);
             screen.addRenderableWidget(vb);
+
+            Checkbox cb = null;
+            if (el != null && el.isJsonPrimitive() && el.getAsJsonPrimitive().isBoolean()) {
+                cb = Checkbox.builder(Component.empty(), Minecraft.getInstance().font)
+                        .selected(el.getAsBoolean())
+                        .onValueChange((box, selected) -> {
+                            int idx = valueBoxes.indexOf(vb);
+                            if (idx >= 0) {
+                                array.set(idx, new JsonPrimitive(selected));
+                                ConfigGuiUtil.setPath(working, keyPath, array);
+                                updateResetButtonState();
+                            }
+                        }).build();
+                screen.addRenderableWidget(cb);
+            }
 
             int deleteX = resetX - 21;
             int downX = deleteX - 22;
@@ -120,7 +138,7 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
                 if (idx >= 0) {
                     var prev = ConfigGuiUtil.jsonToString(array.get(idx));
                     if (!prev.equals(str)) {
-                        array.set(idx, new JsonPrimitive(str));
+                        array.set(idx, ConfigGuiUtil.parsePrimitive(str));
                         ConfigGuiUtil.setPath(working, keyPath, array);
                         updateResetButtonState();
                     }
@@ -128,6 +146,7 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
             });
 
             valueBoxes.add(vb);
+            toggleBoxes.add(cb);
             delButtons.add(del);
             upButtons.add(up);
             downButtons.add(down);
@@ -228,20 +247,28 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
         int vx = x + 40;
         for (int i = 0; i < valueBoxes.size(); i++) {
             var vb = valueBoxes.get(i);
+            var cb = toggleBoxes.get(i);
             var del = delButtons.get(i);
             var up = upButtons.get(i);
             var down = downButtons.get(i);
             int bottomBarTop = Minecraft.getInstance().screen.height - 32;
             boolean visible = expanded && rowY <= bottomBarTop - 20;
-            vb.visible = visible;
+            vb.visible = visible && cb == null;
+            if (cb != null) cb.visible = visible;
             del.visible = visible;
             up.visible = visible;
             down.visible = visible;
             if (visible) {
                 int vw = Math.max(60, resetX - vx - 86);
-                vb.setX(vx);
-                vb.setY(rowY);
-                vb.setWidth(vw);
+                if (cb == null) {
+                    vb.setX(vx);
+                    vb.setY(rowY);
+                    vb.setWidth(vw);
+                } else {
+                    cb.setX(vx);
+                    cb.setY(rowY);
+                    cb.setWidth(20);
+                }
                 int deleteX = resetX - 21;
                 int downX = deleteX - 22;
                 int upX = downX - 22;

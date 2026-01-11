@@ -2,6 +2,7 @@ package cc.sighs.oelib.config;
 
 import cc.sighs.oelib.OELib;
 import cc.sighs.oelib.config.api.ConfigEvents;
+import cc.sighs.oelib.config.datafix.ConfigFixRegistry;
 import cc.sighs.oelib.config.model.ConfigMeta;
 import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.util.ConfigIOUtil;
@@ -9,6 +10,8 @@ import cc.sighs.oelib.config.util.ConfigSerializationUtil;
 import cc.sighs.oelib.platform.Platform;
 import net.minecraft.resources.ResourceLocation;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -76,10 +79,16 @@ public class ConfigUnit<T> {
         var path = ConfigIOUtil.resolveSavePath(meta);
         try {
             ConfigEvents.beforeSave(this, value);
-            boolean success = ConfigSerializationUtil.saveToFile(path, value, meta.format(), configCodec.codec(), configCodec.fields());
-            if (!success) {
+            int version = ConfigFixRegistry.get(meta.id()).map(ConfigFixRegistry.Chain::currentVersion).orElse(0);
+            var content = ConfigSerializationUtil.encodeToStringWithVersion(value, version, meta.format(), configCodec.codec(), configCodec.fields());
+            if (content.isEmpty()) {
                 throw new IllegalStateException("Failed to save config: " + meta.id());
             }
+            var parent = path.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            Files.writeString(path, content.get(), StandardCharsets.UTF_8);
             OELib.LOGGER.info("Saved config {} to {}", meta.id(), path);
             ConfigEvents.afterSave(this, value);
         } catch (Exception e) {

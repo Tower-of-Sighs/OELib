@@ -36,7 +36,8 @@ public class DynamicEntryListWidget extends DynamicElementListWidget {
         for (int i = 0; i < children.size(); i++) {
             AbstractConfigEntry<?> entry = children.get(i);
             int h = entry.getItemHeight();
-            boolean hovered = mouseY >= y && mouseY < y + h && mouseX >= left && mouseX < left + width;
+            boolean hovered = mouseY >= y && mouseY < y + h && mouseX >= left && mouseX < left + width
+                    && mouseY >= top && mouseY < bottom;
             entry.render(graphics, i, y, left + 12, getItemWidth(), h, mouseX, mouseY, hovered, delta);
             y += h;
         }
