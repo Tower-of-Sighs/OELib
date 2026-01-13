@@ -348,63 +348,63 @@ final class ComponentIO {
         }
     }
 
-    static int readVarIntW(RegistryFriendlyByteBuf buf) { return buf.readVarInt(); }
-    static void writeVarIntW(RegistryFriendlyByteBuf buf, int v) { buf.writeVarInt(v); }
-    static long readVarLongW(RegistryFriendlyByteBuf buf) { return buf.readVarLong(); }
-    static void writeVarLongW(RegistryFriendlyByteBuf buf, long v) { buf.writeVarLong(v); }
-    static boolean readBooleanW(RegistryFriendlyByteBuf buf) { return buf.readBoolean(); }
-    static void writeBooleanW(RegistryFriendlyByteBuf buf, boolean v) { buf.writeBoolean(v); }
-    static float readFloatW(RegistryFriendlyByteBuf buf) { return buf.readFloat(); }
-    static void writeFloatW(RegistryFriendlyByteBuf buf, float v) { buf.writeFloat(v); }
-    static double readDoubleW(RegistryFriendlyByteBuf buf) { return buf.readDouble(); }
-    static void writeDoubleW(RegistryFriendlyByteBuf buf, double v) { buf.writeDouble(v); }
-    static byte readByteW(RegistryFriendlyByteBuf buf) { return buf.readByte(); }
-    static void writeByteW(RegistryFriendlyByteBuf buf, byte v) { buf.writeByte(v); }
-    static short readShortW(RegistryFriendlyByteBuf buf) { return buf.readShort(); }
-    static void writeShortW(RegistryFriendlyByteBuf buf, short v) { buf.writeShort(v); }
-    static String readUtfW(RegistryFriendlyByteBuf buf) { return buf.readUtf(); }
-    static void writeUtfW(RegistryFriendlyByteBuf buf, String v) { buf.writeUtf(v); }
-    static UUID readUUIDW(RegistryFriendlyByteBuf buf) { return buf.readUUID(); }
-    static void writeUUIDW(RegistryFriendlyByteBuf buf, UUID v) { buf.writeUUID(v); }
-    static byte[] readByteArrayW(RegistryFriendlyByteBuf buf) { return buf.readByteArray(); }
-    static void writeByteArrayW(RegistryFriendlyByteBuf buf, byte[] v) { buf.writeByteArray(v); }
-    static int[] readVarIntArrayW(RegistryFriendlyByteBuf buf) { return buf.readVarIntArray(); }
-    static void writeVarIntArrayW(RegistryFriendlyByteBuf buf, int[] v) { buf.writeVarIntArray(v); }
-    static long[] readLongArrayW(RegistryFriendlyByteBuf buf) { return buf.readLongArray(); }
-    static void writeLongArrayW(RegistryFriendlyByteBuf buf, long[] v) { buf.writeLongArray(v); }
-    static Date readDateW(RegistryFriendlyByteBuf buf) { return buf.readDate(); }
-    static void writeDateW(RegistryFriendlyByteBuf buf, Date v) { buf.writeDate(v); }
-    static Instant readInstantW(RegistryFriendlyByteBuf buf) { return buf.readInstant(); }
-    static void writeInstantW(RegistryFriendlyByteBuf buf, Instant v) { buf.writeInstant(v); }
-    static BitSet readBitSetW(RegistryFriendlyByteBuf buf) { return buf.readBitSet(); }
-    static void writeBitSetW(RegistryFriendlyByteBuf buf, BitSet v) { buf.writeBitSet(v); }
-    static BlockPos readBlockPosW(RegistryFriendlyByteBuf buf) { return buf.readBlockPos(); }
-    static void writeBlockPosW(RegistryFriendlyByteBuf buf, BlockPos v) { buf.writeBlockPos(v); }
-    static ChunkPos readChunkPosW(RegistryFriendlyByteBuf buf) { return buf.readChunkPos(); }
-    static void writeChunkPosW(RegistryFriendlyByteBuf buf, ChunkPos v) { buf.writeChunkPos(v); }
-    static SectionPos readSectionPosW(RegistryFriendlyByteBuf buf) { return buf.readSectionPos(); }
-    static void writeSectionPosW(RegistryFriendlyByteBuf buf, SectionPos v) { buf.writeSectionPos(v); }
-    static GlobalPos readGlobalPosW(RegistryFriendlyByteBuf buf) { return buf.readGlobalPos(); }
-    static void writeGlobalPosW(RegistryFriendlyByteBuf buf, GlobalPos v) { buf.writeGlobalPos(v); }
-    static Vec3 readVec3W(RegistryFriendlyByteBuf buf) { return buf.readVec3(); }
-    static void writeVec3W(RegistryFriendlyByteBuf buf, Vec3 v) { buf.writeVec3(v); }
-    static Vector3f readVector3fW(RegistryFriendlyByteBuf buf) { return buf.readVector3f(); }
-    static void writeVector3fW(RegistryFriendlyByteBuf buf, Vector3f v) { buf.writeVector3f(v); }
-    static Quaternionf readQuaternionW(RegistryFriendlyByteBuf buf) { return buf.readQuaternion(); }
-    static void writeQuaternionW(RegistryFriendlyByteBuf buf, Quaternionf v) { buf.writeQuaternion(v); }
-    static ResourceLocation readResourceLocationW(RegistryFriendlyByteBuf buf) { return buf.readResourceLocation(); }
-    static void writeResourceLocationW(RegistryFriendlyByteBuf buf, ResourceLocation v) { buf.writeResourceLocation(v); }
+    static int           readVarIntW         (RegistryFriendlyByteBuf buf) { return buf.readVarInt(); }
+    static void          writeVarIntW        (RegistryFriendlyByteBuf buf, int v) { buf.writeVarInt(v); }
+    static long          readVarLongW        (RegistryFriendlyByteBuf buf) { return buf.readVarLong(); }
+    static void          writeVarLongW       (RegistryFriendlyByteBuf buf, long v) { buf.writeVarLong(v); }
+    static boolean       readBooleanW        (RegistryFriendlyByteBuf buf) { return buf.readBoolean(); }
+    static void          writeBooleanW       (RegistryFriendlyByteBuf buf, boolean v) { buf.writeBoolean(v); }
+    static float         readFloatW          (RegistryFriendlyByteBuf buf) { return buf.readFloat(); }
+    static void          writeFloatW         (RegistryFriendlyByteBuf buf, float v) { buf.writeFloat(v); }
+    static double        readDoubleW         (RegistryFriendlyByteBuf buf) { return buf.readDouble(); }
+    static void          writeDoubleW        (RegistryFriendlyByteBuf buf, double v) { buf.writeDouble(v); }
+    static byte          readByteW           (RegistryFriendlyByteBuf buf) { return buf.readByte(); }
+    static void          writeByteW          (RegistryFriendlyByteBuf buf, byte v) { buf.writeByte(v); }
+    static short         readShortW          (RegistryFriendlyByteBuf buf) { return buf.readShort(); }
+    static void          writeShortW         (RegistryFriendlyByteBuf buf, short v) { buf.writeShort(v); }
+    static String        readUtfW            (RegistryFriendlyByteBuf buf) { return buf.readUtf(); }
+    static void          writeUtfW           (RegistryFriendlyByteBuf buf, String v) { buf.writeUtf(v); }
+    static UUID          readUUIDW           (RegistryFriendlyByteBuf buf) { return buf.readUUID(); }
+    static void          writeUUIDW          (RegistryFriendlyByteBuf buf, UUID v) { buf.writeUUID(v); }
+    static byte[]        readByteArrayW      (RegistryFriendlyByteBuf buf) { return buf.readByteArray(); }
+    static void          writeByteArrayW     (RegistryFriendlyByteBuf buf, byte[] v) { buf.writeByteArray(v); }
+    static int[]         readVarIntArrayW    (RegistryFriendlyByteBuf buf) { return buf.readVarIntArray(); }
+    static void          writeVarIntArrayW   (RegistryFriendlyByteBuf buf, int[] v) { buf.writeVarIntArray(v); }
+    static long[]        readLongArrayW      (RegistryFriendlyByteBuf buf) { return buf.readLongArray(); }
+    static void          writeLongArrayW     (RegistryFriendlyByteBuf buf, long[] v) { buf.writeLongArray(v); }
+    static Date          readDateW           (RegistryFriendlyByteBuf buf) { return buf.readDate(); }
+    static void          writeDateW          (RegistryFriendlyByteBuf buf, Date v) { buf.writeDate(v); }
+    static Instant       readInstantW        (RegistryFriendlyByteBuf buf) { return buf.readInstant(); }
+    static void          writeInstantW       (RegistryFriendlyByteBuf buf, Instant v) { buf.writeInstant(v); }
+    static BitSet        readBitSetW         (RegistryFriendlyByteBuf buf) { return buf.readBitSet(); }
+    static void          writeBitSetW        (RegistryFriendlyByteBuf buf, BitSet v) { buf.writeBitSet(v); }
+    static BlockPos      readBlockPosW       (RegistryFriendlyByteBuf buf) { return buf.readBlockPos(); }
+    static void          writeBlockPosW      (RegistryFriendlyByteBuf buf, BlockPos v) { buf.writeBlockPos(v); }
+    static ChunkPos      readChunkPosW       (RegistryFriendlyByteBuf buf) { return buf.readChunkPos(); }
+    static void          writeChunkPosW      (RegistryFriendlyByteBuf buf, ChunkPos v) { buf.writeChunkPos(v); }
+    static SectionPos    readSectionPosW     (RegistryFriendlyByteBuf buf) { return buf.readSectionPos(); }
+    static void          writeSectionPosW    (RegistryFriendlyByteBuf buf, SectionPos v) { buf.writeSectionPos(v); }
+    static GlobalPos     readGlobalPosW      (RegistryFriendlyByteBuf buf) { return buf.readGlobalPos(); }
+    static void          writeGlobalPosW     (RegistryFriendlyByteBuf buf, GlobalPos v) { buf.writeGlobalPos(v); }
+    static Vec3          readVec3W           (RegistryFriendlyByteBuf buf) { return buf.readVec3(); }
+    static void          writeVec3W          (RegistryFriendlyByteBuf buf, Vec3 v) { buf.writeVec3(v); }
+    static Vector3f      readVector3fW       (RegistryFriendlyByteBuf buf) { return buf.readVector3f(); }
+    static void          writeVector3fW      (RegistryFriendlyByteBuf buf, Vector3f v) { buf.writeVector3f(v); }
+    static Quaternionf   readQuaternionW     (RegistryFriendlyByteBuf buf) { return buf.readQuaternion(); }
+    static void          writeQuaternionW    (RegistryFriendlyByteBuf buf, Quaternionf v) { buf.writeQuaternion(v); }
+    static ResourceLocation readResourceLocationW (RegistryFriendlyByteBuf buf) { return buf.readResourceLocation(); }
+    static void          writeResourceLocationW   (RegistryFriendlyByteBuf buf, ResourceLocation v) { buf.writeResourceLocation(v); }
     static BlockHitResult readBlockHitResultW(RegistryFriendlyByteBuf buf) { return buf.readBlockHitResult(); }
-    static void writeBlockHitResultW(RegistryFriendlyByteBuf buf, BlockHitResult v) { buf.writeBlockHitResult(v); }
-    static CompoundTag readCompoundTagW(RegistryFriendlyByteBuf buf) { return buf.readNbt(); }
-    static void writeCompoundTagW(RegistryFriendlyByteBuf buf, CompoundTag v) { buf.writeNbt(v); }
-    static Tag readTagW(RegistryFriendlyByteBuf buf) { return buf.readNbt(NbtAccounter.unlimitedHeap()); }
-    static void writeTagW(RegistryFriendlyByteBuf buf, Tag v) { buf.writeNbt(v); }
-    static Enum readEnumW(RegistryFriendlyByteBuf buf, Class<? extends Enum> enumClass) { return buf.readEnum((Class) enumClass); }
-    static void writeEnumW(RegistryFriendlyByteBuf buf, Enum v) { buf.writeEnum(v); }
-    static IntList readIntIdListW(RegistryFriendlyByteBuf buf) { return buf.readIntIdList(); }
-    static void writeIntIdListW(RegistryFriendlyByteBuf buf, IntList v) { buf.writeIntIdList(v); }
+    static void          writeBlockHitResultW(RegistryFriendlyByteBuf buf, BlockHitResult v) { buf.writeBlockHitResult(v); }
+    static CompoundTag   readCompoundTagW    (RegistryFriendlyByteBuf buf) { return buf.readNbt(); }
+    static void          writeCompoundTagW   (RegistryFriendlyByteBuf buf, CompoundTag v) { buf.writeNbt(v); }
+    static Tag           readTagW            (RegistryFriendlyByteBuf buf) { return buf.readNbt(NbtAccounter.unlimitedHeap()); }
+    static void          writeTagW           (RegistryFriendlyByteBuf buf, Tag v) { buf.writeNbt(v); }
+    static Enum<?>       readEnumW           (RegistryFriendlyByteBuf buf, Class<? extends Enum<?>> enumClass) { return buf.readEnum((Class) enumClass); }
+    static void          writeEnumW          (RegistryFriendlyByteBuf buf, Enum<?> v) { buf.writeEnum(v); }
+    static IntList       readIntIdListW      (RegistryFriendlyByteBuf buf) { return buf.readIntIdList(); }
+    static void          writeIntIdListW     (RegistryFriendlyByteBuf buf, IntList v) { buf.writeIntIdList(v); }
     static <T> ResourceKey<T> readResourceKeyW(RegistryFriendlyByteBuf buf, ResourceKey<? extends Registry<T>> resourceKey) { return buf.readResourceKey(resourceKey); }
-    static void writeResourceKeyW(RegistryFriendlyByteBuf buf, ResourceKey<?> resourceKey) { buf.writeResourceKey(resourceKey); }
+    static void          writeResourceKeyW   (RegistryFriendlyByteBuf buf, ResourceKey<?> resourceKey) { buf.writeResourceKey(resourceKey); }
     static <T> ResourceKey<? extends Registry<T>> readRegistryKeyW(RegistryFriendlyByteBuf buf) { return buf.readRegistryKey(); }
 }
