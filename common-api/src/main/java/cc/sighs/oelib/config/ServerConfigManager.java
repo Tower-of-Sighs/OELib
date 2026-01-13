@@ -6,6 +6,7 @@ import cc.sighs.oelib.config.api.IConfigPermissionChecker;
 import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import cc.sighs.oelib.config.net.ConfigSyncPacket;
+import cc.sighs.oelib.config.net.ConfigUpdateRequestPacket;
 import cc.sighs.oelib.config.util.ConfigSerializationUtil;
 import cc.sighs.oelib.data.DataManager;
 import cc.sighs.oelib.network.api.NetworkManager;
@@ -33,6 +34,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ServerConfigManager implements ResourceManagerReloadListener {
     private static final Map<ResourceLocation, ConfigUnit<?>> CONFIGS = new ConcurrentHashMap<>();
     private static final Map<ResourceLocation, IConfigPermissionChecker> PERMISSIONS = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, String> LAST_BROADCAST = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, String> CLIENT_KNOWN_SERVER = new ConcurrentHashMap<>();
 
     static void registerUnit(ConfigUnit<?> unit, IConfigPermissionChecker permissionChecker) {
         var meta = unit.meta();
@@ -61,6 +64,23 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
         return Optional.ofNullable(PERMISSIONS.get(id));
     }
 
+    public static void recordBroadcast(ResourceLocation id, String payload) {
+        LAST_BROADCAST.put(id, payload);
+        CLIENT_KNOWN_SERVER.put(id, payload);
+    }
+
+    public static Optional<String> getLastBroadcast(ResourceLocation id) {
+        return Optional.ofNullable(LAST_BROADCAST.get(id));
+    }
+
+    public static void recordClientKnownServer(ResourceLocation id, String payload) {
+        CLIENT_KNOWN_SERVER.put(id, payload);
+    }
+
+    public static Optional<String> getClientKnownServer(ResourceLocation id) {
+        return Optional.ofNullable(CLIENT_KNOWN_SERVER.get(id));
+    }
+
     static void reloadAll() {
         for (ConfigUnit<?> unit : CONFIGS.values()) {
             unit.reload();
@@ -68,12 +88,27 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
                 var id = unit.id();
                 var payloadOpt = encodeToString(id);
                 payloadOpt.ifPresent(encoded -> {
+                    recordBroadcast(unit.id(), encoded.payload());
                     if (DataManager.getServer() != null && !Platform.getAllPlayers(DataManager.getServer()).isEmpty()) {
                         NetworkManager.sendToAll(new ConfigSyncPacket(unit.id(), encoded.payload(), encoded.format()));
                     } else {
                         OELib.LOGGER.debug("Skipping config sync for {}: No players online or server starting.", unit.id());
                     }
                 });
+            } else {
+                var id = unit.id();
+                var format = unit.meta().format();
+                @SuppressWarnings("unchecked")
+                ConfigUnit<Object> cast = (ConfigUnit<Object>) unit;
+                var encoded = ConfigSerializationUtil.encodeToString(cast.get(), format, cast.codec().codec(), cast.codec().fields());
+                if (encoded.isPresent()) {
+                    var known = getClientKnownServer(id);
+                    if (known.isEmpty() || !known.get().equals(encoded.get())) {
+                        if (DataManager.getServer() != null && !Platform.getAllPlayers(DataManager.getServer()).isEmpty()) {
+                            NetworkManager.sendToServer(new ConfigUpdateRequestPacket(id, encoded.get(), format, true));
+                        }
+                    }
+                }
             }
         }
     }

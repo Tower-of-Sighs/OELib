@@ -71,6 +71,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
             ConfigGuiUtil.setPath(working, keyPath, mapObj);
             rebuildRows(x, headerY, resetX, deleteX);
             updateResetButtonState();
+            if (screen instanceof ConfigScreen cs) cs.markDirty();
         }).bounds(addX, y, 22, 20).build();
         screen.addRenderableWidget(addBtn);
 
@@ -82,6 +83,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
             ConfigGuiUtil.setPath(working, keyPath, mapObj);
             rebuildRows(x, headerY, resetX, deleteX);
             updateResetButtonState();
+            if (screen instanceof ConfigScreen cs) cs.markDirty();
         }).bounds(resetX, y, 72, 20).build();
         screen.addRenderableWidget(resetButton);
 
@@ -124,6 +126,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
                             mapObj.add(keyBox.getValue(), new JsonPrimitive(selected));
                             ConfigGuiUtil.setPath(working, keyPath, mapObj);
                             updateResetButtonState();
+                            if (screen instanceof ConfigScreen cs) cs.markDirty();
                         })
                         .build();
                 screen.addRenderableWidget(valToggle);
@@ -134,6 +137,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
                 ConfigGuiUtil.setPath(working, keyPath, mapObj);
                 rebuildRows(x, headerY, resetX, deleteX);
                 updateResetButtonState();
+                if (screen instanceof ConfigScreen cs) cs.markDirty();
             }).bounds(deleteX, rowY, 20, 20).build();
             screen.addRenderableWidget(del);
 
@@ -144,6 +148,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
                 mapObj.add(newKey, currentValue);
                 ConfigGuiUtil.setPath(working, keyPath, mapObj);
                 updateResetButtonState();
+                if (screen instanceof ConfigScreen cs) cs.markDirty();
             });
 
             valBox.setResponder(newVal -> {
@@ -153,6 +158,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
                     mapObj.add(keyBox.getValue(), ConfigGuiUtil.parsePrimitive(newVal));
                     ConfigGuiUtil.setPath(working, keyPath, mapObj);
                     updateResetButtonState();
+                    if (screen instanceof ConfigScreen cs) cs.markDirty();
                 }
             });
 

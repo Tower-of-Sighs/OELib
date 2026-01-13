@@ -39,6 +39,15 @@ public final class ConfigIOUtil {
         }
 
         try {
+            unit.reload();
+            var currentEncodedOpt = ConfigManager.encodeToString(unit.id());
+            var lastBroadcastOpt = ServerConfigManager.getLastBroadcast(unit.id());
+            if (currentEncodedOpt.isPresent() && lastBroadcastOpt.isPresent() && !currentEncodedOpt.get().payload().equals(lastBroadcastOpt.get())) {
+                OELib.LOGGER.info("Server-side change detected for config {}, ignoring client update and broadcasting server state", unit.id());
+                NetworkManager.sendToAll(new ConfigSyncPacket(unit.id(), currentEncodedOpt.get().payload(), currentEncodedOpt.get().format()));
+                ServerConfigManager.recordBroadcast(unit.id(), currentEncodedOpt.get().payload());
+                return;
+            }
             var result = ConfigSerializationUtil.parse(payload, format, unit.codec().codec());
             if (result.error().isPresent()) {
                 OELib.LOGGER.error("Failed to parse update for config {}: {}", unit.id(), result.error().get().message());
@@ -54,6 +63,7 @@ public final class ConfigIOUtil {
                 ConfigManager.encodeToString(unit.id()).ifPresent(encoded -> {
                     OELib.LOGGER.info("Broadcasting config {} to clients", unit.id());
                     NetworkManager.sendToAll(new ConfigSyncPacket(unit.id(), encoded.payload(), encoded.format()));
+                    ServerConfigManager.recordBroadcast(unit.id(), encoded.payload());
                 });
             });
         } catch (Exception e) {

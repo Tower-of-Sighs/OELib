@@ -68,6 +68,7 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
             ConfigGuiUtil.setPath(working, keyPath, array);
             rebuildRows(x, y, resetX);
             updateResetButtonState();
+            if (screen instanceof ConfigScreen cs) cs.markDirty();
         }).bounds(resetX - 24, y, 22, 20).build();
         screen.addRenderableWidget(addBtn);
 
@@ -79,6 +80,7 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
             ConfigGuiUtil.setPath(working, keyPath, array);
             rebuildRows(x, y, resetX);
             updateResetButtonState();
+            if (screen instanceof ConfigScreen cs) cs.markDirty();
         }).bounds(resetX, y, 72, 20).build();
         screen.addRenderableWidget(resetButton);
 
@@ -116,6 +118,7 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
                                 array.set(idx, new JsonPrimitive(selected));
                                 ConfigGuiUtil.setPath(working, keyPath, array);
                                 updateResetButtonState();
+                                if (screen instanceof ConfigScreen cs) cs.markDirty();
                             }
                         }).build();
                 screen.addRenderableWidget(cb);
@@ -141,6 +144,7 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
                         array.set(idx, ConfigGuiUtil.parsePrimitive(str));
                         ConfigGuiUtil.setPath(working, keyPath, array);
                         updateResetButtonState();
+                        if (screen instanceof ConfigScreen cs) cs.markDirty();
                     }
                 }
             });
@@ -164,6 +168,7 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
             ConfigGuiUtil.setPath(working, keyPath, array);
             rebuildRows(vb.getX() - 40, vb.getY() - rowHeight, vb.getX() + vb.getWidth() + 54);
             updateResetButtonState();
+            if (screen instanceof ConfigScreen cs) cs.markDirty();
         }
     }
 
@@ -177,6 +182,7 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
             ConfigGuiUtil.setPath(working, keyPath, array);
             rebuildRows(vb.getX() - 40, vb.getY() - rowHeight, vb.getX() + vb.getWidth() + 54);
             updateResetButtonState();
+            if (screen instanceof ConfigScreen cs) cs.markDirty();
         }
     }
 
@@ -187,6 +193,7 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
             ConfigGuiUtil.setPath(working, keyPath, array);
             rebuildRows(vb.getX() - 40, vb.getY() - rowHeight, vb.getX() + vb.getWidth() + 54);
             updateResetButtonState();
+            if (screen instanceof ConfigScreen cs) cs.markDirty();
         }
     }
 

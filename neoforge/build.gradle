@@ -54,6 +54,7 @@ processResources {
 }
 
 shadowJar {
+    exclude "oelib.accessWidener"
     configurations = [project.configurations.shadowCommon]
     archiveClassifier = "dev-shadow"
 }

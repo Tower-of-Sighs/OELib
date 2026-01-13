@@ -85,6 +85,7 @@ public class ConfigScreen extends Screen {
         this.unit = cast;
         this.codec = cast.codec();
         this.fields = codec.fields();
+        this.unit.reload();
         this.working = ConfigGuiUtil.toJson(unit.get(), this);
     }
 
@@ -153,6 +154,7 @@ public class ConfigScreen extends Screen {
             var optUnit = ConfigManager.get(id);
             if (optUnit.isEmpty()) continue;
             var u = ConfigGuiUtil.castUnit(optUnit.get());
+            u.reload();
             var c = u.codec();
             var workingJson = ConfigGuiUtil.encodeToJsonObject(c.codec(), u.get());
             var defaultObj = c.codec().parse(JsonOps.INSTANCE, new JsonObject()).result().orElse(null);
@@ -238,6 +240,10 @@ public class ConfigScreen extends Screen {
         applyActions.clear();
     }
 
+    public void markDirty() {
+        this.dirty = true;
+    }
+
     @Override
     public void onClose() {
         if (!dirty) {
@@ -316,6 +322,9 @@ public class ConfigScreen extends Screen {
 
     @Override
     public void render(GuiGraphics gui, int mouseX, int mouseY, float partialTick) {
+        if (needsRefreshFromUnits()) {
+            init();
+        }
         lastTooltip = null;
         mouseXLast = -1;
         mouseYLast = -1;
@@ -502,6 +511,20 @@ public class ConfigScreen extends Screen {
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, amountX, amountY);
+    }
+
+    private boolean needsRefreshFromUnits() {
+        if (dirty) return false;
+        try {
+            for (ConfigCtx ctx : contexts) {
+                var fresh = ConfigGuiUtil.encodeToJsonObject(ctx.codec.codec(), ctx.unit.get());
+                if (!Objects.equals(fresh.toString(), ctx.working.toString())) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
     }
 
     private record FieldRef(ConfigValueMeta meta, Component label, int topY) {

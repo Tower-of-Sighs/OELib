@@ -87,6 +87,7 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
                 .onValueChange((box, selected) -> {
                     ConfigGuiUtil.setPath(working, meta.key(), new JsonPrimitive(selected));
                     updateResetButtonState();
+                    if (screen instanceof ConfigScreen cs) cs.markDirty();
                 })
                 .build();
         toggle.setPosition(controlX - 8, y);
@@ -121,6 +122,7 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
                 double snapped = Math.round(v / step) * step;
                 ConfigGuiUtil.setPath(working, meta.key(), new JsonPrimitive(snapped));
                 updateResetButtonState();
+                if (screen instanceof ConfigScreen cs) cs.markDirty();
             }
         };
     }
@@ -143,6 +145,7 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
                         (d, v) -> {
                             ConfigGuiUtil.setPath(working, meta.key(), new JsonPrimitive(v));
                             updateResetButtonState();
+                            if (screen instanceof ConfigScreen cs) cs.markDirty();
                         });
         screen.addRenderableWidget(dropdown);
     }
@@ -159,6 +162,7 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
                 JsonElement newEl = parseStringToJson(str);
                 ConfigGuiUtil.setPath(working, meta.key(), newEl);
                 updateResetButtonState();
+                if (screen instanceof ConfigScreen cs) cs.markDirty();
             }
         });
     }
@@ -178,6 +182,7 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
 
         updateControlValue(defaultValueStr, defaultValueElement);
         updateResetButtonState();
+        if (screen instanceof ConfigScreen cs) cs.markDirty();
     }
 
     private void updateControlValue(String defaultValueStr, JsonElement defaultValueElement) {
