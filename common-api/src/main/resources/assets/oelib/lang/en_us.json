@@ -2,13 +2,15 @@
   "itemGroup.oelib.general": "OELib",
   "item.oelib.example_item": "Example Item",
   "block.oelib.example_block": "Example Block",
-  "config.oelib.festival_toast.title": "Festival Blessings Settings",
-  "config.oelib.dev_features.title": "Developer Features Settings",
+
   "config.oelib.title": "OELib Config",
   "config.oelib.save": "Save",
   "config.oelib.reset": "Reset",
   "config.oelib.search": "Search...",
   "config.oelib.done": "Save and exit",
+
+  "config.oelib.festival_toast.title": "Festival Blessings Settings",
+  "config.oelib.dev_features.title": "Developer Features Settings",
   "config.oelib.festival_toast.enabled": "Enable Festival Blessings",
   "config.oelib.festival_toast.enabled.tooltip": "Enable festival blessing toasts",
   "config.oelib.festival_toast.chineseFestivalsOnlyForChineseLanguage": "Chinese festivals only under Chinese language",
@@ -23,13 +25,16 @@
   "config.oelib.dev_features.testEnum.TEST2": "Enum Test 2",
   "config.oelib.dev_features.enableExampleContent": "Enable Example Content",
   "config.oelib.dev_features.enableExampleContent.tooltip": "For internal testing purposes",
-  "overlay.exampletoast.chongyang.title": "Ascending with the Clouds · Double Ninth Festival",
-  "overlay.exampletoast.chongyang.line1": "May your spirit rise with the autumn heights, clear as the endless sky.",
-  "overlay.exampletoast.chongyang.line2": "The Tower of Sighs team walks beside you—near in heart, even when far apart.",
+
+  "overlay.exampletoast.chongyang.title": "Cloud-Ascent · Double Ninth",
+  "overlay.exampletoast.chongyang.line1": "May your spirit rise with the sky.",
+  "overlay.exampletoast.chongyang.line2": "The Tower of Sighs walks with you.",
+
   "overlay.exampletoast.new_year.title": "A Fresh Dawn · Spring Festival",
-  "overlay.exampletoast.new_year.line1": "Wishing you joy that lingers, peace that deepens, and a year full of light.",
-  "overlay.exampletoast.new_year.line2": "The Tower of Sighs team celebrates with you—in blocky worlds and beyond.",
-  "overlay.exampletoast.valentine.title": "Hearts Afloat · Valentine's Day",
-  "overlay.exampletoast.valentine.line1": "May your heart be gently seen, warmly held, never left behind.",
-  "overlay.exampletoast.valentine.line2": "Whether solo or side by side, the Tower of Sighs team walks with you."
+  "overlay.exampletoast.new_year.line1": "Wishing you peace and endless light.",
+  "overlay.exampletoast.new_year.line2": "The Tower of Sighs celebrates with you.",
+
+  "overlay.exampletoast.valentine.title": "Hearts Afloat · Valentine's",
+  "overlay.exampletoast.valentine.line1": "May your heart be warmly held.",
+  "overlay.exampletoast.valentine.line2": "The Tower of Sighs walks with you."
 }
