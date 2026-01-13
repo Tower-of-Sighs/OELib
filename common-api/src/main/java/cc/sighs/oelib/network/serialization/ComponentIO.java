@@ -1,6 +1,12 @@
 package cc.sighs.oelib.network.serialization;
 
-import it.unimi.dsi.fastutil.ints.IntList;
+import com.mojang.datafixers.util.Either;
+import it.unimi.dsi.fastutil.ints.*;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
+import it.unimi.dsi.fastutil.objects.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.Registry;
@@ -9,11 +15,13 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import org.apache.commons.lang3.tuple.Triple;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -22,8 +30,10 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.security.PublicKey;
 import java.time.Instant;
 import java.util.*;
+import java.util.function.Supplier;
 
 /**
  * Low-level I/O operations for common component types.
@@ -70,6 +80,7 @@ final class ComponentIO {
             case DATE              -> { return buf.readDate(); }
             case INSTANT           -> { return buf.readInstant(); }
             case BITSET            -> { return buf.readBitSet(); }
+            case PUBLIC_KEY        -> { return buf.readPublicKey(); }
             case INT_LIST          -> { return buf.readIntIdList(); }
             case BLOCK_POS         -> { return buf.readBlockPos(); }
             case CHUNK_POS         -> { return buf.readChunkPos(); }
@@ -83,15 +94,41 @@ final class ComponentIO {
             case COMPOUND_TAG      -> { return buf.readNbt(); }
             case TAG               -> { return buf.readNbt(NbtAccounter.unlimitedHeap()); }
             case ENUM              -> { return buf.readEnum(plan.enumClass); }
+            case RECORD            -> { return plan.codec.decode(buf); }
+            case PAIR              -> {
+                Object left = decodeWithPlan(buf, plan.key, depth + 1, name, owner);
+                Object right = decodeWithPlan(buf, plan.value, depth + 1, name, owner);
+                if (plan.pairRawClass == com.mojang.datafixers.util.Pair.class) {
+                    return com.mojang.datafixers.util.Pair.of(left, right);
+                } else {
+                    return org.apache.commons.lang3.tuple.Pair.of(left, right);
+                }
+            }
+            case EITHER            -> {
+                boolean isLeft = buf.readBoolean();
+                if (isLeft) {
+                    Object left = decodeWithPlan(buf, plan.key, depth + 1, name, owner);
+                    return Either.left(left);
+                } else {
+                    Object right = decodeWithPlan(buf, plan.value, depth + 1, name, owner);
+                    return Either.right(right);
+                }
+            }
+            case TRIPLE            -> {
+                Object left = decodeWithPlan(buf, plan.key, depth + 1, name, owner);
+                Object middle = decodeWithPlan(buf, plan.middle, depth + 1, name, owner);
+                Object right = decodeWithPlan(buf, plan.value, depth + 1, name, owner);
+                return Triple.of(left, middle, right);
+            }
             case OPTIONAL          -> {
                 boolean present = buf.readBoolean();
                 if (!present) return Optional.empty();
                 Object v = decodeWithPlan(buf, plan.element, depth + 1, name, owner);
                 return Optional.of(v);
             }
-            case LIST              -> { return readListGeneric(buf, plan.element, depth, name, owner); }
-            case SET               -> { return readSetGeneric(buf, plan.element, depth, name, owner); }
-            case MAP               -> { return readMapGeneric(buf, plan.key, plan.value, depth, name, owner); }
+            case LIST              -> { return readListGeneric(buf, plan, depth, name, owner); }
+            case SET               -> { return readSetGeneric(buf, plan, depth, name, owner); }
+            case MAP               -> { return readMapGeneric(buf, plan, depth, name, owner); }
             case ENUM_SET          -> { return readEnumSetGeneric(buf, plan.enumClass); }
             default                -> throw new IllegalStateException("Unsupported plan for record " + owner.getName() + "#" + name);
         }
@@ -129,6 +166,7 @@ final class ComponentIO {
             case DATE              -> buf.writeDate((Date) value);
             case INSTANT           -> buf.writeInstant((Instant) value);
             case BITSET            -> buf.writeBitSet((BitSet) value);
+            case PUBLIC_KEY        -> buf.writePublicKey((PublicKey) value);
             case INT_LIST          -> buf.writeIntIdList((IntList) value);
             case BLOCK_POS         -> buf.writeBlockPos((BlockPos) value);
             case CHUNK_POS         -> buf.writeChunkPos((ChunkPos) value);
@@ -142,6 +180,38 @@ final class ComponentIO {
             case COMPOUND_TAG      -> buf.writeNbt((CompoundTag) value);
             case TAG               -> buf.writeNbt((Tag) value);
             case ENUM              -> buf.writeEnum((Enum<?>) value);
+            case RECORD            -> plan.codec.encode(buf, value);
+            case PAIR              -> {
+                Object left;
+                Object right;
+                if (value instanceof com.mojang.datafixers.util.Pair<?, ?> p) {
+                    left = p.getFirst();
+                    right = p.getSecond();
+                } else if (value instanceof org.apache.commons.lang3.tuple.Pair<?, ?> p) {
+                    left = p.getLeft();
+                    right = p.getRight();
+                } else {
+                    throw new IllegalStateException("Pair value type not supported: " + value.getClass().getName());
+                }
+                encodeWithPlan(buf, plan.key, left, depth + 1, name, owner);
+                encodeWithPlan(buf, plan.value, right, depth + 1, name, owner);
+            }
+            case EITHER            -> {
+                Either<?, ?> e = (Either<?, ?>) value;
+                if (e.left().isPresent()) {
+                    buf.writeBoolean(true);
+                    encodeWithPlan(buf, plan.key, e.left().get(), depth + 1, name, owner);
+                } else {
+                    buf.writeBoolean(false);
+                    encodeWithPlan(buf, plan.value, e.right().orElse(null), depth + 1, name, owner);
+                }
+            }
+            case TRIPLE            -> {
+                Triple<?, ?, ?> t = (Triple<?, ?, ?>) value;
+                encodeWithPlan(buf, plan.key, t.getLeft(), depth + 1, name, owner);
+                encodeWithPlan(buf, plan.middle, t.getMiddle(), depth + 1, name, owner);
+                encodeWithPlan(buf, plan.value, t.getRight(), depth + 1, name, owner);
+            }
             case OPTIONAL          -> {
                 Optional<?> opt = (Optional<?>) value;
                 boolean present = opt != null && opt.isPresent();
@@ -161,6 +231,11 @@ final class ComponentIO {
      * Builds a plan and binds direct read/write MethodHandles at initialization.
      */
     static ComponentPlan planOf(Class<?> rawType, Type genericType) {
+        if (rawType.isRecord()) {
+            ComponentPlan p = new ComponentPlan(Kind.RECORD);
+            p.codec = (StreamCodec<RegistryFriendlyByteBuf, Object>) NetworkSerialization.autoCodec((Class) rawType);
+            return p;
+        }
         if (rawType == int.class || rawType == Integer.class) return bindStatic(new ComponentPlan(Kind.INT), "readVarIntW", int.class, "writeVarIntW", int.class);
         if (rawType == long.class || rawType == Long.class) return bindStatic(new ComponentPlan(Kind.LONG), "readVarLongW", long.class, "writeVarLongW", long.class);
         if (rawType == boolean.class || rawType == Boolean.class) return bindStatic(new ComponentPlan(Kind.BOOLEAN), "readBooleanW", boolean.class, "writeBooleanW", boolean.class);
@@ -176,6 +251,7 @@ final class ComponentIO {
         if (rawType == Date.class) return bindStatic(new ComponentPlan(Kind.DATE), "readDateW", Date.class, "writeDateW", Date.class);
         if (rawType == Instant.class) return bindStatic(new ComponentPlan(Kind.INSTANT), "readInstantW", Instant.class, "writeInstantW", Instant.class);
         if (rawType == BitSet.class) return bindStatic(new ComponentPlan(Kind.BITSET), "readBitSetW", BitSet.class, "writeBitSetW", BitSet.class);
+        if (rawType == PublicKey.class) return bindStatic(new ComponentPlan(Kind.PUBLIC_KEY), "readPublicKeyW", PublicKey.class, "writePublicKeyW", PublicKey.class);
 
         if (rawType == IntList.class) return bindStatic(new ComponentPlan(Kind.INT_LIST), "readIntIdListW", IntList.class, "writeIntIdListW", IntList.class);
         if (rawType == ResourceKey.class) return bindStatic(new ComponentPlan(Kind.RESOURCE_KEY), "readRegistryKeyW", ResourceKey.class, "writeResourceKeyW", ResourceKey.class);
@@ -217,10 +293,46 @@ final class ComponentIO {
                 return p;
             }
             if (raw instanceof Class<?> rawClass) {
+                if (rawClass == com.mojang.datafixers.util.Pair.class || rawClass == org.apache.commons.lang3.tuple.Pair.class) {
+                    var args = pt.getActualTypeArguments();
+                    var leftType = args[0];
+                    var rightType = args[1];
+                    ComponentPlan p = new ComponentPlan(Kind.PAIR);
+                    p.key = planOf(erasureOf(leftType), leftType);
+                    p.value = planOf(erasureOf(rightType), rightType);
+                    p.pairRawClass = rawClass;
+                    return p;
+                }
+                if (rawClass == Either.class) {
+                    var args = pt.getActualTypeArguments();
+                    var leftType = args[0];
+                    var rightType = args[1];
+                    ComponentPlan p = new ComponentPlan(Kind.EITHER);
+                    p.key = planOf(erasureOf(leftType), leftType);
+                    p.value = planOf(erasureOf(rightType), rightType);
+                    return p;
+                }
+                if (rawClass == Triple.class) {
+                    var args = pt.getActualTypeArguments();
+                    var leftType = args[0];
+                    var midType = args[1];
+                    var rightType = args[2];
+                    ComponentPlan p = new ComponentPlan(Kind.TRIPLE);
+                    p.key = planOf(erasureOf(leftType), leftType);
+                    p.middle = planOf(erasureOf(midType), midType);
+                    p.value = planOf(erasureOf(rightType), rightType);
+                    return p;
+                }
                 if (List.class.isAssignableFrom(rawClass)) {
                     var elemType = pt.getActualTypeArguments()[0];
                     var elemRaw = erasureOf(elemType);
                     ComponentPlan p = new ComponentPlan(Kind.LIST);
+                    p.rawType = rawClass;
+                    if (rawClass == ObjectList.class) {
+                        p.collectionFactory = ObjectArrayList::new;
+                    } else {
+                        p.collectionFactory = ArrayList::new;
+                    }
                     p.element = planOf(elemRaw, elemType);
                     return p;
                 }
@@ -228,6 +340,16 @@ final class ComponentIO {
                     var elemType = pt.getActualTypeArguments()[0];
                     var elemRaw = erasureOf(elemType);
                     ComponentPlan p = new ComponentPlan(Kind.SET);
+                    p.rawType = rawClass;
+                    if (rawClass == ObjectSet.class) {
+                        p.collectionFactory = ObjectOpenHashSet::new;
+                    } else if (rawClass == IntSet.class) {
+                        p.collectionFactory = IntOpenHashSet::new;
+                    } else if (rawClass == LongSet.class) {
+                        p.collectionFactory = LongOpenHashSet::new;
+                    } else {
+                        p.collectionFactory = LinkedHashSet::new;
+                    }
                     p.element = planOf(elemRaw, elemType);
                     return p;
                 }
@@ -239,6 +361,7 @@ final class ComponentIO {
                         var keyRaw = erasureOf(keyType);
                         var valueRaw = erasureOf(valueType);
                         ComponentPlan p = new ComponentPlan(Kind.MAP);
+                        p.rawType = rawClass;
                         p.key = planOf(keyRaw, keyType);
                         p.value = planOf(valueRaw, valueType);
                         return p;
@@ -281,24 +404,27 @@ final class ComponentIO {
         buf.writeEnumSet(set, ec);
     }
 
-    static <T> List<T> readListGeneric(RegistryFriendlyByteBuf buf, ComponentPlan elemPlan, int depth, String name, Class<?> owner) {
-        return buf.readList(
-                b -> (T) decodeWithPlan((RegistryFriendlyByteBuf) b, elemPlan, depth + 1, name, owner)
+    static <T> List<T> readListGeneric(RegistryFriendlyByteBuf buf, ComponentPlan containerPlan, int depth, String name, Class<?> owner) {
+        var base = buf.readList(
+                b -> (T) decodeWithPlan((RegistryFriendlyByteBuf) b, containerPlan.element, depth + 1, name, owner)
         );
+        return (List<T>) convertListToRawType(base, containerPlan.rawType);
     }
 
-    static <T> Set<T> readSetGeneric(RegistryFriendlyByteBuf buf, ComponentPlan elemPlan, int depth, String name, Class<?> owner) {
-        return buf.readCollection(
+    static <T> Set<T> readSetGeneric(RegistryFriendlyByteBuf buf, ComponentPlan containerPlan, int depth, String name, Class<?> owner) {
+        Set<T> base = buf.readCollection(
                 LinkedHashSet::new,
-                b -> (T) decodeWithPlan((RegistryFriendlyByteBuf) b, elemPlan, depth + 1, name, owner)
+                b -> (T) decodeWithPlan((RegistryFriendlyByteBuf) b, containerPlan.element, depth + 1, name, owner)
         );
+        return (Set<T>) convertSetToRawType(base, containerPlan.rawType);
     }
 
-    static <K, V> Map<K, V> readMapGeneric(RegistryFriendlyByteBuf buf, ComponentPlan keyPlan, ComponentPlan valuePlan, int depth, String name, Class<?> owner) {
-        return buf.readMap(
-                b -> (K) decodeWithPlan((RegistryFriendlyByteBuf) b, keyPlan, depth + 1, name, owner),
-                b -> (V) decodeWithPlan((RegistryFriendlyByteBuf) b, valuePlan, depth + 1, name, owner)
+    static <K, V> Map<K, V> readMapGeneric(RegistryFriendlyByteBuf buf, ComponentPlan containerPlan, int depth, String name, Class<?> owner) {
+        var base = buf.readMap(
+                b -> (K) decodeWithPlan((RegistryFriendlyByteBuf) b, containerPlan.key, depth + 1, name, owner),
+                b -> (V) decodeWithPlan((RegistryFriendlyByteBuf) b, containerPlan.value, depth + 1, name, owner)
         );
+        return (Map<K, V>) convertMapToRawType(base, containerPlan.rawType);
     }
 
     static void writeCollectionGeneric(RegistryFriendlyByteBuf buf, Collection<?> collection, ComponentPlan elemPlan, int depth, String name, Class<?> owner) {
@@ -314,28 +440,84 @@ final class ComponentIO {
         );
     }
 
-    enum Kind {
-        INT, LONG, BOOLEAN, FLOAT, DOUBLE, BYTE, SHORT,
-        STRING, UUID, BYTE_ARRAY, INT_ARRAY, LONG_ARRAY, DATE, INSTANT, BITSET,
-        BLOCK_POS, CHUNK_POS, SECTION_POS, GLOBAL_POS, VEC3, VECTOR3F, QUATERNIONF, RESOURCE_LOCATION, BLOCK_HIT_RESULT,
-        COMPOUND_TAG, TAG, ENUM,
-        OPTIONAL, LIST, SET, MAP, ENUM_SET,
-        INT_LIST, RESOURCE_KEY
-    }
-
-    static final class ComponentPlan {
-        final Kind kind;
-        ComponentPlan element;
-        ComponentPlan key;
-        ComponentPlan value;
-        Class<? extends Enum> enumClass;
-        MethodHandle readHandle;
-        MethodHandle writeHandle;
-
-        ComponentPlan(Kind k) {
-            this.kind = k;
+    static Map<?, ?> convertMapToRawType(Map<?, ?> base, Class<?> rawType) {
+        if (rawType == null) return base;
+        if (rawType == Object2IntMap.class) {
+            Object2IntMap<Object> m = new Object2IntOpenHashMap<>();
+            for (var e : base.entrySet()) {
+                m.put(e.getKey(), ((Number) e.getValue()).intValue());
+            }
+            return m;
         }
+        if (rawType == Object2LongMap.class) {
+            Object2LongMap<Object> m = new Object2LongOpenHashMap<>();
+            for (var e : base.entrySet()) {
+                m.put(e.getKey(), ((Number) e.getValue()).longValue());
+            }
+            return m;
+        }
+        if (rawType == Object2ObjectMap.class) {
+            Object2ObjectMap<Object, Object> m = new Object2ObjectOpenHashMap<>();
+            m.putAll(base);
+            return m;
+        }
+        if (rawType == Int2ObjectMap.class) {
+            Int2ObjectMap<Object> m = new Int2ObjectOpenHashMap<>();
+            for (var e : base.entrySet()) {
+                m.put(((Number) e.getKey()).intValue(), e.getValue());
+            }
+            return m;
+        }
+        if (rawType == Int2IntMap.class) {
+            Int2IntMap m = new Int2IntOpenHashMap();
+            for (var e : base.entrySet()) {
+                m.put(((Number) e.getKey()).intValue(), ((Number) e.getValue()).intValue());
+            }
+            return m;
+        }
+        if (rawType == Long2ObjectMap.class) {
+            Long2ObjectMap<Object> m = new Long2ObjectOpenHashMap<>();
+            for (var e : base.entrySet()) {
+                m.put(((Number) e.getKey()).longValue(), e.getValue());
+            }
+            return m;
+        }
+        return base;
     }
+
+    static List<?> convertListToRawType(List<?> base, Class<?> rawType) {
+        if (rawType == null) return base;
+        if (rawType == ObjectList.class) {
+            return new ObjectArrayList<>(base);
+        }
+        return base;
+    }
+
+    static Set<?> convertSetToRawType(Set<?> base, Class<?> rawType) {
+        if (rawType == null) return base;
+        if (rawType == ObjectSet.class) {
+            return new ObjectOpenHashSet<>(base);
+        }
+        if (rawType == IntSet.class) {
+            IntOpenHashSet set = new IntOpenHashSet();
+            for (var e : base) {
+                set.add(((Number) e).intValue());
+            }
+            return set;
+        }
+        if (rawType == LongSet.class) {
+            LongOpenHashSet set = new LongOpenHashSet();
+            for (var e : base) {
+                set.add(((Number) e).longValue());
+            }
+            return set;
+        }
+        return base;
+    }
+
+    static PublicKey     readPublicKeyW      (RegistryFriendlyByteBuf buf) { return buf.readPublicKey(); }
+
+    static void          writePublicKeyW     (RegistryFriendlyByteBuf buf, PublicKey v) { buf.writePublicKey(v); }
 
     private static ComponentPlan bindStatic(ComponentPlan p, String readName, Class<?> readType, String writeName, Class<?> writeArgType) {
         try {
@@ -378,6 +560,33 @@ final class ComponentIO {
     static void          writeInstantW       (RegistryFriendlyByteBuf buf, Instant v) { buf.writeInstant(v); }
     static BitSet        readBitSetW         (RegistryFriendlyByteBuf buf) { return buf.readBitSet(); }
     static void          writeBitSetW        (RegistryFriendlyByteBuf buf, BitSet v) { buf.writeBitSet(v); }
+    enum Kind {
+        INT, LONG, BOOLEAN, FLOAT, DOUBLE, BYTE, SHORT,
+        STRING, UUID, BYTE_ARRAY, INT_ARRAY, LONG_ARRAY, DATE, INSTANT, BITSET, PUBLIC_KEY,
+        BLOCK_POS, CHUNK_POS, SECTION_POS, GLOBAL_POS, VEC3, VECTOR3F, QUATERNIONF, RESOURCE_LOCATION, BLOCK_HIT_RESULT,
+        COMPOUND_TAG, TAG, ENUM, RECORD, PAIR, EITHER, TRIPLE,
+        OPTIONAL, LIST, SET, MAP, ENUM_SET,
+        INT_LIST, RESOURCE_KEY
+    }
+
+    static final class ComponentPlan {
+        final Kind kind;
+        ComponentPlan element;
+        ComponentPlan key;
+        ComponentPlan value;
+        ComponentPlan middle;
+        Class<? extends Enum> enumClass;
+        MethodHandle readHandle;
+        MethodHandle writeHandle;
+        StreamCodec<RegistryFriendlyByteBuf, Object> codec;
+        Class<?> pairRawClass;
+        Class<?> rawType;
+        Supplier<Collection<?>> collectionFactory;
+
+        ComponentPlan(Kind k) {
+            this.kind = k;
+        }
+    }
     static BlockPos      readBlockPosW       (RegistryFriendlyByteBuf buf) { return buf.readBlockPos(); }
     static void          writeBlockPosW      (RegistryFriendlyByteBuf buf, BlockPos v) { buf.writeBlockPos(v); }
     static ChunkPos      readChunkPosW       (RegistryFriendlyByteBuf buf) { return buf.readChunkPos(); }
