@@ -14,10 +14,11 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class NetworkManagerImpl implements INetworkManager {
@@ -39,60 +40,47 @@ public class NetworkManagerImpl implements INetworkManager {
         }
     }
 
-    public static int getRegisteredPacketCount() {
-        return registeredPackets.size();
-    }
-
-    public static Set<CustomPacketPayload.Type<?>> getRegisteredPacketTypes() {
-        return new HashSet<>(registeredPackets.keySet());
-    }
-
     @SuppressWarnings("unchecked")
     private <T extends INetworkPacket<T> & CustomPacketPayload> void registerAnnotated(Class<? extends INetworkPacket<?>> rawClass, RegistrationPhase phase) {
         Class<T> clazz = (Class<T>) rawClass;
-        NetworkPacket meta = clazz.getAnnotation(NetworkPacket.class);
+        var meta = clazz.getAnnotation(NetworkPacket.class);
         if (meta == null || !clazz.isRecord()) return;
 
-        CustomPacketPayload.Type<T> type = NetworkPacketTypes.typeOf(clazz);
-        Side side = meta.side();
-        OELib.LOGGER.debug("Registering packet: {} | Phase: {} | Side: {} | Type ID: {}", clazz.getSimpleName(), phase, side, type.id());
+        var type = NetworkPacketTypes.typeOf(clazz);
+        var side = meta.side();
 
         if (phase == RegistrationPhase.COMMON) {
-            StreamCodec<RegistryFriendlyByteBuf, T> codec = NetworkSerialization.autoCodec(clazz);
-            if (!registeredPackets.containsKey(type)) {
-                if (side == Side.SERVER || side == Side.CLIENT || side == Side.BOTH) {
-                    PayloadTypeRegistry.playS2C().register(type, codec);
-                }
-                if (side == Side.SERVER || side == Side.BOTH) {
-                    PayloadTypeRegistry.playC2S().register(type, codec);
-                }
-                registeredPackets.put(type, new PacketInfo<>(type, codec));
+            var codec = NetworkSerialization.autoCodec(clazz);
+            registeredPackets.put(type, new PacketInfo<>(type, codec));
+
+            if (side == Side.CLIENT || side == Side.BOTH) {
+                PayloadTypeRegistry.playS2C().register(type, codec);
+            }
+
+            if (side == Side.SERVER || side == Side.BOTH) {
+                PayloadTypeRegistry.playC2S().register(type, codec);
             }
 
             if (side == Side.SERVER || side == Side.BOTH) {
                 ServerPlayNetworking.registerGlobalReceiver(type, (packet, context) ->
                         context.server().execute(() -> packet.handle(new FabricServerNetworkContext(context))));
             }
-        } else {
+
+            OELib.LOGGER.info("Common registration for {}: Side={}, TypeID={}", clazz.getSimpleName(), side, type.id());
+
+        } else if (phase == RegistrationPhase.CLIENT) {
             if (side == Side.CLIENT || side == Side.BOTH) {
-                PacketInfo<T> info = (PacketInfo<T>) registeredPackets.get(type);
-                if (info == null) {
-                    var codec = NetworkSerialization.autoCodec(clazz);
-                    PayloadTypeRegistry.playS2C().register(type, codec);
-                    PayloadTypeRegistry.playC2S().register(type, codec);
-                    registeredPackets.put(type, new PacketInfo<>(type, codec));
-                }
                 ClientPlayNetworking.registerGlobalReceiver(type, (packet, context) ->
                         context.client().execute(() -> packet.handle(new FabricClientNetworkContext(context))));
+
+                OELib.LOGGER.info("Client receiver registered for: {}", clazz.getSimpleName());
             }
         }
     }
 
     @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToServer(T packet) {
-        if (ClientPlayNetworking.canSend(packet.type().id())) {
-            ClientPlayNetworking.send(packet);
-        }
+        ClientPlayNetworking.send(packet);
     }
 
     @Override
@@ -108,13 +96,16 @@ public class NetworkManagerImpl implements INetworkManager {
 
     @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToAll(T packet) {
-        MinecraftServer server = DataManager.getCurrentServer();
+        var server = DataManager.getCurrentServer();
         if (server == null) return;
         int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
+        var players = PlayerLookup.all(server);
+        if (players.isEmpty()) return;
+
         if (threshold > 0) {
-            sendWithChunking(packet, PlayerLookup.all(server), threshold);
+            sendWithChunking(packet, players, threshold);
         } else {
-            for (ServerPlayer player : PlayerLookup.all(server)) {
+            for (ServerPlayer player : players) {
                 ServerPlayNetworking.send(player, packet);
             }
         }
@@ -128,10 +119,7 @@ public class NetworkManagerImpl implements INetworkManager {
         var firstPlayer = players.iterator().next();
         var registries = firstPlayer.registryAccess();
 
-        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(
-                Unpooled.buffer(),
-                registries
-        );
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
 
         info.codec().encode(buf, packet);
         byte[] data = new byte[buf.readableBytes()];
@@ -140,20 +128,17 @@ public class NetworkManagerImpl implements INetworkManager {
 
         if (data.length <= threshold) {
             players.forEach(p -> ServerPlayNetworking.send(p, packet));
-            OELib.LOGGER.debug("Sent packet {} without chunking ({} bytes)", packet.type().id(), data.length);
         } else {
             NetworkUtil.sendChunkedPacket(data, packet.getClass().getName(), players, threshold);
         }
     }
 
     private enum RegistrationPhase {
-        COMMON,
-        CLIENT
+        COMMON, CLIENT
     }
 
     private record PacketInfo<T extends INetworkPacket<T> & CustomPacketPayload>(
             CustomPacketPayload.Type<T> type,
             StreamCodec<? super RegistryFriendlyByteBuf, T> codec
-    ) {
-    }
+    ) {}
 }

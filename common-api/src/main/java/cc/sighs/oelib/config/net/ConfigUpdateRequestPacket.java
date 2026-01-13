@@ -20,18 +20,17 @@ public record ConfigUpdateRequestPacket(
 ) implements INetworkPacket<ConfigUpdateRequestPacket> {
     @Override
     public void handle(INetworkContext context) {
-        if (!context.isServerSide()) {
-            return;
-        }
-        var player = context.sender();
-        if (player == null) {
-            return;
-        }
-        var unitOpt = ConfigManager.get(configId);
-        if (unitOpt.isEmpty()) {
-            OELib.LOGGER.warn("Config {} not found for update request", configId);
-            return;
-        }
-        ConfigIOUtil.applyUpdate(unitOpt.get(), player, payload, format, save);
+        context.enqueueWork(() -> {
+            var player = context.sender();
+            if (player == null) {
+                return;
+            }
+            var unitOpt = ConfigManager.get(configId);
+            if (unitOpt.isEmpty()) {
+                OELib.LOGGER.warn("Config {} not found for update request", configId);
+                return;
+            }
+            ConfigIOUtil.applyUpdate(unitOpt.get(), player, payload, format, save);
+        });
     }
 }

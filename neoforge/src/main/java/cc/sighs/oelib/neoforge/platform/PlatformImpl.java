@@ -1,12 +1,17 @@
 package cc.sighs.oelib.neoforge.platform;
 
 import cc.sighs.oelib.platform.IPlatform;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.loading.FMLPaths;
 
 import java.nio.file.Path;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Objects;
 
 public class PlatformImpl implements IPlatform {
     @Override
@@ -42,5 +47,16 @@ public class PlatformImpl implements IPlatform {
     @Override
     public boolean isModLoaded(String modId) {
         return ModList.get().isLoaded(modId);
+    }
+
+    @Override
+    public Collection<ServerPlayer> getAllPlayers(MinecraftServer server) {
+        Objects.requireNonNull(server, "The server cannot be null");
+
+        if (server.getPlayerList() != null) {
+            return Collections.unmodifiableCollection(server.getPlayerList().getPlayers());
+        }
+
+        return Collections.emptyList();
     }
 }

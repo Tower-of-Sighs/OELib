@@ -32,31 +32,30 @@ public record OpenGuiPacket(
 
     @Override
     public void handle(INetworkContext context) {
-        if (!context.isServerSide()) {
-            return;
-        }
-        ServerPlayer player = context.sender();
-        if (player != null) {
-            double distanceSq = player.distanceToSqr(
-                    pos.getX() + 0.5,
-                    pos.getY() + 0.5,
-                    pos.getZ() + 0.5
-            );
+        context.enqueueWork(() -> {
+            ServerPlayer player = context.sender();
+            if (player != null) {
+                double distanceSq = player.distanceToSqr(
+                        pos.getX() + 0.5,
+                        pos.getY() + 0.5,
+                        pos.getZ() + 0.5
+                );
 
-            if (distanceSq <= 4.0 &&
-                    player.level().getBlockState(pos).getBlock() instanceof ExampleBlock) {
-                player.openMenu(new FluidRenderExampleMenu.Provider(pos));
-                String enchantmentName = "unknown";
-                if (enchantment != null) {
-                    enchantmentName = enchantment.unwrapKey()
-                            .map(k -> k.location().toString())
-                            .orElse("unregistered");
-                } else {
-                    OELib.LOGGER.warn("Received OpenGuiPacket with null enchantment!");
+                if (distanceSq <= 4.0 &&
+                        player.level().getBlockState(pos).getBlock() instanceof ExampleBlock) {
+                    player.openMenu(new FluidRenderExampleMenu.Provider(pos));
+                    String enchantmentName = "unknown";
+                    if (enchantment != null) {
+                        enchantmentName = enchantment.unwrapKey()
+                                .map(k -> k.location().toString())
+                                .orElse("unregistered");
+                    } else {
+                        OELib.LOGGER.warn("Received OpenGuiPacket with null enchantment!");
+                    }
+
+                    OELib.LOGGER.info("Open fluid example: {} with enchantment {}", title.getString(), enchantmentName);
                 }
-
-                OELib.LOGGER.info("Open fluid example: {} with enchantment {}", title.getString(), enchantmentName);
             }
-        }
+        });
     }
 }

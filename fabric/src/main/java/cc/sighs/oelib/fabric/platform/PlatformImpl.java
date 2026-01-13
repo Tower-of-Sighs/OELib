@@ -2,9 +2,13 @@ package cc.sighs.oelib.fabric.platform;
 
 import cc.sighs.oelib.platform.IPlatform;
 import net.fabricmc.api.EnvType;
+import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.nio.file.Path;
+import java.util.Collection;
 
 public class PlatformImpl implements IPlatform {
     @Override
@@ -40,5 +44,10 @@ public class PlatformImpl implements IPlatform {
     @Override
     public boolean isModLoaded(String modId) {
         return FabricLoader.getInstance().isModLoaded(modId);
+    }
+
+    @Override
+    public Collection<ServerPlayer> getAllPlayers(MinecraftServer server) {
+        return PlayerLookup.all(server);
     }
 }

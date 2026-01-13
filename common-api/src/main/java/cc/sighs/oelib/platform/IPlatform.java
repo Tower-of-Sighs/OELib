@@ -1,6 +1,10 @@
 package cc.sighs.oelib.platform;
 
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+
 import java.nio.file.Path;
+import java.util.Collection;
 
 public interface IPlatform {
     Path getConfigPath();
@@ -16,4 +20,6 @@ public interface IPlatform {
     boolean isNeoForge();
 
     boolean isModLoaded(String modId);
+
+    Collection<ServerPlayer> getAllPlayers(MinecraftServer server);
 }

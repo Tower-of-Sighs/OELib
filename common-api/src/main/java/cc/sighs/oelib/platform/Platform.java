@@ -1,6 +1,10 @@
 package cc.sighs.oelib.platform;
 
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.ServiceLoader;
 
 public class Platform {
@@ -34,5 +38,9 @@ public class Platform {
 
     public static boolean isModLoaded(String modId) {
         return INSTANCE.isModLoaded(modId);
+    }
+
+    public static Collection<ServerPlayer> getAllPlayers(MinecraftServer server) {
+        return INSTANCE.getAllPlayers(server);
     }
 }

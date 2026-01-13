@@ -7,6 +7,7 @@ import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import cc.sighs.oelib.config.net.ConfigSyncPacket;
 import cc.sighs.oelib.config.util.ConfigSerializationUtil;
+import cc.sighs.oelib.data.DataManager;
 import cc.sighs.oelib.network.api.NetworkManager;
 import cc.sighs.oelib.platform.Platform;
 import net.minecraft.resources.ResourceLocation;
@@ -67,9 +68,11 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
                 var id = unit.id();
                 var payloadOpt = encodeToString(id);
                 payloadOpt.ifPresent(encoded -> {
-                    NetworkManager.sendToAll(
-                            new ConfigSyncPacket(id, encoded.payload(), encoded.format())
-                    );
+                    if (DataManager.getServer() != null && !Platform.getAllPlayers(DataManager.getServer()).isEmpty()) {
+                        NetworkManager.sendToAll(new ConfigSyncPacket(unit.id(), encoded.payload(), encoded.format()));
+                    } else {
+                        OELib.LOGGER.debug("Skipping config sync for {}: No players online or server starting.", unit.id());
+                    }
                 });
             }
         }
