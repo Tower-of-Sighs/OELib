@@ -305,6 +305,7 @@ public class ConfigScreen extends Screen {
             renderPanorama(guiGraphics, partialTick);
         }
         this.renderBlurredBackground(partialTick);
+        guiGraphics.fill(0, 0, this.width, this.height, 0x80000000);
     }
 
     private void renderNoneBg(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
