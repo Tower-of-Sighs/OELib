@@ -303,70 +303,11 @@ final class ComponentIO {
             p.value = planOf(Integer.class, Integer.class);
             return p;
         }
-        if (rawType == Object2IntMap.class) {
-            ComponentPlan p = new ComponentPlan(Kind.MAP);
-            p.rawType = Object2IntMap.class;
-            if (genericType instanceof ParameterizedType pt && pt.getActualTypeArguments().length >= 1) {
-                var keyType = pt.getActualTypeArguments()[0];
-                var keyRaw = erasureOf(keyType);
-                p.key = planOf(keyRaw, keyType);
-            } else {
-                p.key = planOf(String.class, String.class);
-            }
-            p.value = planOf(Integer.class, Integer.class);
-            return p;
-        }
-        if (rawType == Object2LongMap.class) {
-            ComponentPlan p = new ComponentPlan(Kind.MAP);
-            p.rawType = Object2LongMap.class;
-            if (genericType instanceof ParameterizedType pt && pt.getActualTypeArguments().length >= 1) {
-                var keyType = pt.getActualTypeArguments()[0];
-                var keyRaw = erasureOf(keyType);
-                p.key = planOf(keyRaw, keyType);
-            } else {
-                p.key = planOf(String.class, String.class);
-            }
-            p.value = planOf(Long.class, Long.class);
-            return p;
-        }
-        if (rawType == Object2ObjectMap.class) {
-            ComponentPlan p = new ComponentPlan(Kind.MAP);
-            p.rawType = Object2ObjectMap.class;
-            if (genericType instanceof ParameterizedType pt && pt.getActualTypeArguments().length >= 2) {
-                var keyType = pt.getActualTypeArguments()[0];
-                var valType = pt.getActualTypeArguments()[1];
-                p.key = planOf(erasureOf(keyType), keyType);
-                p.value = planOf(erasureOf(valType), valType);
-            } else {
-                p.key = planOf(String.class, String.class);
-                p.value = planOf(String.class, String.class);
-            }
-            return p;
-        }
-        if (rawType == Int2ObjectMap.class) {
-            ComponentPlan p = new ComponentPlan(Kind.MAP);
-            p.rawType = Int2ObjectMap.class;
-            p.key = planOf(Integer.class, Integer.class);
-            if (genericType instanceof ParameterizedType pt && pt.getActualTypeArguments().length >= 1) {
-                var valType = pt.getActualTypeArguments()[0];
-                p.value = planOf(erasureOf(valType), valType);
-            } else {
-                p.value = planOf(String.class, String.class);
-            }
-            return p;
-        }
-        if (rawType == Long2ObjectMap.class) {
-            ComponentPlan p = new ComponentPlan(Kind.MAP);
-            p.rawType = Long2ObjectMap.class;
-            p.key = planOf(Long.class, Long.class);
-            if (genericType instanceof ParameterizedType pt && pt.getActualTypeArguments().length >= 1) {
-                var valType = pt.getActualTypeArguments()[0];
-                p.value = planOf(erasureOf(valType), valType);
-            } else {
-                p.value = planOf(String.class, String.class);
-            }
-            return p;
-        }
+        if (rawType == Object2IntMap.class) return planMap(rawType, genericType, String.class, Integer.class);
+        if (rawType == Object2LongMap.class) return planMap(rawType, genericType, String.class, Long.class);
+        if (rawType == Object2ObjectMap.class) return planMap(rawType, genericType, String.class, String.class);
+        if (rawType == Int2ObjectMap.class) return planMap(rawType, genericType, Integer.class, String.class);
+        if (rawType == Long2ObjectMap.class) return planMap(rawType, genericType, Long.class, String.class);
 
         if (genericType instanceof ParameterizedType pt) {
             var raw = pt.getRawType();
@@ -466,6 +407,34 @@ final class ComponentIO {
         }
 
         throw new IllegalStateException("Unsupported type " + rawType.getName());
+    }
+
+    private static ComponentPlan planMap(Class<?> rawType, Type genericType, Class<?> defaultKey, Class<?> defaultValue) {
+        ComponentPlan p = new ComponentPlan(Kind.MAP);
+        p.rawType = rawType;
+
+        var typeArgs = (genericType instanceof ParameterizedType pt) ? pt.getActualTypeArguments() : new Type[0];
+
+        if (rawType == Int2ObjectMap.class || rawType == Int2IntMap.class) {
+            p.key = planOf(Integer.class, Integer.class);
+        } else if (rawType == Long2ObjectMap.class) {
+            p.key = planOf(Long.class, Long.class);
+        } else {
+            Type keyType = (typeArgs.length >= 1) ? typeArgs[0] : defaultKey;
+            p.key = planOf(erasureOf(keyType), keyType);
+        }
+
+        if (rawType == Object2IntMap.class) {
+            p.value = planOf(Integer.class, Integer.class);
+        } else if (rawType == Object2LongMap.class) {
+            p.value = planOf(Long.class, Long.class);
+        } else {
+            int valIdx = (rawType == Object2ObjectMap.class) ? 1 : 0;
+            Type valType = (typeArgs.length > valIdx) ? typeArgs[valIdx] : defaultValue;
+            p.value = planOf(erasureOf(valType), valType);
+        }
+
+        return p;
     }
 
     static Class<?> erasureOf(Type type) {

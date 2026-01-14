@@ -46,31 +46,61 @@ public interface INetworkManager {
 
     /**
      * Sends a packet to all players in the given world.
+     *
+     * @param packet packet instance
+     * @param level  target level
+     * @param <T>    packet type
      */
-    <T extends INetworkPacket<T> & CustomPacketPayload> void sendToWorld(T packet, ServerLevel world);
+    <T extends INetworkPacket<T> & CustomPacketPayload> void sendToWorld(T packet, ServerLevel level);
 
     /**
      * Sends a packet to players near a position in a world.
+     *
+     * @param packet packet instance
+     * @param level  target level
+     * @param pos    center position
+     * @param radius radius from center
+     * @param <T>    packet type
      */
-    <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNear(T packet, ServerLevel world, Vec3 pos, double radius);
+    <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNear(T packet, ServerLevel level, Vec3 pos, double radius);
 
     /**
      * Sends a packet to players near a position in a world, excluding one player.
+     *
+     * @param packet   packet instance
+     * @param level    target level
+     * @param pos      center position
+     * @param radius   radius from center
+     * @param excluded player to exclude
+     * @param <T>      packet type
      */
-    <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNearExcept(T packet, ServerLevel world, Vec3 pos, double radius, ServerPlayer excluded);
+    <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNearExcept(T packet, ServerLevel level, Vec3 pos, double radius, ServerPlayer excluded);
 
     /**
      * Sends a packet to all players tracking an entity.
+     *
+     * @param packet packet instance
+     * @param entity target entity
+     * @param <T>    packet type
      */
     <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingEntity(T packet, Entity entity);
 
     /**
      * Sends a packet to all players tracking an entity and the entity itself if a player.
+     *
+     * @param packet packet instance
+     * @param entity target entity
+     * @param <T>    packet type
      */
     <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingEntityAndSelf(T packet, Entity entity);
 
     /**
      * Sends a packet to all players tracking a chunk.
+     *
+     * @param packet   packet instance
+     * @param level    target level
+     * @param chunkPos target chunk position
+     * @param <T>      packet type
      */
     <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingChunk(T packet, ServerLevel level, ChunkPos chunkPos);
 }

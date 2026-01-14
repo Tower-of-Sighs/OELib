@@ -8,7 +8,6 @@ import net.minecraft.server.level.ServerPlayer;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 
 public class DataSyncPacket<T> {
 
@@ -39,7 +38,7 @@ public class DataSyncPacket<T> {
                     dataClass.getSimpleName(), data.size(), dataBytes.length);
 
             DataSyncChunkPacket packet = new DataSyncChunkPacket(
-                    UUID.randomUUID(), 0, 1, dataClass.getName(), dataBytes);
+                    dataClass.getName(), dataBytes);
 
             packet.sendTo(player);
 
@@ -61,7 +60,7 @@ public class DataSyncPacket<T> {
                     dataClass.getSimpleName(), data.size(), dataBytes.length);
 
             DataSyncChunkPacket packet = new DataSyncChunkPacket(
-                    UUID.randomUUID(), 0, 1, dataClass.getName(), dataBytes);
+                    dataClass.getName(), dataBytes);
 
             packet.sendToAll();
 

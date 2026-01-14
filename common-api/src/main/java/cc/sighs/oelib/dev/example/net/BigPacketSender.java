@@ -47,20 +47,20 @@ public class BigPacketSender {
         BigComponentPacket packet = createBasePacket("SmallTestString", megaBytes);
 
         long endTime = System.nanoTime();
-        OELib.LOGGER.info("[Performance] MB级数据包构建完毕。大小: ~{} MB, 耗时: {} ms",
+        OELib.LOGGER.info("[Performance] The MB-level packet is complete. Size: ~{} MB, Time: {} ms",
                 targetMb, String.format("%.3f", (endTime - startTime) / 1_000_000.0));
         return packet;
     }
 
     public static void runStressTest(ServerPlayer player, int count, int intervalMs) {
         var sentCount = new AtomicInteger(0);
-        OELib.LOGGER.info("[StressTest] 开始压力测试: 共 {} 个包, 间隔 {}ms", count, intervalMs);
+        OELib.LOGGER.info("[StressTest] Start Stress Test: {} packages in total, interval {}ms", count, intervalMs);
 
         STRESS_TESTER.scheduleAtFixedRate(() -> {
             try {
                 int current = sentCount.incrementAndGet();
                 if (current > count || player.connection.player.hasDisconnected()) {
-                    OELib.LOGGER.info("[StressTest] 测试结束或玩家断开。");
+                    OELib.LOGGER.info("[StressTest] Test ends or player disconnects.");
                     throw new CancellationException("Test Finished");
                 }
 
@@ -70,9 +70,9 @@ public class BigPacketSender {
                     player.server.execute(() -> {
                         try {
                             packet.sendTo(player);
-                            OELib.LOGGER.info("[StressTest] 已发出第 {}/{} 个包", current, count);
+                            OELib.LOGGER.info("[StressTest] The {}/{} packet has been sent", current, count);
                         } catch (Exception e) {
-                            OELib.LOGGER.error("[StressTest] 发送时发生错误:", e);
+                            OELib.LOGGER.error("[StressTest] An error occurred while sending:", e);
                         }
                     });
                 }
@@ -80,14 +80,14 @@ public class BigPacketSender {
                 throw e;
             } catch (Exception e) {
 
-                OELib.LOGGER.error("[StressTest] 异步构建任务崩溃:", e);
+                OELib.LOGGER.error("[StressTest] build task crashes:", e);
             }
         }, 0, intervalMs, TimeUnit.MILLISECONDS);
     }
 
     public static BigComponentPacket createBasePacket(String customString, byte[] customBytes) {
         long startTime = System.nanoTime();
-        OELib.LOGGER.info("[Performance] 开始构建超大数据包...");
+        OELib.LOGGER.info("[Performance] Start building very large packets...");
 
         try {
 
@@ -261,7 +261,7 @@ public class BigPacketSender {
             );
             long endTime = System.nanoTime();
             double duration = (endTime - startTime) / 1_000_000.0;
-            OELib.LOGGER.info("[Performance] 超大数据包构建完毕。耗时: {} ms, 预估字段总数: 50+",
+            OELib.LOGGER.info("[Performance] The large data packet is built. Time-consuming: {} ms, Estimated total number of fields: 50+",
                     String.format("%.3f", duration));
 
             return packet;

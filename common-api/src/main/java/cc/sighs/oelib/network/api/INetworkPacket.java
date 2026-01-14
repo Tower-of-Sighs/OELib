@@ -1,7 +1,12 @@
 package cc.sighs.oelib.network.api;
 
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Base interface for cross-platform network packets.
@@ -32,6 +37,7 @@ public interface INetworkPacket<T extends INetworkPacket<T> & CustomPacketPayloa
      * @return packet type identifier
      */
     @SuppressWarnings("unchecked")
+    @NotNull
     @Override
     default CustomPacketPayload.Type<T> type() {
         Class<?> clazz = getClass();
@@ -46,24 +52,86 @@ public interface INetworkPacket<T extends INetworkPacket<T> & CustomPacketPayloa
      *
      * @param player target player
      */
-    @SuppressWarnings("unchecked")
     default void sendTo(ServerPlayer player) {
-        NetworkManager.sendToPlayer((T) this, player);
+        NetworkManager.sendToPlayer(self(), player);
     }
 
     /**
      * Sends this packet to all players.
      */
-    @SuppressWarnings("unchecked")
     default void sendToAll() {
-        NetworkManager.sendToAll((T) this);
+        NetworkManager.sendToAll(self());
     }
 
     /**
      * Sends this packet to the logical server.
      */
-    @SuppressWarnings("unchecked")
     default void sendToServer() {
-        NetworkManager.sendToServer((T) this);
+        NetworkManager.sendToServer(self());
+    }
+
+    /**
+     * Sends this packet to all players in the given world.
+     *
+     * @param level target level
+     */
+    default void sendToWorld(ServerLevel level) {
+        NetworkManager.sendToWorld(self(), level);
+    }
+
+    /**
+     * Sends this packet to players near a position in a world.
+     *
+     * @param level  target level
+     * @param pos    center position
+     * @param radius radius from center
+     */
+    default void sendToNear(ServerLevel level, Vec3 pos, double radius) {
+        NetworkManager.sendToNear(self(), level, pos, radius);
+    }
+
+    /**
+     * Sends this packet to players near a position in a world, excluding one player.
+     *
+     * @param level    target level
+     * @param pos      center position
+     * @param radius   radius from center
+     * @param excluded player to exclude
+     */
+    default void sendToNearExcept(ServerLevel level, Vec3 pos, double radius, ServerPlayer excluded) {
+        NetworkManager.sendToNearExcept(self(), level, pos, radius, excluded);
+    }
+
+    /**
+     * Sends this packet to all players tracking an entity.
+     *
+     * @param entity target entity
+     */
+    default void sendToTrackingEntity(Entity entity) {
+        NetworkManager.sendToTrackingEntity(self(), entity);
+    }
+
+    /**
+     * Sends this packet to all players tracking an entity and the entity itself if a player.
+     *
+     * @param entity target entity
+     */
+    default void sendToTrackingEntityAndSelf(Entity entity) {
+        NetworkManager.sendToTrackingEntityAndSelf(self(), entity);
+    }
+
+    /**
+     * Sends this packet to all players tracking the given chunk.
+     *
+     * @param level    target level
+     * @param chunkPos target chunk position
+     */
+    default void sendToTrackingChunk(ServerLevel level, ChunkPos chunkPos) {
+        NetworkManager.sendToTrackingChunk(self(), level, chunkPos);
+    }
+
+    @SuppressWarnings("unchecked")
+    default T self() {
+        return (T) this;
     }
 }

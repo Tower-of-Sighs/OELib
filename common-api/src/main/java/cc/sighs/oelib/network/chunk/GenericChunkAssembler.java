@@ -1,12 +1,10 @@
 package cc.sighs.oelib.network.chunk;
 
 import cc.sighs.oelib.OELib;
-import cc.sighs.oelib.data.DataManager;
 import cc.sighs.oelib.network.api.INetworkContext;
 import cc.sighs.oelib.network.api.INetworkPacket;
 import cc.sighs.oelib.network.api.NetworkPacketTypes;
 import cc.sighs.oelib.network.serialization.NetworkSerialization;
-import cc.sighs.oelib.util.CodecUtils;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
@@ -15,10 +13,8 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
-import java.nio.charset.StandardCharsets;
 import java.util.BitSet;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -102,37 +98,6 @@ public final class GenericChunkAssembler {
             } catch (Throwable t) {
                 OELib.LOGGER.error("Failed to reassemble payload {}", typeId, t);
                 sessions.remove(sessionId);
-            }
-        }
-    }
-
-    public static void receiveChunkJson(UUID sessionId, int chunkIndex, int totalChunks, String dataClassName, byte[] chunkData) {
-        var s = sessions.computeIfAbsent(sessionId, id -> new Session(totalChunks, 0, ResourceLocation.fromNamespaceAndPath("oelib", "json")));
-        if (s.add(chunkIndex, chunkData)) {
-            CompositeByteBuf composite = null;
-            try {
-                composite = s.assembleComposite();
-                int len = composite.readableBytes();
-                byte[] all = new byte[len];
-                composite.readBytes(all);
-                String json = new String(all, StandardCharsets.UTF_8);
-                var dataClass = Class.forName(dataClassName);
-                @SuppressWarnings("unchecked")
-                Optional<Map<ResourceLocation, ?>> dataOpt =
-                        (Optional<Map<ResourceLocation, ?>>) (Object)
-                                CodecUtils.decodeFromJson((Class<Object>) dataClass, json);
-                if (dataOpt.isPresent()) {
-                    var data = dataOpt.get();
-                    DataManager.updateClientDataRaw(dataClass, data);
-                    OELib.LOGGER.info("Processed {} {} data entries", data.size(), dataClass.getSimpleName());
-                } else {
-                    OELib.LOGGER.error("Failed to parse JSON data for {} session {}", dataClassName, sessionId);
-                }
-            } catch (Throwable t) {
-                OELib.LOGGER.error("Failed to assemble JSON chunk {}", dataClassName, t);
-            } finally {
-                sessions.remove(sessionId);
-                if (composite != null) ReferenceCountUtil.release(composite);
             }
         }
     }

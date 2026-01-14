@@ -148,48 +148,25 @@ public class NetworkManagerImpl implements INetworkManager {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private <T extends INetworkPacket<T> & CustomPacketPayload> void sendWithChunking(
-            T packet,
-            Collection<ServerPlayer> players,
-            int threshold) {
-
-        if (players.isEmpty()) return;
-
-        NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
-        if (info == null) return;
-
-        var buf = NetworkUtil.createBufferFromFirstPlayer(players);
-
-        NetworkUtil.sendWithChunking(
-                packet,
-                info,
-                buf,
-                threshold,
-                () -> players.forEach(p -> ServerPlayNetworking.send(p, packet)),
-                data -> NetworkUtil.sendChunkedPacket(data, packet.type().id(), players, threshold)
-        );
-    }
-
     @Override
-    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToWorld(T packet, ServerLevel world) {
-        var players = PlayerLookup.world(world);
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToWorld(T packet, ServerLevel level) {
+        var players = PlayerLookup.world(level);
         if (players.isEmpty()) return;
         int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
         sendWithChunking(packet, players, threshold);
     }
 
     @Override
-    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNear(T packet, ServerLevel world, Vec3 pos, double radius) {
-        var players = PlayerLookup.around(world, pos, radius);
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNear(T packet, ServerLevel level, Vec3 pos, double radius) {
+        var players = PlayerLookup.around(level, pos, radius);
         if (players.isEmpty()) return;
         int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
         sendWithChunking(packet, players, threshold);
     }
 
     @Override
-    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNearExcept(T packet, ServerLevel world, Vec3 pos, double radius, ServerPlayer excluded) {
-        var players = PlayerLookup.around(world, pos, radius).stream().filter(p -> p != excluded).toList();
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNearExcept(T packet, ServerLevel level, Vec3 pos, double radius, ServerPlayer excluded) {
+        var players = PlayerLookup.around(level, pos, radius).stream().filter(p -> p != excluded).toList();
         if (players.isEmpty()) return;
         int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
         sendWithChunking(packet, players, threshold);
@@ -221,6 +198,30 @@ public class NetworkManagerImpl implements INetworkManager {
         int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
         sendWithChunking(packet, players, threshold);
     }
+
+    @SuppressWarnings("unchecked")
+    private <T extends INetworkPacket<T> & CustomPacketPayload> void sendWithChunking(
+            T packet,
+            Collection<ServerPlayer> players,
+            int threshold) {
+
+        if (players.isEmpty()) return;
+
+        NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
+        if (info == null) return;
+
+        var buf = NetworkUtil.createBufferFromFirstPlayer(players);
+
+        NetworkUtil.sendWithChunking(
+                packet,
+                info,
+                buf,
+                threshold,
+                () -> players.forEach(p -> ServerPlayNetworking.send(p, packet)),
+                data -> NetworkUtil.sendChunkedPacket(data, packet.type().id(), players, threshold)
+        );
+    }
+
     private enum RegistrationPhase {
         COMMON, CLIENT
     }

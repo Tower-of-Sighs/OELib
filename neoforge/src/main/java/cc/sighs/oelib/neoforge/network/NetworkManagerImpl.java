@@ -155,114 +155,60 @@ public class NetworkManagerImpl implements INetworkManager {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private <T extends INetworkPacket<T> & CustomPacketPayload> void sendWithChunking(
-            T packet,
-            Collection<ServerPlayer> players,
-            int threshold) {
-
-        if (players.isEmpty()) return;
-
-        NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
-        if (info == null) return;
-
-        var firstPlayer = players.iterator().next();
-
-        var buf = createNeoForgeBuffer(firstPlayer.registryAccess());
-
-        NetworkUtil.sendWithChunking(
-                packet,
-                info,
-                buf,
-                threshold,
-                () -> players.forEach(p -> PacketDistributor.sendToPlayer(p, packet)),
-                data -> NetworkUtil.sendChunkedPacket(data, packet.type().id(), players, threshold)
-        );
-    }
-
-    private <T extends INetworkPacket<T> & CustomPacketPayload> void broadcastWithChunking(
-            T packet,
-            NetworkUtil.PacketInfo<T> info,
-            RegistryAccess registries,
-            int threshold,
-            Runnable directSender,
-            Consumer<CustomPacketPayload> chunkSender
-    ) {
-        var buf = createNeoForgeBuffer(registries);
-        try {
-            byte[] data = NetworkUtil.encodePacket(packet, info, buf);
-            if (data.length <= threshold) {
-                directSender.run();
-            } else {
-                var sessionId = UUID.randomUUID();
-                int totalChunks = (int) Math.ceil((double) data.length / threshold);
-                for (int i = 0; i < totalChunks; i++) {
-                    int start = i * threshold;
-                    int end = Math.min(start + threshold, data.length);
-                    byte[] chunkData = Arrays.copyOfRange(data, start, end);
-                    var chunk = new GenericChunkPacket(sessionId, data.length, (short) i, (short) totalChunks, packet.type().id(), chunkData);
-                    chunkSender.accept(chunk);
-                }
-            }
-        } finally {
-            buf.release();
-        }
-    }
-
     @Override
-    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToWorld(T packet, ServerLevel world) {
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToWorld(T packet, ServerLevel level) {
         int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
         if (threshold <= 0) {
-            PacketDistributor.sendToPlayersInDimension(world, packet);
+            PacketDistributor.sendToPlayersInDimension(level, packet);
             return;
         }
         @SuppressWarnings("unchecked")
         NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
         if (info == null) {
-            PacketDistributor.sendToPlayersInDimension(world, packet);
+            PacketDistributor.sendToPlayersInDimension(level, packet);
             return;
         }
-        broadcastWithChunking(packet, info, world.registryAccess(), threshold,
-                () -> PacketDistributor.sendToPlayersInDimension(world, packet),
-                p -> PacketDistributor.sendToPlayersInDimension(world, p)
+        broadcastWithChunking(packet, info, level.registryAccess(), threshold,
+                () -> PacketDistributor.sendToPlayersInDimension(level, packet),
+                p -> PacketDistributor.sendToPlayersInDimension(level, p)
         );
     }
 
     @Override
-    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNear(T packet, ServerLevel world, Vec3 pos, double radius) {
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNear(T packet, ServerLevel level, Vec3 pos, double radius) {
         int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
         if (threshold <= 0) {
-            PacketDistributor.sendToPlayersNear(world, null, pos.x, pos.y, pos.z, radius, packet);
+            PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, radius, packet);
             return;
         }
         @SuppressWarnings("unchecked")
         NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
         if (info == null) {
-            PacketDistributor.sendToPlayersNear(world, null, pos.x, pos.y, pos.z, radius, packet);
+            PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, radius, packet);
             return;
         }
-        broadcastWithChunking(packet, info, world.registryAccess(), threshold,
-                () -> PacketDistributor.sendToPlayersNear(world, null, pos.x, pos.y, pos.z, radius, packet),
-                p -> PacketDistributor.sendToPlayersNear(world, null, pos.x, pos.y, pos.z, radius, p)
+        broadcastWithChunking(packet, info, level.registryAccess(), threshold,
+                () -> PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, radius, packet),
+                p -> PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, radius, p)
         );
     }
 
     @Override
-    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNearExcept(T packet, ServerLevel world, Vec3 pos, double radius, ServerPlayer excluded) {
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNearExcept(T packet, ServerLevel level, Vec3 pos, double radius, ServerPlayer excluded) {
         int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
         if (threshold <= 0) {
-            PacketDistributor.sendToPlayersNear(world, excluded, pos.x, pos.y, pos.z, radius, packet);
+            PacketDistributor.sendToPlayersNear(level, excluded, pos.x, pos.y, pos.z, radius, packet);
             return;
         }
         @SuppressWarnings("unchecked")
         NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
         if (info == null) {
-            PacketDistributor.sendToPlayersNear(world, excluded, pos.x, pos.y, pos.z, radius, packet);
+            PacketDistributor.sendToPlayersNear(level, excluded, pos.x, pos.y, pos.z, radius, packet);
             return;
         }
-        broadcastWithChunking(packet, info, world.registryAccess(), threshold,
-                () -> PacketDistributor.sendToPlayersNear(world, excluded, pos.x, pos.y, pos.z, radius, packet),
-                p -> PacketDistributor.sendToPlayersNear(world, excluded, pos.x, pos.y, pos.z, radius, p)
+        broadcastWithChunking(packet, info, level.registryAccess(), threshold,
+                () -> PacketDistributor.sendToPlayersNear(level, excluded, pos.x, pos.y, pos.z, radius, packet),
+                p -> PacketDistributor.sendToPlayersNear(level, excluded, pos.x, pos.y, pos.z, radius, p)
         );
     }
 
@@ -321,5 +267,59 @@ public class NetworkManagerImpl implements INetworkManager {
                 () -> PacketDistributor.sendToPlayersTrackingChunk(level, chunkPos, packet),
                 p -> PacketDistributor.sendToPlayersTrackingChunk(level, chunkPos, p)
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T extends INetworkPacket<T> & CustomPacketPayload> void sendWithChunking(
+            T packet,
+            Collection<ServerPlayer> players,
+            int threshold) {
+
+        if (players.isEmpty()) return;
+
+        NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
+        if (info == null) return;
+
+        var firstPlayer = players.iterator().next();
+
+        var buf = createNeoForgeBuffer(firstPlayer.registryAccess());
+
+        NetworkUtil.sendWithChunking(
+                packet,
+                info,
+                buf,
+                threshold,
+                () -> players.forEach(p -> PacketDistributor.sendToPlayer(p, packet)),
+                data -> NetworkUtil.sendChunkedPacket(data, packet.type().id(), players, threshold)
+        );
+    }
+
+    private <T extends INetworkPacket<T> & CustomPacketPayload> void broadcastWithChunking(
+            T packet,
+            NetworkUtil.PacketInfo<T> info,
+            RegistryAccess registries,
+            int threshold,
+            Runnable directSender,
+            Consumer<CustomPacketPayload> chunkSender
+    ) {
+        var buf = createNeoForgeBuffer(registries);
+        try {
+            byte[] data = NetworkUtil.encodePacket(packet, info, buf);
+            if (data.length <= threshold) {
+                directSender.run();
+            } else {
+                var sessionId = UUID.randomUUID();
+                int totalChunks = (int) Math.ceil((double) data.length / threshold);
+                for (int i = 0; i < totalChunks; i++) {
+                    int start = i * threshold;
+                    int end = Math.min(start + threshold, data.length);
+                    byte[] chunkData = Arrays.copyOfRange(data, start, end);
+                    var chunk = new GenericChunkPacket(sessionId, data.length, (short) i, (short) totalChunks, packet.type().id(), chunkData);
+                    chunkSender.accept(chunk);
+                }
+            }
+        } finally {
+            buf.release();
+        }
     }
 }

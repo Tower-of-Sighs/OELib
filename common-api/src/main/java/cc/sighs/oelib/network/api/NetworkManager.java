@@ -66,27 +66,48 @@ public class NetworkManager {
 
     /**
      * Sends a packet to all players in the given world.
+     *
+     * @param packet packet instance
+     * @param level  target level
+     * @param <T>    packet type
      */
-    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToWorld(T packet, ServerLevel world) {
-        IMPL.sendToWorld(packet, world);
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToWorld(T packet, ServerLevel level) {
+        IMPL.sendToWorld(packet, level);
     }
 
     /**
      * Sends a packet to players near a position in a world.
+     *
+     * @param packet packet instance
+     * @param level  target level
+     * @param pos    center position
+     * @param radius radius from center
+     * @param <T>    packet type
      */
-    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNear(T packet, ServerLevel world, Vec3 pos, double radius) {
-        IMPL.sendToNear(packet, world, pos, radius);
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNear(T packet, ServerLevel level, Vec3 pos, double radius) {
+        IMPL.sendToNear(packet, level, pos, radius);
     }
 
     /**
      * Sends a packet to players near a position in a world, excluding one player.
+     *
+     * @param packet   packet instance
+     * @param level    target level
+     * @param pos      center position
+     * @param radius   radius from center
+     * @param excluded player to exclude
+     * @param <T>      packet type
      */
-    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNearExcept(T packet, ServerLevel world, Vec3 pos, double radius, ServerPlayer excluded) {
-        IMPL.sendToNearExcept(packet, world, pos, radius, excluded);
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNearExcept(T packet, ServerLevel level, Vec3 pos, double radius, ServerPlayer excluded) {
+        IMPL.sendToNearExcept(packet, level, pos, radius, excluded);
     }
 
     /**
      * Sends a packet to all players tracking an entity.
+     *
+     * @param packet packet instance
+     * @param entity target entity
+     * @param <T>    packet type
      */
     public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingEntity(T packet, Entity entity) {
         IMPL.sendToTrackingEntity(packet, entity);
@@ -94,6 +115,10 @@ public class NetworkManager {
 
     /**
      * Sends a packet to all players tracking an entity and the entity itself if a player.
+     *
+     * @param packet packet instance
+     * @param entity target entity
+     * @param <T>    packet type
      */
     public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingEntityAndSelf(T packet, Entity entity) {
         IMPL.sendToTrackingEntityAndSelf(packet, entity);
@@ -101,6 +126,11 @@ public class NetworkManager {
 
     /**
      * Sends a packet to all players tracking the given chunk.
+     *
+     * @param packet   packet instance
+     * @param level    target level
+     * @param chunkPos target chunk position
+     * @param <T>      packet type
      */
     public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingChunk(T packet, ServerLevel level, ChunkPos chunkPos) {
         IMPL.sendToTrackingChunk(packet, level, chunkPos);

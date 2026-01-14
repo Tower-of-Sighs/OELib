@@ -103,7 +103,7 @@ public record BigComponentPacket(
         long startTime = System.nanoTime();
         int dataLength = this.refString().length();
 
-        OELib.LOGGER.info("[Performance] 收到数据包 (Size: {} bytes)", dataLength);
+        OELib.LOGGER.info("[Performance] Received packets (Size: {} bytes)", dataLength);
 
         if (!hasSavedSample) {
             CompletableFuture.runAsync(() -> {
@@ -112,16 +112,16 @@ public record BigComponentPacket(
                     Files.createDirectories(path);
                     String summary = "Packet Received at " + new Date() + "\nString Length: " + dataLength;
                     Files.writeString(path.resolve("stress_sample_summary.txt"), summary);
-                    OELib.LOGGER.info("[Performance] 样本摘要已保存。");
+                    OELib.LOGGER.info("[Performance] Sample abstracts are saved.");
                 } catch (Exception e) {
-                    OELib.LOGGER.error("保存失败", e);
+                    OELib.LOGGER.error("Save failed", e);
                 }
             });
             hasSavedSample = true;
         }
 
         long endTime = System.nanoTime();
-        OELib.LOGGER.info("[Performance] 接收端逻辑触发耗时: {} ms", (endTime - startTime) / 1_000_000.0);
+        OELib.LOGGER.info("[Performance] Receiving logic triggering is time-consuming: {} ms", (endTime - startTime) / 1_000_000.0);
     }
 
     public enum ExampleEnum {

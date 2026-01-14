@@ -28,15 +28,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-/**
- * 通用数据管理器。
- * <p>
- * 负责管理所有带有 {@link DataDriven} 注解的数据类型，
- * 提供数据加载、验证、缓存、网络同步等功能。
- * </p>
- *
- * @param <T> 数据类型
- */
 @EventBusSubscriber(modid = OELib.MODID)
 public class DataManager<T> extends SimpleJsonResourceReloadListener {
     private static final Gson GSON = new GsonBuilder().setLenient().create();
@@ -60,7 +51,6 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         this.codec = CodecUtils.getCodec(dataClass);
         this.defaultValidator = createValidator(annotation.validator());
 
-        // 注解声明的 namespace 绑定
         for (DataDriven.ValidatorBinding binding : annotation.namespaceValidators()) {
             if (binding != null && binding.namespace() != null && !binding.namespace().isBlank() && binding.validator() != null) {
                 namespaceValidatorClasses.put(binding.namespace(), binding.validator());
@@ -68,9 +58,6 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         }
     }
 
-    /**
-     * 运行时注册命名空间验证器（解耦合子模组引用）。
-     */
     public static <T> void registerNamespaceValidator(Class<T> dataClass, String namespace, Class<? extends DataValidator<?>> validatorClass) {
         DataManager<T> mgr = get(dataClass);
         if (mgr != null && namespace != null && !namespace.isBlank() && validatorClass != null) {
@@ -78,13 +65,6 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         }
     }
 
-    /**
-     * 注册数据驱动类型。
-     *
-     * @param dataClass 数据类型
-     * @param <T>       数据类型泛型
-     * @return 数据管理器实例
-     */
     @SuppressWarnings("unchecked")
     public static <T> DataManager<T> register(Class<T> dataClass) {
         if (!dataClass.isAnnotationPresent(DataDriven.class)) {
@@ -94,22 +74,12 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         return (DataManager<T>) managers.computeIfAbsent(dataClass, DataManager::new);
     }
 
-    /**
-     * 运行时注册命名空间（允许附属 mod 在父 mod 数据结构下增加自己的 namespace）
-     */
     public static <T> void registerNamespace(Class<T> dataClass, String namespace) {
         runtimeRegisteredNamespaces
                 .computeIfAbsent(dataClass, k -> ConcurrentHashMap.newKeySet())
                 .add(namespace);
     }
 
-    /**
-     * 获取数据管理器实例。
-     *
-     * @param dataClass 数据类型
-     * @param <T>       数据类型泛型
-     * @return 数据管理器实例，如果未注册则返回 null
-     */
     @SuppressWarnings("unchecked")
     public static <T> DataManager<T> get(Class<T> dataClass) {
         return (DataManager<T>) managers.get(dataClass);
@@ -140,45 +110,20 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         }
     }
 
-    /**
-     * 获取所有已加载的数据。
-     *
-     * @return 数据映射的副本
-     */
     public Map<ResourceLocation, T> getAllData() {
         return new HashMap<>(loadedData);
     }
 
-    /**
-     * 根据资源位置获取数据。
-     *
-     * @param location 资源位置
-     * @return 数据，如果不存在则返回 null
-     */
     public T getData(ResourceLocation location) {
         return loadedData.get(location);
     }
 
-    /**
-     * 获取所有数据的列表。
-     *
-     * @return 数据列表
-     */
     public List<T> getDataList() {
         List<T> result = new ArrayList<>(loadedData.values());
         result.addAll(deferredData.values());
         return result;
     }
 
-    /**
-     * 根据缓存键获取数据。
-     * <p>
-     * 仅在启用缓存时有效。
-     * </p>
-     *
-     * @param cacheKey 缓存键
-     * @return 数据集合
-     */
     public Set<T> getCachedData(String cacheKey) {
         if (!annotation.enableCache()) {
             throw new UnsupportedOperationException("Cache is disabled for " + dataClass.getSimpleName());
@@ -186,39 +131,21 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         return cache.getOrDefault(cacheKey, Collections.emptySet());
     }
 
-    /**
-     * 添加数据到缓存。
-     *
-     * @param cacheKey 缓存键
-     * @param data     数据
-     */
     public void addToCache(String cacheKey, T data) {
         if (annotation.enableCache()) {
             cache.computeIfAbsent(cacheKey, k -> ConcurrentHashMap.newKeySet()).add(data);
         }
     }
 
-    /**
-     * 清空缓存。
-     */
     public void clearCache() {
         cache.clear();
     }
 
-    /**
-     * 更新客户端数据。
-     * <p>
-     * 此方法仅在客户端调用。
-     * </p>
-     *
-     * @param data 新数据
-     */
     public void updateClientData(Map<ResourceLocation, T> data) {
         loadedData.clear();
         loadedData.putAll(data);
         clearCache();
 
-        // 重建缓存
         if (annotation.enableCache()) {
             for (Map.Entry<ResourceLocation, T> entry : data.entrySet()) {
                 buildCache(entry.getValue());
@@ -230,11 +157,6 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         NeoForge.EVENT_BUS.post(new DataReloadEvent(dataClass, data.size(), 0));
     }
 
-    /**
-     * 同步数据到指定玩家。
-     *
-     * @param player 玩家
-     */
     public void syncToPlayer(ServerPlayer player) {
         if (annotation.syncToClient() && (!loadedData.isEmpty() || !deferredData.isEmpty())) {
             try {
@@ -349,9 +271,6 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         NeoForge.EVENT_BUS.post(new DataReloadEvent(dataClass, validCount, invalidCount));
     }
 
-    /**
-     * 验证数据，如果验证器支持服务器上下文则使用上下文验证。
-     */
     private DataValidator.ValidationResult validateData(T data, ResourceLocation source) {
         var vr = getValidatorForNamespace(source.getNamespace());
         if (vr instanceof DataValidator.ServerContextAware<T> contextAwareValidator) {
@@ -361,16 +280,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         }
     }
 
-    /**
-     * 构建缓存。
-     * <p>
-     * 子类可以重写此方法来实现自定义的缓存逻辑。
-     * </p>
-     *
-     * @param data 数据
-     */
     protected void buildCache(T data) {
-        // 默认实现，将数据添加到 "all" 缓存键
         addToCache("all", data);
     }
 
