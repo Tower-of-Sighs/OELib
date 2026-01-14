@@ -88,9 +88,12 @@ public final class NetworkSerialization {
         if (!recordClass.isRecord()) {
             throw new IllegalArgumentException("autoCodec only supports record types: " + recordClass.getName());
         }
-        return (StreamCodec<RegistryFriendlyByteBuf, T>) RECORD_CODEC_CACHE.computeIfAbsent(
-                recordClass,
-                NetworkRecordCodecBuilder::build
-        );
+        var existing = (StreamCodec<RegistryFriendlyByteBuf, T>) RECORD_CODEC_CACHE.get(recordClass);
+        if (existing != null) {
+            return existing;
+        }
+        StreamCodec<RegistryFriendlyByteBuf, T> built = NetworkRecordCodecBuilder.build(recordClass);
+        var prev = (StreamCodec<RegistryFriendlyByteBuf, T>) RECORD_CODEC_CACHE.putIfAbsent(recordClass, built);
+        return prev != null ? prev : built;
     }
 }

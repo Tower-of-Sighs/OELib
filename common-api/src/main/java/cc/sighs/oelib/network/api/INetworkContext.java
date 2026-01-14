@@ -1,6 +1,7 @@
 package cc.sighs.oelib.network.api;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
@@ -57,4 +58,11 @@ public interface INetworkContext {
      * @param task task to execute
      */
     void enqueueWork(Runnable task);
+
+    /**
+     * Returns the registry access for this side.
+     *
+     * @return registry access
+     */
+    RegistryAccess registryAccess();
 }

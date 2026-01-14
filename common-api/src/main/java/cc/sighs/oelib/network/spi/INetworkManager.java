@@ -3,7 +3,11 @@ package cc.sighs.oelib.network.spi;
 import cc.sighs.oelib.network.api.INetworkPacket;
 import cc.sighs.oelib.network.api.NetworkManager;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Service Provider Interface for platform network managers.
@@ -39,4 +43,34 @@ public interface INetworkManager {
      * @param <T>    packet type
      */
     <T extends INetworkPacket<T> & CustomPacketPayload> void sendToServer(T packet);
+
+    /**
+     * Sends a packet to all players in the given world.
+     */
+    <T extends INetworkPacket<T> & CustomPacketPayload> void sendToWorld(T packet, ServerLevel world);
+
+    /**
+     * Sends a packet to players near a position in a world.
+     */
+    <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNear(T packet, ServerLevel world, Vec3 pos, double radius);
+
+    /**
+     * Sends a packet to players near a position in a world, excluding one player.
+     */
+    <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNearExcept(T packet, ServerLevel world, Vec3 pos, double radius, ServerPlayer excluded);
+
+    /**
+     * Sends a packet to all players tracking an entity.
+     */
+    <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingEntity(T packet, Entity entity);
+
+    /**
+     * Sends a packet to all players tracking an entity and the entity itself if a player.
+     */
+    <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingEntityAndSelf(T packet, Entity entity);
+
+    /**
+     * Sends a packet to all players tracking a chunk.
+     */
+    <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingChunk(T packet, ServerLevel level, ChunkPos chunkPos);
 }

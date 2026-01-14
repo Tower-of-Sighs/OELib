@@ -6,15 +6,22 @@ import cc.sighs.oelib.network.api.INetworkPacket;
 import cc.sighs.oelib.network.api.NetworkAutoRegistration;
 import cc.sighs.oelib.network.api.NetworkPacket;
 import cc.sighs.oelib.network.api.NetworkPacketTypes;
+import cc.sighs.oelib.network.chunk.GenericChunkPacket;
 import cc.sighs.oelib.network.serialization.NetworkSerialization;
 import cc.sighs.oelib.network.spi.INetworkManager;
 import cc.sighs.oelib.network.util.NetworkUtil;
 import io.netty.buffer.Unpooled;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -25,12 +32,13 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 @EventBusSubscriber(modid = OELib.MODID)
 public class NetworkManagerImpl implements INetworkManager {
 
     private static final String PROTOCOL_VERSION = "1";
-    private static final Map<CustomPacketPayload.Type<?>, PacketInfo<?>> registeredPackets = new ConcurrentHashMap<>();
+    private static final Map<CustomPacketPayload.Type<?>, NetworkUtil.PacketInfo<?>> registeredPackets = new ConcurrentHashMap<>();
 
     @SubscribeEvent
     public static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
@@ -50,6 +58,18 @@ public class NetworkManagerImpl implements INetworkManager {
         return new HashSet<>(registeredPackets.keySet());
     }
 
+    private static RegistryFriendlyByteBuf createNeoForgeBuffer(RegistryAccess registries) {
+        return new RegistryFriendlyByteBuf(
+                Unpooled.buffer(),
+                registries,
+                ConnectionType.NEOFORGE
+        );
+    }
+
+    private <T extends INetworkPacket<T>> void handle(T packet, IPayloadContext context) {
+        context.enqueueWork(() -> packet.handle(new NeoForgeNetworkContext(context)));
+    }
+
     @SuppressWarnings("unchecked")
     private <T extends INetworkPacket<T> & CustomPacketPayload> void registerAnnotated(Class<? extends INetworkPacket<?>> rawClass, PayloadRegistrar registrar) {
         Class<T> clazz = (Class<T>) rawClass;
@@ -58,7 +78,7 @@ public class NetworkManagerImpl implements INetworkManager {
 
         CustomPacketPayload.Type<T> type = NetworkPacketTypes.typeOf(clazz);
         StreamCodec<RegistryFriendlyByteBuf, T> codec = NetworkSerialization.autoCodec(clazz);
-        registeredPackets.put(type, new PacketInfo<>(type, codec));
+        registeredPackets.put(type, new NetworkUtil.PacketInfo<>(type, codec));
 
         var side = meta.side();
         OELib.LOGGER.debug("Registering packet: {} | Side: {} | Type ID: {}", clazz.getSimpleName(), side, type.id());
@@ -67,15 +87,6 @@ public class NetworkManagerImpl implements INetworkManager {
             case SERVER -> registrar.playToServer(type, codec, this::handle);
             case BOTH -> registrar.playBidirectional(type, codec, this::handle);
         }
-    }
-
-    private <T extends INetworkPacket<T>> void handle(T packet, IPayloadContext context) {
-        context.enqueueWork(() -> packet.handle(new NeoForgeNetworkContext(context)));
-    }
-
-    @Override
-    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToServer(T packet) {
-        PacketDistributor.sendToServer(packet);
     }
 
     @Override
@@ -89,49 +100,226 @@ public class NetworkManagerImpl implements INetworkManager {
     }
 
     @Override
-    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToAll(T packet) {
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToServer(T packet) {
         int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
+        if (threshold <= 0) {
+            PacketDistributor.sendToServer(packet);
+            return;
+        }
+
+        @SuppressWarnings("unchecked")
+        NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
+        if (info == null) {
+            PacketDistributor.sendToServer(packet);
+            return;
+        }
+
+        var client = Minecraft.getInstance();
+        if (client.level == null) {
+            PacketDistributor.sendToServer(packet);
+            return;
+        }
+
+        RegistryFriendlyByteBuf buf = createNeoForgeBuffer(client.level.registryAccess());
+
+        NetworkUtil.sendWithChunking(
+                packet,
+                info,
+                buf,
+                threshold,
+                () -> PacketDistributor.sendToServer(packet),
+                data -> NetworkUtil.sendChunkedPacketToServer(data, packet.type().id(), threshold)
+        );
+    }
+
+    @Override
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToAll(T packet) {
         MinecraftServer server = DataManager.getCurrentServer();
+        int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
+
         if (threshold > 0 && server != null) {
-            sendWithChunking(packet, server.getPlayerList().getPlayers(), threshold);
+            @SuppressWarnings("unchecked")
+            NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
+            if (info == null) return;
+
+            var buf = createNeoForgeBuffer(server.registryAccess());
+
+            try {
+                byte[] data = NetworkUtil.encodePacket(packet, info, buf);
+                NetworkUtil.sendChunkedPacketToAll(data, packet.type().id(), threshold);
+            } finally {
+                buf.release();
+            }
         } else {
             PacketDistributor.sendToAllPlayers(packet);
         }
     }
 
     @SuppressWarnings("unchecked")
-    private <T extends INetworkPacket<T> & CustomPacketPayload> void sendWithChunking(T packet, Collection<ServerPlayer> players, int threshold) {
-        PacketInfo<T> info = (PacketInfo<T>) registeredPackets.get(packet.type());
-        if (info == null || players.isEmpty()) return;
+    private <T extends INetworkPacket<T> & CustomPacketPayload> void sendWithChunking(
+            T packet,
+            Collection<ServerPlayer> players,
+            int threshold) {
+
+        if (players.isEmpty()) return;
+
+        NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
+        if (info == null) return;
 
         var firstPlayer = players.iterator().next();
-        var registries = firstPlayer.registryAccess();
 
-        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(
-                Unpooled.buffer(),
-                registries,
-                ConnectionType.NEOFORGE
+        var buf = createNeoForgeBuffer(firstPlayer.registryAccess());
+
+        NetworkUtil.sendWithChunking(
+                packet,
+                info,
+                buf,
+                threshold,
+                () -> players.forEach(p -> PacketDistributor.sendToPlayer(p, packet)),
+                data -> NetworkUtil.sendChunkedPacket(data, packet.type().id(), players, threshold)
         );
+    }
 
+    private <T extends INetworkPacket<T> & CustomPacketPayload> void broadcastWithChunking(
+            T packet,
+            NetworkUtil.PacketInfo<T> info,
+            RegistryAccess registries,
+            int threshold,
+            Runnable directSender,
+            Consumer<CustomPacketPayload> chunkSender
+    ) {
+        var buf = createNeoForgeBuffer(registries);
         try {
-            info.codec().encode(buf, packet);
-            byte[] data = new byte[buf.readableBytes()];
-            buf.readBytes(data);
-
+            byte[] data = NetworkUtil.encodePacket(packet, info, buf);
             if (data.length <= threshold) {
-                players.forEach(p -> PacketDistributor.sendToPlayer(p, packet));
-                OELib.LOGGER.debug("Sent packet {} without chunking ({} bytes)", packet.type().id(), data.length);
+                directSender.run();
             } else {
-                NetworkUtil.sendChunkedPacket(data, packet.getClass().getName(), players, threshold);
+                var sessionId = UUID.randomUUID();
+                int totalChunks = (int) Math.ceil((double) data.length / threshold);
+                for (int i = 0; i < totalChunks; i++) {
+                    int start = i * threshold;
+                    int end = Math.min(start + threshold, data.length);
+                    byte[] chunkData = Arrays.copyOfRange(data, start, end);
+                    var chunk = new GenericChunkPacket(sessionId, data.length, (short) i, (short) totalChunks, packet.type().id(), chunkData);
+                    chunkSender.accept(chunk);
+                }
             }
         } finally {
             buf.release();
         }
     }
 
-    public record PacketInfo<T extends INetworkPacket<T> & CustomPacketPayload>(
-            CustomPacketPayload.Type<T> type,
-            StreamCodec<? super RegistryFriendlyByteBuf, T> codec
-    ) {
+    @Override
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToWorld(T packet, ServerLevel world) {
+        int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
+        if (threshold <= 0) {
+            PacketDistributor.sendToPlayersInDimension(world, packet);
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
+        if (info == null) {
+            PacketDistributor.sendToPlayersInDimension(world, packet);
+            return;
+        }
+        broadcastWithChunking(packet, info, world.registryAccess(), threshold,
+                () -> PacketDistributor.sendToPlayersInDimension(world, packet),
+                p -> PacketDistributor.sendToPlayersInDimension(world, p)
+        );
+    }
+
+    @Override
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNear(T packet, ServerLevel world, Vec3 pos, double radius) {
+        int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
+        if (threshold <= 0) {
+            PacketDistributor.sendToPlayersNear(world, null, pos.x, pos.y, pos.z, radius, packet);
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
+        if (info == null) {
+            PacketDistributor.sendToPlayersNear(world, null, pos.x, pos.y, pos.z, radius, packet);
+            return;
+        }
+        broadcastWithChunking(packet, info, world.registryAccess(), threshold,
+                () -> PacketDistributor.sendToPlayersNear(world, null, pos.x, pos.y, pos.z, radius, packet),
+                p -> PacketDistributor.sendToPlayersNear(world, null, pos.x, pos.y, pos.z, radius, p)
+        );
+    }
+
+    @Override
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNearExcept(T packet, ServerLevel world, Vec3 pos, double radius, ServerPlayer excluded) {
+        int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
+        if (threshold <= 0) {
+            PacketDistributor.sendToPlayersNear(world, excluded, pos.x, pos.y, pos.z, radius, packet);
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
+        if (info == null) {
+            PacketDistributor.sendToPlayersNear(world, excluded, pos.x, pos.y, pos.z, radius, packet);
+            return;
+        }
+        broadcastWithChunking(packet, info, world.registryAccess(), threshold,
+                () -> PacketDistributor.sendToPlayersNear(world, excluded, pos.x, pos.y, pos.z, radius, packet),
+                p -> PacketDistributor.sendToPlayersNear(world, excluded, pos.x, pos.y, pos.z, radius, p)
+        );
+    }
+
+    @Override
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingEntity(T packet, Entity entity) {
+        int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
+        if (threshold <= 0) {
+            PacketDistributor.sendToPlayersTrackingEntity(entity, packet);
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
+        if (info == null) {
+            PacketDistributor.sendToPlayersTrackingEntity(entity, packet);
+            return;
+        }
+        broadcastWithChunking(packet, info, entity.level().registryAccess(), threshold,
+                () -> PacketDistributor.sendToPlayersTrackingEntity(entity, packet),
+                p -> PacketDistributor.sendToPlayersTrackingEntity(entity, p)
+        );
+    }
+
+    @Override
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingEntityAndSelf(T packet, Entity entity) {
+        int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
+        if (threshold <= 0) {
+            PacketDistributor.sendToPlayersTrackingEntityAndSelf(entity, packet);
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
+        if (info == null) {
+            PacketDistributor.sendToPlayersTrackingEntityAndSelf(entity, packet);
+            return;
+        }
+        broadcastWithChunking(packet, info, entity.level().registryAccess(), threshold,
+                () -> PacketDistributor.sendToPlayersTrackingEntityAndSelf(entity, packet),
+                p -> PacketDistributor.sendToPlayersTrackingEntityAndSelf(entity, p)
+        );
+    }
+
+    @Override
+    public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingChunk(T packet, ServerLevel level, ChunkPos chunkPos) {
+        int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
+        if (threshold <= 0) {
+            PacketDistributor.sendToPlayersTrackingChunk(level, chunkPos, packet);
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
+        if (info == null) {
+            PacketDistributor.sendToPlayersTrackingChunk(level, chunkPos, packet);
+            return;
+        }
+        broadcastWithChunking(packet, info, level.registryAccess(), threshold,
+                () -> PacketDistributor.sendToPlayersTrackingChunk(level, chunkPos, packet),
+                p -> PacketDistributor.sendToPlayersTrackingChunk(level, chunkPos, p)
+        );
     }
 }

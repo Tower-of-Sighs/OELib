@@ -14,6 +14,7 @@ public class ExampleMenus {
     public static void init() {
         MENUS.register();
     }
+
     public static final RegisterSupplier<MenuType<FluidRenderExampleMenu>> FLUID_RENDER_EXAMPLE =
             MENUS.register("fluid_render_example",
                     () -> new MenuType<>(FluidRenderExampleMenu::new, FeatureFlags.DEFAULT_FLAGS));

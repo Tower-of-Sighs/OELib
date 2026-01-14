@@ -3,6 +3,7 @@ package cc.sighs.oelib.fabric.network;
 import cc.sighs.oelib.network.api.INetworkContext;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
@@ -39,5 +40,10 @@ public class FabricServerNetworkContext implements INetworkContext {
     @Override
     public void enqueueWork(Runnable task) {
         context.server().execute(task);
+    }
+
+    @Override
+    public RegistryAccess registryAccess() {
+        return context.player().registryAccess();
     }
 }

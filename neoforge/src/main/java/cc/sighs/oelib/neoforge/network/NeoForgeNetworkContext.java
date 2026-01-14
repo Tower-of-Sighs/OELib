@@ -2,6 +2,7 @@ package cc.sighs.oelib.neoforge.network;
 
 import cc.sighs.oelib.network.api.INetworkContext;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
@@ -45,5 +46,17 @@ public class NeoForgeNetworkContext implements INetworkContext {
     @Override
     public void enqueueWork(Runnable task) {
         context.enqueueWork(task);
+    }
+
+    @Override
+    public RegistryAccess registryAccess() {
+        if (isServerSide() && context.player() instanceof ServerPlayer serverPlayer) {
+            return serverPlayer.registryAccess();
+        }
+        var mc = Minecraft.getInstance();
+        if (mc.level != null) {
+            return mc.level.registryAccess();
+        }
+        return RegistryAccess.EMPTY;
     }
 }

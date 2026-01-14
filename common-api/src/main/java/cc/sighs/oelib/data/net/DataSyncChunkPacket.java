@@ -1,11 +1,11 @@
 package cc.sighs.oelib.data.net;
 
 import cc.sighs.oelib.OELib;
-import cc.sighs.oelib.network.ChunkAssembler;
 import cc.sighs.oelib.network.api.INetworkContext;
 import cc.sighs.oelib.network.api.INetworkPacket;
 import cc.sighs.oelib.network.api.NetworkPacket;
 import cc.sighs.oelib.network.api.Side;
+import cc.sighs.oelib.network.chunk.GenericChunkAssembler;
 
 import java.util.UUID;
 
@@ -25,9 +25,9 @@ public record DataSyncChunkPacket(UUID sessionId, int chunkIndex, int totalChunk
     @Override
     public void handle(INetworkContext context) {
         try {
-            ChunkAssembler.receiveChunk(sessionId, chunkIndex, totalChunks, dataClassName, chunkData);
+            GenericChunkAssembler.receiveChunkJson(sessionId, chunkIndex, totalChunks, dataClassName, chunkData);
         } catch (Exception e) {
-            OELib.LOGGER.error("Failed to handle chunk packet: {}", e.getMessage(), e);
+            OELib.LOGGER.error("Failed to handle data sync chunk: {}", e.getMessage(), e);
         }
     }
 }

@@ -60,12 +60,12 @@ public record DevConfig(
                     .format(ConfigStorageFormat.TOML)
     );
 
+    public static void register() {
+        ConfigManager.registerServer(UNIT, player -> player.hasPermissions(4));
+    }
+
     public enum TestEnum {
         TEST,
         TEST2
-    }
-
-    public static void register() {
-        ConfigManager.registerServer(UNIT, player -> player.hasPermissions(4));
     }
 }

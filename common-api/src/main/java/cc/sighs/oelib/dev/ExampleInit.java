@@ -9,6 +9,7 @@ import net.minecraft.client.renderer.RenderType;
 public class ExampleInit {
     public static void init() {
         if (DevConfig.UNIT.get().enableExampleContent()) {
+            TestPacketCommand.register();
             ExampleRegistry.init();
             ExampleCreativeTab.init();
             ExampleCreativeTab.registerCreativeTabEntries();

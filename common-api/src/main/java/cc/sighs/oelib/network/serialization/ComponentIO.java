@@ -283,6 +283,91 @@ final class ComponentIO {
             return p;
         }
 
+        // Fastutil specialized raw types without generics
+        if (rawType == IntSet.class) {
+            ComponentPlan p = new ComponentPlan(Kind.SET);
+            p.rawType = IntSet.class;
+            p.element = planOf(Integer.class, Integer.class);
+            return p;
+        }
+        if (rawType == LongSet.class) {
+            ComponentPlan p = new ComponentPlan(Kind.SET);
+            p.rawType = LongSet.class;
+            p.element = planOf(Long.class, Long.class);
+            return p;
+        }
+        if (rawType == Int2IntMap.class) {
+            ComponentPlan p = new ComponentPlan(Kind.MAP);
+            p.rawType = Int2IntMap.class;
+            p.key = planOf(Integer.class, Integer.class);
+            p.value = planOf(Integer.class, Integer.class);
+            return p;
+        }
+        if (rawType == Object2IntMap.class) {
+            ComponentPlan p = new ComponentPlan(Kind.MAP);
+            p.rawType = Object2IntMap.class;
+            if (genericType instanceof ParameterizedType pt && pt.getActualTypeArguments().length >= 1) {
+                var keyType = pt.getActualTypeArguments()[0];
+                var keyRaw = erasureOf(keyType);
+                p.key = planOf(keyRaw, keyType);
+            } else {
+                p.key = planOf(String.class, String.class);
+            }
+            p.value = planOf(Integer.class, Integer.class);
+            return p;
+        }
+        if (rawType == Object2LongMap.class) {
+            ComponentPlan p = new ComponentPlan(Kind.MAP);
+            p.rawType = Object2LongMap.class;
+            if (genericType instanceof ParameterizedType pt && pt.getActualTypeArguments().length >= 1) {
+                var keyType = pt.getActualTypeArguments()[0];
+                var keyRaw = erasureOf(keyType);
+                p.key = planOf(keyRaw, keyType);
+            } else {
+                p.key = planOf(String.class, String.class);
+            }
+            p.value = planOf(Long.class, Long.class);
+            return p;
+        }
+        if (rawType == Object2ObjectMap.class) {
+            ComponentPlan p = new ComponentPlan(Kind.MAP);
+            p.rawType = Object2ObjectMap.class;
+            if (genericType instanceof ParameterizedType pt && pt.getActualTypeArguments().length >= 2) {
+                var keyType = pt.getActualTypeArguments()[0];
+                var valType = pt.getActualTypeArguments()[1];
+                p.key = planOf(erasureOf(keyType), keyType);
+                p.value = planOf(erasureOf(valType), valType);
+            } else {
+                p.key = planOf(String.class, String.class);
+                p.value = planOf(String.class, String.class);
+            }
+            return p;
+        }
+        if (rawType == Int2ObjectMap.class) {
+            ComponentPlan p = new ComponentPlan(Kind.MAP);
+            p.rawType = Int2ObjectMap.class;
+            p.key = planOf(Integer.class, Integer.class);
+            if (genericType instanceof ParameterizedType pt && pt.getActualTypeArguments().length >= 1) {
+                var valType = pt.getActualTypeArguments()[0];
+                p.value = planOf(erasureOf(valType), valType);
+            } else {
+                p.value = planOf(String.class, String.class);
+            }
+            return p;
+        }
+        if (rawType == Long2ObjectMap.class) {
+            ComponentPlan p = new ComponentPlan(Kind.MAP);
+            p.rawType = Long2ObjectMap.class;
+            p.key = planOf(Long.class, Long.class);
+            if (genericType instanceof ParameterizedType pt && pt.getActualTypeArguments().length >= 1) {
+                var valType = pt.getActualTypeArguments()[0];
+                p.value = planOf(erasureOf(valType), valType);
+            } else {
+                p.value = planOf(String.class, String.class);
+            }
+            return p;
+        }
+
         if (genericType instanceof ParameterizedType pt) {
             var raw = pt.getRawType();
             if (raw == Optional.class) {
@@ -336,6 +421,16 @@ final class ComponentIO {
                     p.element = planOf(elemRaw, elemType);
                     return p;
                 }
+                if (rawClass == EnumSet.class) {
+                    var arg = pt.getActualTypeArguments()[0];
+                    var argRaw = erasureOf(arg);
+                    if (!Enum.class.isAssignableFrom(argRaw)) {
+                        throw new IllegalStateException("EnumSet element type must be an enum");
+                    }
+                    ComponentPlan p = new ComponentPlan(Kind.ENUM_SET);
+                    p.enumClass = (Class<? extends Enum>) argRaw;
+                    return p;
+                }
                 if (Set.class.isAssignableFrom(rawClass)) {
                     var elemType = pt.getActualTypeArguments()[0];
                     var elemRaw = erasureOf(elemType);
@@ -366,16 +461,6 @@ final class ComponentIO {
                         p.value = planOf(valueRaw, valueType);
                         return p;
                     }
-                }
-                if (rawClass == EnumSet.class) {
-                    var arg = pt.getActualTypeArguments()[0];
-                    var argRaw = erasureOf(arg);
-                    if (!Enum.class.isAssignableFrom(argRaw)) {
-                        throw new IllegalStateException("EnumSet element type must be an enum");
-                    }
-                    ComponentPlan p = new ComponentPlan(Kind.ENUM_SET);
-                    p.enumClass = (Class<? extends Enum>) argRaw;
-                    return p;
                 }
             }
         }
@@ -613,7 +698,7 @@ final class ComponentIO {
     static void          writeEnumW          (RegistryFriendlyByteBuf buf, Enum<?> v) { buf.writeEnum(v); }
     static IntList       readIntIdListW      (RegistryFriendlyByteBuf buf) { return buf.readIntIdList(); }
     static void          writeIntIdListW     (RegistryFriendlyByteBuf buf, IntList v) { buf.writeIntIdList(v); }
-    static <T> ResourceKey<T> readResourceKeyW(RegistryFriendlyByteBuf buf, ResourceKey<? extends Registry<T>> resourceKey) { return buf.readResourceKey(resourceKey); }
-    static void          writeResourceKeyW   (RegistryFriendlyByteBuf buf, ResourceKey<?> resourceKey) { buf.writeResourceKey(resourceKey); }
+    static <T> ResourceKey<T> readResourceKeyW(RegistryFriendlyByteBuf buf, ResourceKey<? extends Registry<T>> resourceKeyClass) { return buf.readResourceKey(resourceKeyClass); }
+    static void          writeResourceKeyW   (RegistryFriendlyByteBuf buf, ResourceKey<?> v) { buf.writeResourceKey(v); }
     static <T> ResourceKey<? extends Registry<T>> readRegistryKeyW(RegistryFriendlyByteBuf buf) { return buf.readRegistryKey(); }
 }

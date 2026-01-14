@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class NetworkPacketTypes {
 
     private static final Map<Class<?>, CustomPacketPayload.Type<?>> CACHE = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, Class<?>> REVERSE = new ConcurrentHashMap<>();
 
     private NetworkPacketTypes() {
     }
@@ -37,8 +38,8 @@ public final class NetworkPacketTypes {
     public static <T extends INetworkPacket<T> & CustomPacketPayload> CustomPacketPayload.Type<T> typeOf(
             Class<T> packetClass
     ) {
-        return (CustomPacketPayload.Type<T>) CACHE.computeIfAbsent(packetClass, cls -> {
-            NetworkPacket meta = packetClass.getAnnotation(NetworkPacket.class);
+        CustomPacketPayload.Type<T> type = (CustomPacketPayload.Type<T>) CACHE.computeIfAbsent(packetClass, cls -> {
+            var meta = packetClass.getAnnotation(NetworkPacket.class);
             if (meta == null) {
                 throw new IllegalArgumentException("Packet class " + packetClass.getName() + " is missing @NetworkPacket");
             }
@@ -48,8 +49,14 @@ public final class NetworkPacketTypes {
                 throw new IllegalArgumentException("Packet class " + packetClass.getName()
                         + " has empty NetworkPacket.modId or id");
             }
-            ResourceLocation resourceLocation = ResourceLocation.fromNamespaceAndPath(modId, id);
+            var resourceLocation = ResourceLocation.fromNamespaceAndPath(modId, id);
             return new CustomPacketPayload.Type<>(resourceLocation);
         });
+        REVERSE.putIfAbsent(type.id(), packetClass);
+        return type;
+    }
+
+    public static Class<?> classOf(ResourceLocation id) {
+        return REVERSE.get(id);
     }
 }
