@@ -51,8 +51,16 @@ processResources {
     }
 }
 
-java {
-    withSourcesJar()
+sourcesJar {
+    afterEvaluate {
+        [":common-api"].forEach {
+            def depSources = project(it).sourcesJar
+            dependsOn depSources
+            from(depSources.archiveFile.map { zipTree(it) }) {
+                exclude "oelib.accessWidener"
+            }
+        }
+    }
 }
 
 shadowJar {

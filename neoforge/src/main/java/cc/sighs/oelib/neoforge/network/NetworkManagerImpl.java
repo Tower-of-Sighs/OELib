@@ -16,7 +16,6 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -134,7 +133,7 @@ public class NetworkManagerImpl implements INetworkManager {
 
     @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToAll(T packet) {
-        MinecraftServer server = DataManager.getCurrentServer();
+        var server = DataManager.getCurrentServer();
         int threshold = NetworkAutoRegistration.getChunkThreshold(packet.getClass());
 
         if (threshold > 0 && server != null) {

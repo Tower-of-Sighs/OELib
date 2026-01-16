@@ -1,6 +1,7 @@
 package cc.sighs.oelib.network.util;
 
 import cc.sighs.oelib.OELib;
+import cc.sighs.oelib.data.DataManager;
 import cc.sighs.oelib.network.api.INetworkPacket;
 import cc.sighs.oelib.network.chunk.GenericChunkPacket;
 import io.netty.buffer.Unpooled;
@@ -18,6 +19,10 @@ import java.util.function.Consumer;
 
 public final class NetworkUtil {
     private NetworkUtil() {
+    }
+
+    public static boolean isLogicalServer() {
+        return DataManager.getServer() != null;
     }
 
     public static void sendChunkedPacket(byte[] data, ResourceLocation typeId, Iterable<ServerPlayer> players, int chunkSize) {
@@ -99,7 +104,7 @@ public final class NetworkUtil {
         return createServerBuffer(firstPlayer);
     }
 
-    public static void forEachChunk(byte[] data, ResourceLocation typeId, int chunkSize, java.util.function.Consumer<GenericChunkPacket> consumer) {
+    public static void forEachChunk(byte[] data, ResourceLocation typeId, int chunkSize, Consumer<GenericChunkPacket> consumer) {
         var sessionId = UUID.randomUUID();
         int totalChunks = (int) Math.ceil((double) data.length / chunkSize);
         OELib.LOGGER.info("Chunking {} into {} chunks for session {} ({} bytes)", typeId, totalChunks, sessionId, data.length);

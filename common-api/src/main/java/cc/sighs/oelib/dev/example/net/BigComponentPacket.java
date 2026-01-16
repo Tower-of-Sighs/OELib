@@ -19,7 +19,6 @@ import net.minecraft.core.GlobalPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.ChunkPos;
@@ -95,7 +94,7 @@ public record BigComponentPacket(
         Int2IntMap fastI2I,
         Long2ObjectMap<String> fastL2O,
         IntList fastIntList
-) implements INetworkPacket<BigComponentPacket>, CustomPacketPayload {
+) implements INetworkPacket<BigComponentPacket> {
     private static boolean hasSavedSample = false;
 
     @Override
