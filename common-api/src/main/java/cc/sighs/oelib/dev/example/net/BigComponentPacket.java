@@ -18,12 +18,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.Vec3;
 import org.apache.commons.lang3.tuple.Triple;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -64,14 +62,15 @@ public record BigComponentPacket(
         ChunkPos mcChunkPos,
         SectionPos mcSectionPos,
         GlobalPos mcGlobalPos,
-        Vec3 mcVec3,
+        // 为保证 1.20.1 与 1.21.1 测试的一致性，这里注释掉几个参数
+//        Vec3 mcVec3,
         Vector3f mcVector3f,
         Quaternionf mcQuaternionf,
         ResourceLocation mcResourceLocation,
         ResourceKey<?> mcResourceKey,
         BlockHitResult mcBlockHitResult,
         CompoundTag mcCompoundTag,
-        Tag mcTag,
+//        Tag mcTag,
         ExampleEnum enumVal,
         NestedRecord nestedRecord,
         Optional<String> optString,
@@ -99,28 +98,22 @@ public record BigComponentPacket(
 
     @Override
     public void handle(INetworkContext context) {
-        long startTime = System.nanoTime();
-        int dataLength = this.refString().length();
-
-        OELib.LOGGER.info("[Performance] Received packets (Size: {} bytes)", dataLength);
-
+        long startNs = System.nanoTime();
         if (!hasSavedSample) {
             CompletableFuture.runAsync(() -> {
                 try {
                     var path = Paths.get("logs", "packet_dumps");
                     Files.createDirectories(path);
-                    String summary = "Packet Received at " + new Date() + "\nString Length: " + dataLength;
+                    String summary = "Packet Received at " + new Date();
                     Files.writeString(path.resolve("stress_sample_summary.txt"), summary);
-                    OELib.LOGGER.info("[Performance] Sample abstracts are saved.");
-                } catch (Exception e) {
-                    OELib.LOGGER.error("Save failed", e);
+                } catch (Exception ignored) {
                 }
             });
             hasSavedSample = true;
         }
 
-        long endTime = System.nanoTime();
-        OELib.LOGGER.info("[Performance] Receiving logic triggering is time-consuming: {} ms", (endTime - startTime) / 1_000_000.0);
+        long endNs = System.nanoTime();
+        BigPacketSender.recordReceive((endNs - startNs) / 1_000_000.0);
     }
 
     public enum ExampleEnum {
