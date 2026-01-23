@@ -264,7 +264,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
         OELib.LOGGER.info("Loaded {} valid {} entries, {} deferred entries, {} invalid entries were skipped",
                 validCount, dataClass.getSimpleName(), deferredCount, invalidCount);
 
-        if (annotation.syncToClient() && serverStarted) {
+        if (annotation.syncToClient() && serverStarted && getCurrentServer() != null) {
             syncToAllPlayers();
         }
 
@@ -301,7 +301,7 @@ public class DataManager<T> extends SimpleJsonResourceReloadListener {
 
     private void syncToAllPlayers() {
         try {
-            if (!loadedData.isEmpty() || !deferredData.isEmpty()) {
+            if (getCurrentServer() != null && (!loadedData.isEmpty() || !deferredData.isEmpty())) {
                 Map<ResourceLocation, T> allData = new HashMap<>(loadedData);
                 allData.putAll(deferredData);
                 DataSyncPacket<T> packet = new DataSyncPacket<>(dataClass, allData);

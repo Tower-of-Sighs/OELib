@@ -348,7 +348,7 @@ public class DataManager<T> implements SimpleResourceReloadListener<Map<Resource
 
     private void syncToAllPlayers() {
         try {
-            if (!loadedData.isEmpty() || !deferredData.isEmpty()) {
+            if (getCurrentServer() != null && (!loadedData.isEmpty() || !deferredData.isEmpty())) {
                 Map<ResourceLocation, T> allData = new HashMap<>(loadedData);
                 allData.putAll(deferredData);
                 DataSyncPacket<T> packet = new DataSyncPacket<>(dataClass, allData);
