@@ -6,7 +6,7 @@
   "mixins": [
   ],
   "client": [
-    "ForgeIconHandlerMixin"
+    "cc.sighs.oelib.forge.mixin.ForgeIconHandlerMixin"
   ],
   "injectors": {
     "defaultRequire": 1
