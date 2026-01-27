@@ -1,57 +1,40 @@
 package cc.sighs.oelib.data.net;
 
 import cc.sighs.oelib.OELib;
-import cc.sighs.oelib.network.ChunkAssembler;
+import cc.sighs.oelib.data.DataManager;
 import cc.sighs.oelib.network.api.INetworkContext;
 import cc.sighs.oelib.network.api.INetworkPacket;
 import cc.sighs.oelib.network.api.NetworkPacket;
 import cc.sighs.oelib.network.api.Side;
-import net.minecraft.network.FriendlyByteBuf;
+import cc.sighs.oelib.util.CodecUtils;
+import net.minecraft.resources.ResourceLocation;
 
-import java.util.UUID;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Optional;
 
-/**
- * 数据同步分片数据包。
- *
- * @param sessionId     会话ID
- * @param chunkIndex    当前分片索引
- * @param totalChunks   总分片数
- * @param dataClassName 数据类名
- * @param chunkData     分片数据
- */
-@NetworkPacket(side = Side.BOTH, chunkThreshold = 30000)
-public record DataSyncChunkPacket(UUID sessionId, int chunkIndex, int totalChunks, String dataClassName,
-                                  byte[] chunkData) implements INetworkPacket<DataSyncChunkPacket> {
-
-    public static DataSyncChunkPacket decode(FriendlyByteBuf buf) {
-        UUID sessionId = buf.readUUID();
-        int chunkIndex = buf.readInt();
-        int totalChunks = buf.readInt();
-        String dataClassName = buf.readUtf();
-        int dataLength = buf.readInt();
-        byte[] chunkData = new byte[dataLength];
-        buf.readBytes(chunkData);
-
-        return new DataSyncChunkPacket(sessionId, chunkIndex, totalChunks, dataClassName, chunkData);
-    }
-
-    @Override
-    public void encode(FriendlyByteBuf buf) {
-        buf.writeUUID(sessionId);
-        buf.writeInt(chunkIndex);
-        buf.writeInt(totalChunks);
-        buf.writeUtf(dataClassName);
-        buf.writeInt(chunkData.length);
-        buf.writeBytes(chunkData);
-    }
+@NetworkPacket(modId = OELib.MODID, id = "data_sync_chunk", side = Side.BOTH, chunkThreshold = 30000)
+public record DataSyncChunkPacket(String dataClassName,
+                                  byte[] dataBytes) implements INetworkPacket<DataSyncChunkPacket> {
 
     @Override
     public void handle(INetworkContext context) {
         try {
-            ChunkAssembler.receiveChunk(sessionId, chunkIndex,
-                    totalChunks, dataClassName, chunkData);
+            String json = new String(dataBytes, StandardCharsets.UTF_8);
+            Class<?> dataClass = Class.forName(dataClassName);
+            @SuppressWarnings("unchecked")
+            Optional<Map<ResourceLocation, ?>> dataOpt =
+                    (Optional<Map<ResourceLocation, ?>>) (Object)
+                            CodecUtils.decodeFromJson((Class<Object>) dataClass, json);
+            if (dataOpt.isPresent()) {
+                Map<ResourceLocation, ?> data = dataOpt.get();
+                DataManager.updateClientDataRaw(dataClass, data);
+                OELib.LOGGER.info("Processed {} {} data entries", data.size(), dataClass.getSimpleName());
+            } else {
+                OELib.LOGGER.error("Failed to parse JSON data for {}", dataClassName);
+            }
         } catch (Exception e) {
-            OELib.LOGGER.error("Failed to handle chunk packet: {}", e.getMessage(), e);
+            OELib.LOGGER.error("Failed to handle data sync packet: {}", e.getMessage(), e);
         }
     }
 }

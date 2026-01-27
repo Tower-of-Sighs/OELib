@@ -9,6 +9,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.world.level.material.Fluid;
 import org.joml.Matrix4f;
 
 import java.util.ServiceLoader;
@@ -16,29 +17,19 @@ import java.util.ServiceLoader;
 /**
  * Utility class for Fluid GUI Rendering.
  * <p>
- * This class provides GUI rendering capabilities for fluids. The method
- * {@link #render(GuiGraphics, Object, long, long, int, int, int, int)}
- * automatically detects the type of the provided fluid object—either a
- * {@code net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant} (Fabric)
- * or a {@code net.minecraftforge.fluids.FluidStack} (Forge)—and renders it
- * with the correct texture and tint color.
+ * This class provides a platform-agnostic way to render fluids in the GUI.
+ * It uses {@link FluidRef} as a bridge to encapsulate platform-specific fluid representations
+ * (such as Fabric's {@code FluidVariant} or NeoForge's {@code FluidStack}).
  * </p>
  *
- * <h2>Basic Usage</h2>
+ * <h2>Usage</h2>
  * <ul>
- *   <li>Call {@link #render(GuiGraphics, Object, long, long, int, int, int, int)},
- *       passing in a fluid object from either platform (e.g., {@code FluidVariant}
- *       or {@code FluidStack}), the current fluid amount, total capacity, and the
- *       target rectangular area.</li>
- *   <li>The implementation automatically resolves the appropriate texture sprite
- *       and ARGB tint color, then renders the fluid by vertically scaling its
- *       fill height according to the {@code amount / capacity} ratio.</li>
- *   <li>For fine-grained control—such as when you already have a specific sprite
- *       and color—you can use the lower-level method
- *       {@link #renderTiledSprite(GuiGraphics, TextureAtlasSprite, int, int, int, int, int, int)} directly.</li>
+ * <li>Implement or use an existing {@link FluidRef} to wrap your fluid data.</li>
+ * <li>Call {@link #render(GuiGraphics, FluidRef, long, long, int, int, int, int)}
+ * to draw the fluid bar with correct textures and tint colors.</li>
  * </ul>
  */
-public final class FluidRenderers {
+public class FluidRenderers {
     public static final int TEXTURE_SIZE = 16;
     public static final int MIN_FLUID_HEIGHT = 1;
 
@@ -53,9 +44,35 @@ public final class FluidRenderers {
     private FluidRenderers() {
     }
 
-    public static void render(GuiGraphics graphics, Object fluidRef, long amount, long capacity,
+    /**
+     * Renders a fluid into a rectangular area on the screen.
+     *
+     * @param graphics  The current GuiGraphics instance.
+     * @param ref  A bridge object containing fluid type and data.
+     * @param amount    The current amount of fluid.
+     * @param capacity  The maximum capacity of the container.
+     * @param x         Target X coordinate.
+     * @param y         Target Y coordinate.
+     * @param width     Width of the rendering area.
+     * @param height    Height of the rendering area.
+     */
+    public static void render(GuiGraphics graphics, FluidRef ref, long amount, long capacity,
                               int x, int y, int width, int height) {
-        IMPL.render(graphics, fluidRef, amount, capacity, x, y, width, height);
+        var attrs = IMPL.resolve(ref);
+        if (attrs == null) return;
+        int scaledHeight = computeScaledHeight(amount, capacity, height, MIN_FLUID_HEIGHT);
+        renderTiledSprite(graphics, attrs.sprite(), attrs.colorARGB(), x, y, width, scaledHeight, height);
+    }
+
+    public static FluidRef of(Fluid fluid) {
+        return new SimpleFluidRef(fluid);
+    }
+
+    private record SimpleFluidRef(Fluid fluid) implements FluidRef {
+        @Override
+        public Fluid getFluid() {
+            return fluid;
+        }
     }
 
     public static int computeScaledHeight(long amount, long capacity, int fullHeight, int minHeight) {

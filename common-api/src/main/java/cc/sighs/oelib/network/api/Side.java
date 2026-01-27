@@ -1,21 +1,21 @@
 package cc.sighs.oelib.network.api;
 
 /**
- * 网络包的目标端。
+ * Logical side on which a packet is handled.
  */
 public enum Side {
     /**
-     * 仅客户端接收。
+     * Handled only on the logical client.
      */
     CLIENT,
 
     /**
-     * 仅服务端接收。
+     * Handled only on the logical server.
      */
     SERVER,
 
     /**
-     * 双端都接收。
+     * Handled on both client and server.
      */
     BOTH
 }

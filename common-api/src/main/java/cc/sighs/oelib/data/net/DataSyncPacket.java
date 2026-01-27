@@ -8,7 +8,6 @@ import net.minecraft.server.level.ServerPlayer;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 
 public class DataSyncPacket<T> {
 
@@ -39,9 +38,9 @@ public class DataSyncPacket<T> {
                     dataClass.getSimpleName(), data.size(), dataBytes.length);
 
             DataSyncChunkPacket packet = new DataSyncChunkPacket(
-                    UUID.randomUUID(), 0, 1, dataClass.getName(), dataBytes);
+                    dataClass.getName(), dataBytes);
 
-            packet.sendToWithChunking(player);
+            packet.sendTo(player);
 
         } catch (Exception e) {
             OELib.LOGGER.error("Failed to send {} sync packet: {}", dataClass.getSimpleName(), e.getMessage(), e);
@@ -61,9 +60,9 @@ public class DataSyncPacket<T> {
                     dataClass.getSimpleName(), data.size(), dataBytes.length);
 
             DataSyncChunkPacket packet = new DataSyncChunkPacket(
-                    UUID.randomUUID(), 0, 1, dataClass.getName(), dataBytes);
+                    dataClass.getName(), dataBytes);
 
-            packet.sendToAllWithChunking();
+            packet.sendToAll();
 
         } catch (Exception e) {
             OELib.LOGGER.error("Failed to send {} sync packet to all players: {}", dataClass.getSimpleName(), e.getMessage(), e);

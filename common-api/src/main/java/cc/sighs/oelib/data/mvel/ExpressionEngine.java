@@ -54,7 +54,7 @@ public final class ExpressionEngine {
             registrar.register(registry, requiredFunctions);
         }
 
-        // 如果定向注册没有获得任何函数，自动回退到完整注册
+        // If the directed registration does not get any functions, it automatically falls back to the full registration
         if (requiredFunctions != null && functionMap.isEmpty()) {
             OELib.LOGGER.warn("No functions registered for required set {}. Falling back to full registration.", requiredFunctions);
             initialize(null);

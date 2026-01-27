@@ -3,6 +3,7 @@ package cc.sighs.oelib.data;
 import cc.sighs.oelib.data.api.DataValidator;
 import cc.sighs.oelib.data.spi.IDataManager;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.List;
@@ -16,7 +17,7 @@ public final class DataManager {
     static {
         IMPL = ServiceLoader.load(IDataManager.class)
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("No DataManagerBridgeSPI implementation found"));
+                .orElseThrow(() -> new IllegalStateException("No IDataManager implementation found"));
     }
 
     private DataManager() {
@@ -80,5 +81,9 @@ public final class DataManager {
     @ApiStatus.Internal
     public static boolean isModLoaded(String modId) {
         return IMPL.isModLoaded(modId);
+    }
+
+    public static MinecraftServer getServer() {
+        return IMPL.getServer();
     }
 }

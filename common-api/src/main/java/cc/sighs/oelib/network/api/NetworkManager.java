@@ -1,101 +1,137 @@
 package cc.sighs.oelib.network.api;
 
+import cc.sighs.oelib.network.spi.INetworkManager;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.phys.Vec3;
+
+import java.util.ServiceLoader;
 
 /**
- * 通用网络管理器接口。
+ * Static facade for platform specific network managers.
  * <p>
- * 提供平台无关的网络包发送功能。
- * 具体实现由各平台的NetworkManager提供。
+ * Provides platform independent helpers for sending packets. The actual
+ * implementation is supplied by platform modules through the
+ * {@link INetworkManager} service provider interface discovered via
+ * {@link ServiceLoader}.
  * </p>
  */
 public class NetworkManager {
 
-    private static INetworkManager instance;
+    private static final INetworkManager IMPL;
 
-    /**
-     * 设置网络管理器实例。
-     * <p>
-     * 此方法由各平台的NetworkManager在初始化时调用。
-     * </p>
-     *
-     * @param manager 网络管理器实例
-     */
-    public static void setInstance(INetworkManager manager) {
-        instance = manager;
+    static {
+        IMPL = ServiceLoader.load(INetworkManager.class)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("No INetworkManager implementation found"));
+    }
+
+    public static void registerPacketScanPackage(String basePackage) {
+        NetworkAutoRegistration.registerBasePackage(basePackage);
     }
 
     /**
-     * 发送网络包到指定玩家。
+     * Sends a packet to a specific player.
      *
-     * @param packet 网络包
-     * @param player 目标玩家
-     * @param <T>    网络包类型
+     * @param packet packet instance
+     * @param player target player
+     * @param <T>    packet type
      */
-    public static <T extends INetworkPacket<T>> void sendToPlayer(T packet, ServerPlayer player) {
-        if (instance != null) {
-            instance.sendToPlayer(packet, player);
-        }
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToPlayer(T packet, ServerPlayer player) {
+        IMPL.sendToPlayer(packet, player);
     }
 
     /**
-     * 发送网络包到所有玩家。
+     * Sends a packet to all players.
      *
-     * @param packet 网络包
-     * @param <T>    网络包类型
+     * @param packet packet instance
+     * @param <T>    packet type
      */
-    public static <T extends INetworkPacket<T>> void sendToAll(T packet) {
-        if (instance != null) {
-            instance.sendToAll(packet);
-        }
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToAll(T packet) {
+        IMPL.sendToAll(packet);
     }
 
     /**
-     * 发送网络包到服务器。
+     * Sends a packet to the logical server.
      *
-     * @param packet 网络包
-     * @param <T>    网络包类型
+     * @param packet packet instance
+     * @param <T>    packet type
      */
-    public static <T extends INetworkPacket<T>> void sendToServer(T packet) {
-        if (instance != null) {
-            instance.sendToServer(packet);
-        }
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToServer(T packet) {
+        IMPL.sendToServer(packet);
     }
 
     /**
-     * 发送网络包到指定玩家（支持自动分片）。
+     * Sends a packet to all players in the given world.
      *
-     * @param packet 网络包
-     * @param player 目标玩家
-     * @param <T>    网络包类型
+     * @param packet packet instance
+     * @param level  target level
+     * @param <T>    packet type
      */
-    public static <T extends INetworkPacket<T>> void sendToPlayerWithChunking(T packet, ServerPlayer player) {
-        if (instance != null) {
-            instance.sendToPlayerWithChunking(packet, player);
-        }
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToWorld(T packet, ServerLevel level) {
+        IMPL.sendToWorld(packet, level);
     }
 
     /**
-     * 发送网络包到所有玩家（支持自动分片）。
+     * Sends a packet to players near a position in a world.
      *
-     * @param packet 网络包
-     * @param <T>    网络包类型
+     * @param packet packet instance
+     * @param level  target level
+     * @param pos    center position
+     * @param radius radius from center
+     * @param <T>    packet type
      */
-    public static <T extends INetworkPacket<T>> void sendToAllWithChunking(T packet) {
-        if (instance != null) {
-            instance.sendToAllWithChunking(packet);
-        }
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNear(T packet, ServerLevel level, Vec3 pos, double radius) {
+        IMPL.sendToNear(packet, level, pos, radius);
     }
 
     /**
-     * 注册网络包。
+     * Sends a packet to players near a position in a world, excluding one player.
      *
-     * @param packetClasses 要注册的网络包类
+     * @param packet   packet instance
+     * @param level    target level
+     * @param pos      center position
+     * @param radius   radius from center
+     * @param excluded player to exclude
+     * @param <T>      packet type
      */
-    @SafeVarargs
-    public static void registerPackets(Class<? extends INetworkPacket<?>>... packetClasses) {
-        if (instance != null) {
-            instance.registerPackets(packetClasses);
-        }
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNearExcept(T packet, ServerLevel level, Vec3 pos, double radius, ServerPlayer excluded) {
+        IMPL.sendToNearExcept(packet, level, pos, radius, excluded);
+    }
+
+    /**
+     * Sends a packet to all players tracking an entity.
+     *
+     * @param packet packet instance
+     * @param entity target entity
+     * @param <T>    packet type
+     */
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingEntity(T packet, Entity entity) {
+        IMPL.sendToTrackingEntity(packet, entity);
+    }
+
+    /**
+     * Sends a packet to all players tracking an entity and the entity itself if a player.
+     *
+     * @param packet packet instance
+     * @param entity target entity
+     * @param <T>    packet type
+     */
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingEntityAndSelf(T packet, Entity entity) {
+        IMPL.sendToTrackingEntityAndSelf(packet, entity);
+    }
+
+    /**
+     * Sends a packet to all players tracking the given chunk.
+     *
+     * @param packet   packet instance
+     * @param level    target level
+     * @param chunkPos target chunk position
+     * @param <T>      packet type
+     */
+    public static <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingChunk(T packet, ServerLevel level, ChunkPos chunkPos) {
+        IMPL.sendToTrackingChunk(packet, level, chunkPos);
     }
 }
