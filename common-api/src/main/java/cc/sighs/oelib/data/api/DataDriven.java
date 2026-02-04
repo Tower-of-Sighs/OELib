@@ -8,9 +8,9 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 标记数据驱动类型的注解。
+ * Annotation for marking data-driven types.
  *
- * <h3>使用示例：</h3>
+ * <h3>Usage Example:</h3>
  * <pre>{@code
  * @DataDriven(
  *     modid = "mymod",
@@ -34,93 +34,93 @@ import java.lang.annotation.Target;
 public @interface DataDriven {
 
     /**
-     * 模组ID。
+     * The mod ID.
      * <p>
-     * 指定数据包所属的模组ID，数据文件将从 {@code data/<modid>/<folder>/} 目录加载。
-     * 如果为空字符串，则使用注册时提供的默认模组ID。
+     * Specifies the mod ID to which the data pack belongs.
+     * Data files will be loaded from {@code data/<modid>/<folder>/}.
+     * If left as an empty string, the default mod ID provided at registration time will be used.
      * </p>
      *
-     * @return 模组ID，默认为空字符串
+     * @return the mod ID, defaulting to an empty string
      */
     String modid() default "";
 
     /**
-     * 数据包文件夹名称。
+     * The data pack folder name.
      * <p>
-     * 数据文件将从 {@code data/<modid>/<folder>/} 目录加载。
+     * Data files will be loaded from {@code data/<modid>/<folder>/}.
      * </p>
      *
-     * @return 文件夹名称
+     * @return the folder name
      */
     String folder();
 
     /**
-     * 是否同步到客户端。
+     * Whether to synchronize data to clients.
      * <p>
-     * 如果为 true，数据将在服务器加载后自动同步到所有客户端。
+     * If true, data will be automatically synced to all clients after being loaded on the server.
      * </p>
      *
-     * @return 是否同步到客户端，默认为 false
+     * @return whether to sync to clients, defaulting to false
      */
     boolean syncToClient() default false;
 
     /**
-     * 数据验证器类。
+     * The data validator class.
      * <p>
-     * 指定一个实现了 {@link DataValidator} 接口的类来验证数据的有效性。
+     * Specifies a class implementing {@link DataValidator} to validate data validity.
      * </p>
      *
-     * @return 验证器类，默认为无验证器
+     * @return the validator class, defaulting to no validator
      */
     Class<? extends DataValidator<?>> validator() default DataValidator.NoValidator.class;
 
     /**
-     * 是否启用缓存。
+     * Whether caching is enabled.
      * <p>
-     * 启用缓存可以提高数据查询性能，但会占用更多内存。
+     * Enabling caching improves data lookup performance at the cost of increased memory usage.
      * </p>
      *
-     * @return 是否启用缓存，默认为 true
+     * @return whether caching is enabled, defaulting to true
      */
     boolean enableCache() default true;
 
     /**
-     * 数据处理优先级。
+     * Data processing priority.
      * <p>
-     * 数值越小优先级越高，用于控制多个数据类型的加载顺序。
+     * Lower values indicate higher priority. Controls the loading order of multiple data types.
      * </p>
      *
-     * @return 优先级，默认为 1000
+     * @return the priority, defaulting to 1000
      */
     int priority() default 1000;
 
     /**
-     * 是否支持数组格式。
+     * Whether array format is supported.
      * <p>
-     * 如果为 true，JSON 文件可以包含对象数组，每个数组元素将作为单独的数据条目处理。
-     * 如果为 false，JSON 文件必须包含单个对象。
+     * If true, JSON files may contain an array of objects, each treated as a separate data entry.
+     * If false, JSON files must contain a single object.
      * </p>
      *
-     * @return 是否支持数组格式，默认为 false
+     * @return whether array format is supported, defaulting to false
      */
     boolean supportArray() default false;
 
     /**
-     * 为不同命名空间绑定特定验证器。
-     * 适用于同一数据类型在多个 namespace 下共享但需要不同的验证逻辑的场景。
+     * Binds specific validators to different namespaces.
+     * Useful when the same data type is shared across multiple namespaces but requires different validation logic per namespace.
      */
     @ApiStatus.Internal
     ValidatorBinding[] namespaceValidators() default {};
 
     /**
-     * 命名空间验证器绑定。
+     * Namespace-validator binding annotation.
      */
     @Target({})
     @Retention(RetentionPolicy.RUNTIME)
     @ApiStatus.Internal
     @interface ValidatorBinding {
         String namespace();
-
         Class<? extends DataValidator<?>> validator();
     }
 }
