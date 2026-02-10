@@ -1,12 +1,12 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "com.sighs.oelib.forge.mixin",
+  "package": "cc.sighs.oelib.forge.mixin",
   "compatibilityLevel": "JAVA_17",
   "mixins": [
   ],
   "client": [
-    "cc.sighs.oelib.forge.mixin.ForgeIconHandlerMixin"
+    "ForgeIconHandlerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

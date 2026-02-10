@@ -31,6 +31,14 @@ dependencies {
     modImplementation("com.terraformersmc:modmenu:${rootProject.modmenu_version}")
     modImplementation("mezz.jei:jei-$rootProject.minecraft_version-fabric:${jei_version}")
 
+    implementation "cn.6tail:lunar:1.7.3"
+    implementation "com.electronwill.night-config:toml:3.8.3"
+    implementation "de.marhali:json5-java:3.0.0"
+    include("cn.6tail:lunar:1.7.3")
+    include("com.electronwill.night-config:core:3.8.3")
+    include("com.electronwill.night-config:toml:3.8.3")
+    include("de.marhali:json5-java:3.0.0")
+
     common(project(path: ':common-api', configuration: 'namedElements')) { transitive false }
     shadowCommon (project(path: ':common-api', configuration: 'transformProductionFabric')) { transitive false }
 }
@@ -43,8 +51,16 @@ processResources {
     }
 }
 
-java {
-    withSourcesJar()
+sourcesJar {
+    afterEvaluate {
+        [":common-api"].forEach {
+            def depSources = project(it).sourcesJar
+            dependsOn depSources
+            from(depSources.archiveFile.map { zipTree(it) }) {
+                exclude "oelib.accessWidener"
+            }
+        }
+    }
 }
 
 shadowJar {
@@ -68,6 +84,27 @@ publishing {
             }
             artifact(tasks.sourcesJar) {
                 classifier "sources"
+            }
+            pom.withXml {
+                def root = asNode()
+                def depsNode = root.appendNode('dependencies')
+                def addDeps = { confName, scope ->
+                    def conf = configurations.findByName(confName)
+                    if (conf != null) {
+                        conf.allDependencies.each { dep ->
+                            if (!(dep instanceof ProjectDependency) && dep.group && dep.name && dep.version) {
+                                def dn = depsNode.appendNode('dependency')
+                                dn.appendNode('groupId', dep.group)
+                                dn.appendNode('artifactId', dep.name)
+                                dn.appendNode('version', dep.version)
+                                dn.appendNode('scope', scope)
+                                logger.lifecycle("POM add dependency ${dep.group}:${dep.name}:${dep.version} (${scope})")
+                            }
+                        }
+                    }
+                }
+                addDeps('api', 'compile')
+                addDeps('implementation', 'runtime')
             }
         }
     }

@@ -5,6 +5,7 @@ import cc.sighs.oelib.data.DataRegistry;
 import cc.sighs.oelib.data.api.DataValidator;
 import cc.sighs.oelib.data.spi.IDataManager;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraftforge.event.AddReloadListenerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModList;
@@ -108,5 +109,10 @@ public final class DataManagerImpl implements IDataManager {
     @Override
     public boolean isModLoaded(String modId) {
         return ModList.get().isLoaded(modId);
+    }
+
+    @Override
+    public MinecraftServer getServer() {
+        return DataManager.getCurrentServer();
     }
 }

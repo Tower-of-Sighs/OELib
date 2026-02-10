@@ -78,7 +78,10 @@ public class ExpressionFunctionProcessor extends AbstractProcessor {
 
     private void generateRegistrar(Map<String, ExecutableElement> functionsByName, List<ExecutableElement> allMethods) throws IOException {
         String hash = hashSuffix(allMethods);
-        ExecutableElement sample = allMethods.getFirst();
+        if (allMethods.isEmpty()) {
+            return;
+        }
+        ExecutableElement sample = allMethods.get(0);
         TypeElement owner = (TypeElement) sample.getEnclosingElement();
 
         String userPkg = processingEnv.getElementUtils().getPackageOf(owner).getQualifiedName().toString();

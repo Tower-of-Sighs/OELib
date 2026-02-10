@@ -1,5 +1,12 @@
 package cc.sighs.oelib.registry.action;
 
 public sealed interface RegistrationAction
-        permits ClientTooltipComponentAction, ColorBlockAction, ColorItemAction, CommandRegisterAction, CreativeTabAppendStackAction, CreativeTabModifyAction, EntityAttributeAction, EntityModelLayerAction, EntityRendererAction, FuelAction, KeyMappingAction, ListenAction, ParticleProviderAction, RegistryBatchAction, RenderTypeBlocksAction, RenderTypeFluidsAction, SpawnPlacementAction, TradeVillagerAction, TradeWandererAction {
+        permits RegistryBatchAction, KeyMappingAction, ClientTooltipComponentAction,
+        ColorItemAction, ColorBlockAction,
+        RenderTypeBlocksAction, RenderTypeFluidsAction,
+        EntityRendererAction, EntityModelLayerAction,
+        ParticleProviderAction, FuelAction, EntityAttributeAction,
+        SpawnPlacementAction, TradeVillagerAction,
+        TradeWandererAction, ListenAction, CreativeTabModifyAction, CreativeTabAppendStackAction,
+        CommandRegisterAction, ShaderRegisterAction, MenuAction {
 }

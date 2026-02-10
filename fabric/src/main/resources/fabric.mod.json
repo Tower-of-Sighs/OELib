@@ -19,6 +19,9 @@
     ],
     "client": [
       "cc.sighs.oelib.fabric.OELibFabricClient"
+    ],
+    "modmenu": [
+      "cc.sighs.oelib.fabric.modmenu.OELibModMenu"
     ]
   },
   "mixins": [
@@ -33,5 +36,6 @@
   },
   "suggests": {
     "another-mod": "*"
-  }
+  },
+  "accessWidener": "oelib.accesswidener"
 }

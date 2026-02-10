@@ -13,7 +13,7 @@ public final class FuelRegister {
     private static final IFuelRegistry IMPL = ServiceLoader
             .load(IFuelRegistry.class)
             .findFirst()
-            .orElseThrow(() -> new IllegalStateException("No FuelApi impl found"));
+            .orElseThrow(() -> new IllegalStateException("No IFuelRegistry impl found"));
 
     private FuelRegister() {
     }

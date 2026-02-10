@@ -5,11 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 
-/**
- * Forge网络上下文实现。
- */
 public class ForgeNetworkContext implements INetworkContext {
-
     private final NetworkEvent.Context context;
 
     public ForgeNetworkContext(NetworkEvent.Context context) {
@@ -33,9 +29,11 @@ public class ForgeNetworkContext implements INetworkContext {
 
     @Override
     public Minecraft client() {
-        if (isClientSide()) {
-            return Minecraft.getInstance();
-        }
-        return null;
+        return Minecraft.getInstance();
+    }
+
+    @Override
+    public void enqueueWork(Runnable task) {
+        context.enqueueWork(task);
     }
 }

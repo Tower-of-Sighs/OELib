@@ -22,6 +22,27 @@ publishing {
             artifact(tasks.sourcesJar) {
                 classifier "sources"
             }
+            pom.withXml {
+                def root = asNode()
+                def depsNode = root.appendNode('dependencies')
+                def addDeps = { confName, scope ->
+                    def conf = configurations.findByName(confName)
+                    if (conf != null) {
+                        conf.allDependencies.each { dep ->
+                            if (!(dep instanceof ProjectDependency) && dep.group && dep.name && dep.version) {
+                                def dn = depsNode.appendNode('dependency')
+                                dn.appendNode('groupId', dep.group)
+                                dn.appendNode('artifactId', dep.name)
+                                dn.appendNode('version', dep.version)
+                                dn.appendNode('scope', scope)
+                                logger.lifecycle("POM add dependency ${dep.group}:${dep.name}:${dep.version} (${scope})")
+                            }
+                        }
+                    }
+                }
+                addDeps('api', 'compile')
+                addDeps('implementation', 'runtime')
+            }
         }
     }
 }

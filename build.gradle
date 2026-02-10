@@ -10,6 +10,7 @@ architectury {
 
 allprojects {
     apply plugin: "architectury-plugin"
+    apply plugin: "java"
 
 
     architectury {
@@ -18,6 +19,9 @@ allprojects {
 
     group = rootProject.maven_group
     version = rootProject.mod_version
+    java {
+        withSourcesJar()
+    }
 }
 
 subprojects {
@@ -42,14 +46,17 @@ subprojects {
         minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
         mappings loom.officialMojangMappings()
 
+        implementation "cn.6tail:lunar:1.7.3"
+        implementation "de.marhali:json5-java:3.0.0"
+        if (project.name != "forge") {
+            implementation "com.electronwill.night-config:toml:3.8.3"
+        }
+
         if (project.name == "fabric") {
-            api("org.mvel:mvel2:2.5.0.Final")
-            include("org.mvel:mvel2:2.5.0.Final")
+            implementation("org.mvel:mvel2:2.5.0.Final")
         }
         if (project.name == "neoforge" || project.name == "forge") {
-            api("org.mvel:mvel2:2.5.0.Final")
-            include("org.mvel:mvel2:2.5.0.Final")
-            forgeRuntimeLibrary("org.mvel:mvel2:2.5.0.Final")
+            implementation("org.mvel:mvel2:2.5.0.Final")
         }
         if (project.name == "common-api") {
             implementation "org.mvel:mvel2:2.5.0.Final"
@@ -79,18 +86,23 @@ subprojects {
 
     publishing {
         repositories {
-            def publishUrl = System.getenv("SIGHS_PUBLISH_URL")
+            def modVersion = project.findProperty('mod_version') ?: 'unknown'
+
+            boolean isSnapshot = modVersion.toLowerCase().contains('snapshot')
+
+            def publishUrl = isSnapshot ?
+                    "https://maven.sighs.cc/repository/maven-snapshots/" :
+                    "https://maven.sighs.cc/repository/maven-releases/"
+
             def publishUser = System.getenv("SIGHS_PUBLISH_USER")
             def publishPassword = System.getenv("SIGHS_PUBLISH_PASSWORD")
 
-            if (publishUrl) {
-                maven {
-                    name = "remoteRepo"
-                    url = uri(publishUrl)
-                    credentials {
-                        username = publishUser
-                        password = publishPassword
-                    }
+            maven {
+                name = "remoteRepo"
+                url = uri(publishUrl)
+                credentials {
+                    username = publishUser
+                    password = publishPassword
                 }
             }
         }

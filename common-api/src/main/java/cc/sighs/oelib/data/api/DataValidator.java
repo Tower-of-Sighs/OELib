@@ -1,56 +1,55 @@
 package cc.sighs.oelib.data.api;
 
-
 import net.minecraft.resources.ResourceLocation;
 
 /**
- * 数据验证器接口。
+ * Interface for data validators.
  * <p>
- * 实现此接口来为数据驱动类型提供自定义验证逻辑。
+ * Implement this interface to provide custom validation logic for data-driven types.
  * </p>
  *
- * @param <T> 数据类型
+ * @param <T> the data type
  */
 public interface DataValidator<T> {
 
     /**
-     * 验证数据的有效性。
+     * Validates the correctness of the given data.
      *
-     * @param data   要验证的数据
-     * @param source 数据来源文件位置
-     * @return 验证结果
+     * @param data   the data to validate
+     * @param source the file location from which the data originates
+     * @return the validation result
      */
     ValidationResult validate(T data, ResourceLocation source);
 
     /**
-     * 验证结果。
+     * Represents the result of a validation.
      */
     record ValidationResult(boolean valid, String message, boolean deferrable) {
 
         /**
-         * 创建成功的验证结果。
+         * Creates a successful validation result.
          */
         public static ValidationResult success() {
             return new ValidationResult(true, null, false);
         }
 
         /**
-         * 创建失败的验证结果。
+         * Creates a failed validation result.
          *
-         * @param message 错误消息
+         * @param message the error message
          */
         public static ValidationResult failure(String message) {
             return new ValidationResult(false, message, false);
         }
 
         /**
-         * 创建可延迟验证的结果。
+         * Creates a deferred validation result.
          * <p>
-         * 用于处理依赖于运行时状态（如tag系统）的验证。
-         * 数据会被加载，但标记为需要延迟验证。
+         * Used when validation depends on runtime state (e.g., tag systems).
+         * The data will be loaded but marked for deferred validation.
          * </p>
          *
-         * @param message 延迟原因消息
+         * @param message the reason for deferral
          */
         public static ValidationResult deferred(String message) {
             return new ValidationResult(true, message, true);
@@ -58,7 +57,7 @@ public interface DataValidator<T> {
     }
 
     /**
-     * 默认的无验证器实现。
+     * Default no-op validator implementation.
      */
     class NoValidator implements DataValidator<Object> {
         @Override

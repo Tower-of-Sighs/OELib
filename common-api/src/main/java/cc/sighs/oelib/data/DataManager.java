@@ -78,11 +78,12 @@ public final class DataManager {
         IMPL.updateClientDataRaw(dataClass, data);
     }
 
-    @ApiStatus.Internal
+    @Deprecated(since = "0.1.3")
     public static boolean isModLoaded(String modId) {
         return IMPL.isModLoaded(modId);
     }
 
+    @Deprecated(since = "0.1.3")
     public static MinecraftServer getServer() {
         return IMPL.getServer();
     }
