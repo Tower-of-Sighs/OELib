@@ -290,4 +290,26 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
     public Optional<JsonObject> getDefaultValue() {
         return Optional.of(mapObj);
     }
+
+    @Override
+    public void dispose() {
+        if (screen != null) {
+            clearWidgets();
+            if (addBtn != null) {
+                addBtn.visible = false;
+                screen.children().remove(addBtn);
+            }
+            if (resetButton != null) {
+                resetButton.visible = false;
+                screen.children().remove(resetButton);
+            }
+        }
+        keyBoxes.clear();
+        valBoxes.clear();
+        valToggles.clear();
+        delButtons.clear();
+        addBtn = null;
+        resetButton = null;
+        created = false;
+    }
 }

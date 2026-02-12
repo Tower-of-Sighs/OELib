@@ -307,4 +307,27 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
     public Optional<JsonArray> getDefaultValue() {
         return Optional.of(array);
     }
+
+    @Override
+    public void dispose() {
+        if (screen != null) {
+            clearWidgets();
+            if (addBtn != null) {
+                addBtn.visible = false;
+                screen.children().remove(addBtn);
+            }
+            if (resetButton != null) {
+                resetButton.visible = false;
+                screen.children().remove(resetButton);
+            }
+        }
+        valueBoxes.clear();
+        toggleBoxes.clear();
+        delButtons.clear();
+        upButtons.clear();
+        downButtons.clear();
+        addBtn = null;
+        resetButton = null;
+        created = false;
+    }
 }

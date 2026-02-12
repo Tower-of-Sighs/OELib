@@ -120,10 +120,10 @@ public abstract class AbstractShaderOverlay {
         var tesselator = Tesselator.getInstance();
         var bufferBuilder = tesselator.getBuilder();
         bufferBuilder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        bufferBuilder.vertex(currentPose, 0.0F, 0.0F, 0.0F).uv(0.0F, 0.0F);
-        bufferBuilder.vertex(currentPose, 0.0F, (float) state.overlayHeight, 0.0F).uv(0.0F, 1.0F);
-        bufferBuilder.vertex(currentPose, (float) state.overlayWidth, (float) state.overlayHeight, 0.0F).uv(1.0F, 1.0F);
-        bufferBuilder.vertex(currentPose, (float) state.overlayWidth, 0.0F, 0.0F).uv(1.0F, 0.0F);
+        bufferBuilder.vertex(currentPose, 0.0F, 0.0F, 0.0F).uv(0.0F, 0.0F).endVertex();
+        bufferBuilder.vertex(currentPose, 0.0F, (float) state.overlayHeight, 0.0F).uv(0.0F, 1.0F).endVertex();
+        bufferBuilder.vertex(currentPose, (float) state.overlayWidth, (float) state.overlayHeight, 0.0F).uv(1.0F, 1.0F).endVertex();
+        bufferBuilder.vertex(currentPose, (float) state.overlayWidth, 0.0F, 0.0F).uv(1.0F, 0.0F).endVertex();
         BufferUploader.drawWithShader(bufferBuilder.end());
         pose.popPose();
     }

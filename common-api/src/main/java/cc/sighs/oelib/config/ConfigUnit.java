@@ -68,7 +68,6 @@ public class ConfigUnit<T> {
         var path = ConfigIOUtil.resolveLoadPath(meta);
         var loaded = ConfigSerializationUtil.loadFromFile(path, meta.format(), configCodec.codec(), defaultValue);
         T value = loaded.orElse(defaultValue);
-        OELib.LOGGER.info("Loaded config {} from {}", meta.id(), path);
         ConfigEvents.onLoad(this, value);
         return value;
     }

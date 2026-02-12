@@ -288,6 +288,38 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
         return Optional.empty();
     }
 
+    @Override
+    public void dispose() {
+        if (screen != null) {
+            if (toggle != null) {
+                toggle.visible = false;
+                screen.children().remove(toggle);
+            }
+            if (textBox != null) {
+                textBox.setVisible(false);
+                screen.children().remove(textBox);
+            }
+            if (slider != null) {
+                slider.visible = false;
+                screen.children().remove(slider);
+            }
+            if (dropdown != null) {
+                dropdown.visible = false;
+                screen.children().remove(dropdown);
+            }
+            if (resetButton != null) {
+                resetButton.visible = false;
+                screen.children().remove(resetButton);
+            }
+        }
+        toggle = null;
+        textBox = null;
+        slider = null;
+        dropdown = null;
+        resetButton = null;
+        created = false;
+    }
+
     private void updateResetButtonState() {
         if (resetButton == null) return;
 

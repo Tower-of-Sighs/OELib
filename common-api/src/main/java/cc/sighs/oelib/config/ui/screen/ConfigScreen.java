@@ -19,7 +19,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.CommonComponents;
@@ -112,117 +111,26 @@ public class ConfigScreen extends Screen {
             return;
         }
         int initialScroll = listWidget != null ? listWidget.getScrollOffset() : 0;
-        contexts.clear();
         int sidebar = sidebarWidth();
-        int labelWidth = 160;
         int left = sidebar + 16;
-        int controlWidth = Math.min(220, this.width - left - 40 - labelWidth);
-        int listControlWidth = controlWidth;
-        int fieldControlWidth = Math.min(200, this.width - left - 60 - labelWidth);
         int y = contentTop;
-        searchBox = new EditBox(Minecraft.getInstance().font, left, y, this.width - left - 20, 20, Component.empty());
-        searchBox.setSuggestion(Component.translatable("config.oelib.search").getString());
-        searchBox.setValue(searchText);
-        searchBox.setResponder(s -> {
-            searchText = s;
-            searchBox.setSuggestion(s.isEmpty() ? Component.translatable("config.oelib.search").getString() : "");
-            init();
-        });
-        searchBox.setFocused(true);
-        this.setInitialFocus(searchBox);
+        if (searchBox == null) {
+            searchBox = new EditBox(Minecraft.getInstance().font, left, y, this.width - left - 20, 20, Component.empty());
+            searchBox.setValue(searchText);
+            searchBox.setSuggestion(searchText.isEmpty() ? Component.translatable("config.oelib.search").getString() : "");
+            searchBox.setResponder(this::onSearchChanged);
+            searchBox.setFocused(true);
+            this.setInitialFocus(searchBox);
+        } else {
+            searchBox.setX(left);
+            searchBox.setY(y);
+            searchBox.setWidth(this.width - left - 20);
+            searchBox.setValue(searchText);
+            searchBox.setSuggestion(searchText.isEmpty() ? Component.translatable("config.oelib.search").getString() : "");
+        }
         addRenderableWidget(searchBox);
         y += 24;
-        listWidget = new DynamicEntryListWidget(Minecraft.getInstance(), this.width - left - 12, this.height, y, this.height - 32);
-        listWidget.setLeftPos(left);
-        Set<ResourceLocation> modsConfigsSet = new HashSet<>();
-        modsConfigsSet.addAll(ClientConfigManager.all().keySet());
-        modsConfigsSet.addAll(ServerConfigManager.all().keySet());
-        this.modConfigs = modsConfigsSet.stream()
-                .filter(id -> id.getNamespace().equals(this.configId.getNamespace()))
-                .sorted(Comparator.comparing(ResourceLocation::getPath))
-                .toList();
-        List<FieldRef> refs = new ArrayList<>();
-        for (ResourceLocation id : modConfigs) {
-            refs.add(new FieldRef(null, Component.translatable("config." + id.getNamespace() + "." + id.getPath() + ".title"), 0));
-        }
-        entryDefaults.clear();
-        var items = listWidget.children();
-        items.clear();
-        items.add(new EmptyEntry(5));
-        var searchLower = searchText.toLowerCase(Locale.ROOT);
-        for (ResourceLocation id : modConfigs) {
-            var optUnit = ConfigManager.get(id);
-            if (optUnit.isEmpty()) continue;
-            var u = ConfigGuiUtil.castUnit(optUnit.get());
-            u.reload();
-            var c = u.codec();
-            var workingJson = ConfigGuiUtil.encodeToJsonObject(c.codec(), u.get());
-            var defaultObj = c.codec().parse(JsonOps.INSTANCE, new JsonObject()).result().orElse(null);
-            var defaultsJson = defaultObj != null ? ConfigGuiUtil.encodeToJsonObject(c.codec(), defaultObj) : new JsonObject();
-            var flds = c.fields();
-            contexts.add(new ConfigCtx(id, u, c, flds, workingJson, defaultsJson));
-            items.add(new CategoryTextEntry(Component.translatable("config." + id.getNamespace() + "." + id.getPath() + ".title"), Component.empty()));
-            items.add(new EmptyEntry(5));
-            for (ConfigValueMeta meta : flds) {
-                if (meta.hidden()) continue;
-                if (!searchText.isEmpty()) {
-                    var display = meta.translationKey()
-                            .map(k -> Component.translatable(k).getString())
-                            .orElse(meta.key());
-                    if (!display.toLowerCase(Locale.ROOT).contains(searchLower)) continue;
-                }
-                var label = meta.translationKey().map(Component::translatable).orElse(Component.literal(meta.key()));
-                var v = ConfigGuiUtil.getPath(workingJson, meta.key());
-                if (v != null && v.isJsonArray()) {
-                    ListEntry le = new ListEntry(meta.key(), label, workingJson, listControlWidth, rowHeight,
-                            meta.tooltip().map(Component::translatable).orElse(null));
-                    items.add(le);
-                    entryDefaults.put(le, defaultsJson);
-                } else if (v != null && v.isJsonObject()) {
-                    MapEntry me = new MapEntry(meta.key(), label, workingJson, listControlWidth, rowHeight,
-                            meta.tooltip().map(Component::translatable).orElse(null));
-                    items.add(me);
-                    entryDefaults.put(me, defaultsJson);
-                } else {
-                    FieldEntry fe = new FieldEntry(meta, workingJson, labelWidth, fieldControlWidth, rowHeight);
-                    items.add(fe);
-                    entryDefaults.put(fe, defaultsJson);
-                }
-            }
-        }
-        references = refs;
-        int longest = 0;
-        for (FieldRef r : references) {
-            int w = this.font.width(Component.literal("- ").append(r.label()).getVisualOrderText());
-            if (w > longest) longest = w;
-        }
-        sideExpandLimit = Math.min(Math.max(80, longest + 16), this.width / 4);
-        sideSlider.setMaxScroll(sideExpandLimit - 14);
-        sideSlider.offset(sidebarExpanded ? sideExpandLimit - 14 : -sideExpandLimit);
-        // create controls once to avoid widget leak
-        int attachY = y;
-        for (AbstractConfigEntry<?> entry : items) {
-            var def = entryDefaults.getOrDefault(entry, new JsonObject());
-            if (entry instanceof FieldEntry fe) {
-                fe.attach(this, left, attachY, def);
-            } else if (entry instanceof MapEntry me) {
-                me.attach(this, left, attachY, def);
-            } else if (entry instanceof ListEntry le) {
-                le.attach(this, left, attachY, def);
-            }
-            attachY += entry.getItemHeight();
-        }
-        if (initialScroll > 0 && listWidget != null) {
-            listWidget.scrollTo(initialScroll, false);
-        }
-        if (!references.isEmpty()) {
-            int itemHeight = this.font.lineHeight + 3;
-            int available = this.height - 32 - 8;
-            int total = references.size() * itemHeight;
-            refScroller.setMaxScroll(Math.max(0, total - available));
-        } else {
-            refScroller.setMaxScroll(0);
-        }
+        rebuildEntries(initialScroll, y);
         int btnY = this.height - 28;
         saveButton = addRenderableWidget(Button.builder(Component.translatable("config.oelib.done"), b -> onSave()).bounds(this.width / 2 + 4, btnY, 120, 20).build());
         cancelButton = addRenderableWidget(Button.builder(CommonComponents.GUI_CANCEL, b -> onClose()).bounds(this.width / 2 - 124, btnY, 120, 20).build());
@@ -306,17 +214,121 @@ public class ConfigScreen extends Screen {
         }
     }
 
-    private void renderBg(GuiGraphics guiGraphics) {
-        if (this.minecraft.level != null) {
-            guiGraphics.fillGradient(0, 0, this.width, this.height, -1072689136, -804253680);
-        } else {
-            guiGraphics.fill(0, 0, this.width, this.height, 0x80000000);
+    private void onSearchChanged(String s) {
+        searchText = s;
+        if (searchBox != null) {
+            searchBox.setSuggestion(s.isEmpty() ? Component.translatable("config.oelib.search").getString() : "");
         }
+        int initialScroll = listWidget != null ? listWidget.getScrollOffset() : 0;
+        rebuildEntries(initialScroll, contentTop + 24);
     }
 
-    private void renderNoneBg(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        for (Renderable renderable : this.renderables) {
-            renderable.render(guiGraphics, mouseX, mouseY, partialTick);
+    private void rebuildEntries(int initialScroll, int listTop) {
+        contexts.clear();
+        int sidebar = sidebarWidth();
+        int labelWidth = 160;
+        int left = sidebar + 16;
+        int controlWidth = Math.min(220, this.width - left - 40 - labelWidth);
+        int listControlWidth = controlWidth;
+        int fieldControlWidth = Math.min(200, this.width - left - 60 - labelWidth);
+        int y = listTop;
+        if (listWidget == null) {
+            listWidget = new DynamicEntryListWidget(Minecraft.getInstance(), this.width - left - 12, this.height, y, this.height - 32);
+        }
+        listWidget.setLeftPos(left);
+        listWidget.width = this.width - left - 12;
+        listWidget.top = y;
+        listWidget.bottom = this.height - 32;
+        var items = listWidget.children();
+        for (AbstractConfigEntry<?> entry : items) {
+            entry.dispose();
+        }
+        items.clear();
+        Set<ResourceLocation> modsConfigsSet = new HashSet<>();
+        modsConfigsSet.addAll(ClientConfigManager.all().keySet());
+        modsConfigsSet.addAll(ServerConfigManager.all().keySet());
+        this.modConfigs = modsConfigsSet.stream()
+                .filter(id -> id.getNamespace().equals(this.configId.getNamespace()))
+                .sorted(Comparator.comparing(ResourceLocation::getPath))
+                .toList();
+        List<FieldRef> refs = new ArrayList<>();
+        for (ResourceLocation id : modConfigs) {
+            refs.add(new FieldRef(null, Component.translatable("config." + id.getNamespace() + "." + id.getPath() + ".title"), 0));
+        }
+        entryDefaults.clear();
+        items.add(new EmptyEntry(5));
+        var searchLower = searchText.toLowerCase(Locale.ROOT);
+        for (ResourceLocation id : modConfigs) {
+            var optUnit = ConfigManager.get(id);
+            if (optUnit.isEmpty()) continue;
+            var u = ConfigGuiUtil.castUnit(optUnit.get());
+            u.reload();
+            var c = u.codec();
+            var workingJson = ConfigGuiUtil.encodeToJsonObject(c.codec(), u.get());
+            var defaultObj = c.codec().parse(JsonOps.INSTANCE, new JsonObject()).result().orElse(null);
+            var defaultsJson = defaultObj != null ? ConfigGuiUtil.encodeToJsonObject(c.codec(), defaultObj) : new JsonObject();
+            var flds = c.fields();
+            contexts.add(new ConfigCtx(id, u, c, flds, workingJson, defaultsJson));
+            items.add(new CategoryTextEntry(Component.translatable("config." + id.getNamespace() + "." + id.getPath() + ".title"), Component.empty()));
+            items.add(new EmptyEntry(5));
+            for (ConfigValueMeta meta : flds) {
+                if (meta.hidden()) continue;
+                if (!searchText.isEmpty()) {
+                    var display = meta.translationKey()
+                            .map(k -> Component.translatable(k).getString())
+                            .orElse(meta.key());
+                    if (!display.toLowerCase(Locale.ROOT).contains(searchLower)) continue;
+                }
+                var label = meta.translationKey().map(Component::translatable).orElse(Component.literal(meta.key()));
+                var v = ConfigGuiUtil.getPath(workingJson, meta.key());
+                if (v != null && v.isJsonArray()) {
+                    ListEntry le = new ListEntry(meta.key(), label, workingJson, listControlWidth, rowHeight,
+                            meta.tooltip().map(Component::translatable).orElse(null));
+                    items.add(le);
+                    entryDefaults.put(le, defaultsJson);
+                } else if (v != null && v.isJsonObject()) {
+                    MapEntry me = new MapEntry(meta.key(), label, workingJson, listControlWidth, rowHeight,
+                            meta.tooltip().map(Component::translatable).orElse(null));
+                    items.add(me);
+                    entryDefaults.put(me, defaultsJson);
+                } else {
+                    FieldEntry fe = new FieldEntry(meta, workingJson, labelWidth, fieldControlWidth, rowHeight);
+                    items.add(fe);
+                    entryDefaults.put(fe, defaultsJson);
+                }
+            }
+        }
+        references = refs;
+        int longest = 0;
+        for (FieldRef r : references) {
+            int w = this.font.width(Component.literal("- ").append(r.label()).getVisualOrderText());
+            if (w > longest) longest = w;
+        }
+        sideExpandLimit = Math.min(Math.max(80, longest + 16), this.width / 4);
+        sideSlider.setMaxScroll(sideExpandLimit - 14);
+        sideSlider.offset(sidebarExpanded ? sideExpandLimit - 14 : -sideExpandLimit);
+        int attachY = y;
+        for (AbstractConfigEntry<?> entry : items) {
+            var def = entryDefaults.getOrDefault(entry, new JsonObject());
+            if (entry instanceof FieldEntry fe) {
+                fe.attach(this, left, attachY, def);
+            } else if (entry instanceof MapEntry me) {
+                me.attach(this, left, attachY, def);
+            } else if (entry instanceof ListEntry le) {
+                le.attach(this, left, attachY, def);
+            }
+            attachY += entry.getItemHeight();
+        }
+        if (initialScroll > 0 && listWidget != null) {
+            listWidget.scrollTo(initialScroll, false);
+        }
+        if (!references.isEmpty()) {
+            int itemHeight = this.font.lineHeight + 3;
+            int available = this.height - 32 - 8;
+            int total = references.size() * itemHeight;
+            refScroller.setMaxScroll(Math.max(0, total - available));
+        } else {
+            refScroller.setMaxScroll(0);
         }
     }
 
@@ -330,7 +342,7 @@ public class ConfigScreen extends Screen {
         mouseYLast = -1;
         refScroller.update(partialTick);
         sideSlider.update(partialTick);
-        renderBg(gui);
+        super.renderBackground(gui);
         ScissorsHandler.INSTANCE.clearScissors();
         int sidebar = sidebarWidth();
         int contentLeft = sidebar;
@@ -389,7 +401,7 @@ public class ConfigScreen extends Screen {
         int bottomBarTop = this.height - 32;
         Rectangle contentRect = new Rectangle(0, headerBottom, this.width, bottomBarTop - headerBottom);
         ScissorsHandler.INSTANCE.scissor(contentRect);
-        renderNoneBg(gui, mouseX, mouseY, partialTick);
+        super.render(gui, mouseX, mouseY, partialTick);
         if (listWidget != null) {
             listWidget.render(gui, mouseX, mouseY, partialTick);
         }
@@ -410,6 +422,14 @@ public class ConfigScreen extends Screen {
         }
         if (lastTooltip != null && mouseXLast >= 0) {
             gui.renderTooltip(this.font, lastTooltip, mouseXLast, mouseYLast);
+        }
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (searchBox != null) {
+            searchBox.tick();
         }
     }
 

@@ -47,6 +47,9 @@ public abstract class AbstractConfigEntry<T> implements GuiEventListener, Narrat
         return Collections.emptyList();
     }
 
+    public void dispose() {
+    }
+
     public void save() {
         if (saveCallback != null) {
             saveCallback.accept(getValue());
