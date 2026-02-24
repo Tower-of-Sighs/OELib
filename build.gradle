@@ -29,6 +29,7 @@ subprojects {
     apply plugin: 'architectury-plugin'
     apply plugin: 'maven-publish'
     apply plugin: 'java'
+    apply plugin: 'java-library'
 
     base {
         archivesName = "${rootProject.archives_name}-${project.name}-${rootProject.minecraft_version}"
@@ -88,7 +89,11 @@ subprojects {
         repositories {
             def modVersion = project.findProperty('mod_version') ?: 'unknown'
 
-            boolean isSnapshot = modVersion.toLowerCase().contains('snapshot')
+            String normalizedVersion = modVersion.toLowerCase()
+            boolean isSnapshot = normalizedVersion.contains('snapshot') ||
+                    normalizedVersion.contains('alpha') ||
+                    normalizedVersion.contains('beta') ||
+                    normalizedVersion.contains('dev')
 
             def publishUrl = isSnapshot ?
                     "https://maven.sighs.cc/repository/maven-snapshots/" :
