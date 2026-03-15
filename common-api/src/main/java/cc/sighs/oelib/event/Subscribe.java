@@ -19,8 +19,6 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface Subscribe {
-    EventPhase phase() default EventPhase.NORMAL;
-
     EventPriority priority() default EventPriority.NORMAL;
 
     EventSide side() default EventSide.BOTH;

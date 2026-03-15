@@ -76,6 +76,10 @@ public final class FabricAnnotationScanner implements IAnnotationScanner {
         try {
             Class<?> clazz = Class.forName(name, false, l);
             if (!filter.test(clazz)) return;
+            if (clazz.isAnnotationPresent(ann)) {
+                res.add(clazz);
+                return;
+            }
             for (Method m : clazz.getDeclaredMethods()) {
                 if (m.isAnnotationPresent(ann)) {
                     res.add(clazz);

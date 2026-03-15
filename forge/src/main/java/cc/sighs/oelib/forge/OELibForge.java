@@ -1,6 +1,7 @@
 package cc.sighs.oelib.forge;
 
 import cc.sighs.oelib.OELib;
+import cc.sighs.oelib.forge.event.TickBridge;
 import cc.sighs.oelib.forge.network.NetworkManagerImpl;
 import cc.sighs.oelib.network.api.INetworkPacket;
 import cc.sighs.oelib.network.api.NetworkAutoRegistration;
@@ -15,6 +16,7 @@ public class OELibForge {
             impl.registerAnnotated(packetClass);
         }
         OELib.init();
+        TickBridge.initServer();
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> OELibForgeClient::onClientSetup);
     }
 }

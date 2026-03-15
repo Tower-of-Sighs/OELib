@@ -1,7 +1,7 @@
 package cc.sighs.oelib.event;
 
 /**
- * Relative priority of handlers within the same {@link EventPhase}.
+ * Relative priority of handlers for a given event type.
  * <p>
  * Higher priorities are invoked before lower priorities.
  */

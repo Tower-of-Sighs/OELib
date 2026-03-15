@@ -7,7 +7,12 @@
   "mixins": [
   ],
   "client": [
-    "FabricIconHandlerMixin"
+    "FabricIconHandlerMixin",
+    "event.EffectRenderingInventoryScreenMixin",
+    "event.KeyboardHandlerMixin",
+    "event.MinecraftMixin",
+    "event.MouseHandlerMixin",
+    "event.ScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1

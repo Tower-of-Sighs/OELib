@@ -20,14 +20,13 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <ol>
  *   <li>Annotate a void method with {@link Subscribe}, taking exactly one {@link Event} parameter.</li>
  *   <li>Register an instance via {@link #register(Object)} or a class with static handlers via {@link #register(Class)}.</li>
- *   <li>Post events with {@link #post(Event)} or {@link #postPhase(Event, EventPhase)}.</li>
+ *   <li>Post events with {@link #post(Event)}.</li>
  * </ol>
  * Notes:
  * <ul>
- *   <li>Handlers are ordered by {@link EventPhase} then {@link EventPriority}.</li>
- *   <li>{@link #postPhase(Event, EventPhase)} dispatches only handlers matching the given phase.
- *       This is intended for bridges that need a precise "pre/normal/post" around native handling.</li>
- *   <li>{@link #post(Event)} dispatches all phases in a single call (ordered by phase &amp; priority).</li>
+ *   <li>Handlers are ordered by {@link EventPriority} only.</li>
+ *   <li>For pre/post semantics, define distinct event types (e.g. MyEvent.Pre/MyEvent.Post)
+ *       and post them separately.</li>
  *   <li>{@link CancellableEvent} is supported; handlers can opt into receiving cancelled events via {@link Subscribe#receiveCanceled()}.</li>
  *   <li>Posting is thread-safe; frequent register/unregister will invalidate internal caches and is best done during initialization.</li>
  * </ul>
@@ -37,7 +36,6 @@ public final class EventBus {
 
     private static final Handler[] NO_HANDLERS = new Handler[0];
     private static final EventPriority[] PRIORITIES = EventPriority.values();
-    private static final EventPhase[] PHASES = EventPhase.values();
 
     private final Map<Class<? extends Event>, Handler[]> directHandlers = new ConcurrentHashMap<>();
     private final AtomicInteger cacheEpoch = new AtomicInteger();
@@ -73,24 +71,16 @@ public final class EventBus {
         INSTANCE.unregisterInternal(listenerClass);
     }
 
-    public static <E extends Event> E post(E event) {
-        return INSTANCE.postInternal(event);
+    /**
+     * Posts an event to all registered handlers.
+     *
+     * @return {@code true} if the event is cancellable and was cancelled by a handler.
+     */
+    public static boolean post(Event event) {
+        INSTANCE.postInternal(event);
+        return event instanceof CancellableEvent cancellableEvent && cancellableEvent.isCanceled();
     }
 
-    /**
-     * Post an event to handlers matching the given phase only.
-     * <p>
-     * Use this in platform bridges where you need to invoke handlers
-     * <em>before</em> or <em>after</em> native handling:
-     * <pre>
-     *   EventBus.postPhase(event, EventPhase.PRE);
-     *   // native handling
-     *   EventBus.postPhase(event, EventPhase.POST);
-     * </pre>
-     */
-    public static <E extends Event> E postPhase(E event, EventPhase phase) {
-        return INSTANCE.postInternalPhase(event, phase);
-    }
 
     public static <E extends Event> CompletableFuture<E> postAsync(E event) {
         return INSTANCE.postAsyncInternal(event);
@@ -119,10 +109,6 @@ public final class EventBus {
     }
 
     private static boolean shouldComeBefore(Handler a, Handler b) {
-        int phaseCmp = Integer.compare(a.phase.ordinal(), b.phase.ordinal());
-        if (phaseCmp != 0) {
-            return phaseCmp < 0;
-        }
         int prioCmp = Integer.compare(a.priority.ordinal(), b.priority.ordinal());
         return prioCmp < 0;
     }
@@ -169,7 +155,6 @@ public final class EventBus {
             Handler handler = new Handler(
                     listenerInstance != null ? listenerInstance : listenerClass,
                     invoker,
-                    subscribe.phase(),
                     subscribe.priority(),
                     subscribe.receiveCanceled()
             );
@@ -233,43 +218,17 @@ public final class EventBus {
         return event;
     }
 
-    /**
-     * like {@link #postInternal(Event)}, but only dispatches handlers whose phase equals {@code phase}.
-     * Useful for precise "pre/normal/post" around a native handling section in platform bridges.
-     */
-    private <E extends Event> E postInternalPhase(E event, EventPhase phase) {
-        if (event == null) {
-            return null;
-        }
-        Class<? extends Event> eventClass = event.getClass();
-        Handler[] allHandlers = getDispatchHandlers(eventClass);
-        if (allHandlers.length == 0) {
-            return event;
-        }
-        if (!(event instanceof CancellableEvent cancellableEvent)) {
-            for (Handler handler : allHandlers) {
-                if (handler.phase == phase) {
-                    handler.invoker.invoke(event);
-                }
-            }
-            return event;
-        }
-        for (Handler handler : allHandlers) {
-            if (handler.phase != phase) continue;
-            if (cancellableEvent.isCanceled() && !handler.receiveCanceled) {
-                continue;
-            }
-            handler.invoker.invoke(event);
-        }
-        return event;
-    }
+    // no per-phase internal dispatch
 
     private <E extends Event> CompletableFuture<E> postAsyncInternal(E event) {
         if (event instanceof CancellableEvent) {
             throw new IllegalStateException("postAsync does not support CancellableEvent. Use post() on main thread or design immutable, non-cancellable events for async.");
         }
         Executor executor = asyncExecutor;
-        return CompletableFuture.supplyAsync(() -> postInternal(event), executor);
+        return CompletableFuture.supplyAsync(() -> {
+            postInternal(event);
+            return event;
+        }, executor);
     }
 
     private void setAsyncExecutorInternal(Executor executor) {
@@ -295,7 +254,7 @@ public final class EventBus {
 
     private Handler[] computeHandlers(Class<? extends Event> eventClass) {
         @SuppressWarnings("unchecked")
-        ArrayList<Handler>[] buckets = (ArrayList<Handler>[]) new ArrayList[PHASES.length * PRIORITIES.length];
+        ArrayList<Handler>[] buckets = (ArrayList<Handler>[]) new ArrayList[PRIORITIES.length];
         // use identity semantics for Class keys; avoids Class.equals/hashCode work
         Set<Class<?>> visited = Collections.newSetFromMap(new IdentityHashMap<>());
        ArrayDeque<Class<?>> stack = new ArrayDeque<>();
@@ -310,7 +269,7 @@ public final class EventBus {
                 Handler[] direct = directHandlers.get(evtType);
                 if (direct != null) {
                     for (Handler handler : direct) {
-                        int bucketIndex = handler.phase.ordinal() * PRIORITIES.length + handler.priority.ordinal();
+                        int bucketIndex = handler.priority.ordinal();
                         ArrayList<Handler> bucket = buckets[bucketIndex];
                         if (bucket == null) {
                             bucket = new ArrayList<>();
@@ -344,16 +303,14 @@ public final class EventBus {
         Handler[] out = new Handler[total];
         int idx = 0;
         // flatten (phase, priority) buckets in a fixed order for cache-friendly iteration
-        for (int p = 0; p < PHASES.length; p++) {
-            for (int prio = 0; prio < PRIORITIES.length; prio++) {
-                int bucketIndex = p * PRIORITIES.length + prio;
-                List<Handler> bucket = buckets[bucketIndex];
-                if (bucket == null) {
-                    continue;
-                }
-                for (Handler handler : bucket) {
-                    out[idx++] = handler;
-                }
+        for (int prio = 0; prio < PRIORITIES.length; prio++) {
+            int bucketIndex = prio;
+            List<Handler> bucket = buckets[bucketIndex];
+            if (bucket == null) {
+                continue;
+            }
+            for (Handler handler : bucket) {
+                out[idx++] = handler;
             }
         }
         return out;
@@ -415,7 +372,7 @@ public final class EventBus {
         private volatile Handler[] handlers = NO_HANDLERS;
     }
 
-    private record Handler(Object owner, Invoker invoker, EventPhase phase, EventPriority priority,
+    private record Handler(Object owner, Invoker invoker, EventPriority priority,
                            boolean receiveCanceled) {
     }
 }

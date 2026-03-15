@@ -98,16 +98,16 @@ public class EventBusJmhBenchmarks {
 
     public static class MixedPhasesInstance {
 
-        @Subscribe(phase = EventPhase.PRE, priority = EventPriority.HIGH)
+        @Subscribe(priority = EventPriority.HIGH)
         public void a(BaseEvent e) {}
 
-        @Subscribe(phase = EventPhase.NORMAL)
+        @Subscribe
         public void b(BaseEvent e) {}
 
-        @Subscribe(phase = EventPhase.POST, priority = EventPriority.LOW)
+        @Subscribe(priority = EventPriority.LOW)
         public void c(BaseEvent e) {}
 
-        @Subscribe(phase = EventPhase.NORMAL)
+        @Subscribe
         public void onCancellable(MyCancellableEvent e) {}
     }
 }
