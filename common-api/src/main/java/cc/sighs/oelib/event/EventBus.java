@@ -14,26 +14,22 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Central event bus for OELib.
+ * OELib event bus: register listeners and post events.
  * <p>
- * Features:
+ * How to use:
+ * <ol>
+ *   <li>Annotate a void method with {@link Subscribe}, taking exactly one {@link Event} parameter.</li>
+ *   <li>Register an instance via {@link #register(Object)} or a class with static handlers via {@link #register(Class)}.</li>
+ *   <li>Post events with {@link #post(Event)} or {@link #postPhase(Event, EventPhase)}.</li>
+ * </ol>
+ * Notes:
  * <ul>
- *     <li>Annotation-based handlers via {@link Subscribe}.</li>
- *     <li>Phase and priority ordering ({@link EventPhase}, {@link EventPriority}).</li>
- *     <li>Side-aware registration controlled by {@link EventSide}.</li>
- *     <li>Cancellable events via {@link CancellableEvent}.</li>
- *     <li>High-performance dispatch using {@link LambdaMetafactory} and a
- *     cached {@code Handler[]} per event class.</li>
- * </ul>
- * <p>
- * Thread-safety:
- * <ul>
- *     <li>{@link #post(Event)} and {@link #postAsync(Event)} may be called
- *     concurrently from multiple threads.</li>
- *     <li>{@link #register(Object)} and {@link #unregister(Object)} are safe
- *     to call concurrently with {@code post}, but frequent modifications will
- *     cause the internal dispatch cache to be rebuilt; it is recommended to
- *     perform registration during initialization where possible.</li>
+ *   <li>Handlers are ordered by {@link EventPhase} then {@link EventPriority}.</li>
+ *   <li>{@link #postPhase(Event, EventPhase)} dispatches only handlers matching the given phase.
+ *       This is intended for bridges that need a precise "pre/normal/post" around native handling.</li>
+ *   <li>{@link #post(Event)} dispatches all phases in a single call (ordered by phase &amp; priority).</li>
+ *   <li>{@link CancellableEvent} is supported; handlers can opt into receiving cancelled events via {@link Subscribe#receiveCanceled()}.</li>
+ *   <li>Posting is thread-safe; frequent register/unregister will invalidate internal caches and is best done during initialization.</li>
  * </ul>
  */
 public final class EventBus {
@@ -79,6 +75,21 @@ public final class EventBus {
 
     public static <E extends Event> E post(E event) {
         return INSTANCE.postInternal(event);
+    }
+
+    /**
+     * Post an event to handlers matching the given phase only.
+     * <p>
+     * Use this in platform bridges where you need to invoke handlers
+     * <em>before</em> or <em>after</em> native handling:
+     * <pre>
+     *   EventBus.postPhase(event, EventPhase.PRE);
+     *   // native handling
+     *   EventBus.postPhase(event, EventPhase.POST);
+     * </pre>
+     */
+    public static <E extends Event> E postPhase(E event, EventPhase phase) {
+        return INSTANCE.postInternalPhase(event, phase);
     }
 
     public static <E extends Event> CompletableFuture<E> postAsync(E event) {
@@ -202,8 +213,7 @@ public final class EventBus {
         if (event == null) {
             return null;
         }
-        @SuppressWarnings("unchecked")
-        Class<? extends Event> eventClass = (Class<? extends Event>) event.getClass();
+        Class<? extends Event> eventClass = event.getClass();
         Handler[] allHandlers = getDispatchHandlers(eventClass);
         if (allHandlers.length == 0) {
             return event;
@@ -215,6 +225,37 @@ public final class EventBus {
             return event;
         }
         for (Handler handler : allHandlers) {
+            if (cancellableEvent.isCanceled() && !handler.receiveCanceled) {
+                continue;
+            }
+            handler.invoker.invoke(event);
+        }
+        return event;
+    }
+
+    /**
+     * like {@link #postInternal(Event)}, but only dispatches handlers whose phase equals {@code phase}.
+     * Useful for precise "pre/normal/post" around a native handling section in platform bridges.
+     */
+    private <E extends Event> E postInternalPhase(E event, EventPhase phase) {
+        if (event == null) {
+            return null;
+        }
+        Class<? extends Event> eventClass = event.getClass();
+        Handler[] allHandlers = getDispatchHandlers(eventClass);
+        if (allHandlers.length == 0) {
+            return event;
+        }
+        if (!(event instanceof CancellableEvent cancellableEvent)) {
+            for (Handler handler : allHandlers) {
+                if (handler.phase == phase) {
+                    handler.invoker.invoke(event);
+                }
+            }
+            return event;
+        }
+        for (Handler handler : allHandlers) {
+            if (handler.phase != phase) continue;
             if (cancellableEvent.isCanceled() && !handler.receiveCanceled) {
                 continue;
             }
@@ -255,8 +296,9 @@ public final class EventBus {
     private Handler[] computeHandlers(Class<? extends Event> eventClass) {
         @SuppressWarnings("unchecked")
         ArrayList<Handler>[] buckets = (ArrayList<Handler>[]) new ArrayList[PHASES.length * PRIORITIES.length];
-        Set<Class<?>> visited = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
-        java.util.ArrayDeque<Class<?>> stack = new java.util.ArrayDeque<>();
+        // use identity semantics for Class keys; avoids Class.equals/hashCode work
+        Set<Class<?>> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+       ArrayDeque<Class<?>> stack = new ArrayDeque<>();
         stack.push(eventClass);
         while (!stack.isEmpty()) {
             Class<?> type = stack.pop();
@@ -301,9 +343,10 @@ public final class EventBus {
         }
         Handler[] out = new Handler[total];
         int idx = 0;
-        for (int phase = 0; phase < PHASES.length; phase++) {
+        // flatten (phase, priority) buckets in a fixed order for cache-friendly iteration
+        for (int p = 0; p < PHASES.length; p++) {
             for (int prio = 0; prio < PRIORITIES.length; prio++) {
-                int bucketIndex = phase * PRIORITIES.length + prio;
+                int bucketIndex = p * PRIORITIES.length + prio;
                 List<Handler> bucket = buckets[bucketIndex];
                 if (bucket == null) {
                     continue;
@@ -317,6 +360,7 @@ public final class EventBus {
     }
 
     private void addHandler(Class<? extends Event> eventType, Handler handler) {
+        // keep per-type array sorted (phase then priority); readers use a simple array walk
         directHandlers.compute(eventType, (type, existing) -> insertSorted(existing, handler));
         cacheEpoch.incrementAndGet();
     }
@@ -347,6 +391,7 @@ public final class EventBus {
             }
             return null;
         } catch (Throwable t) {
+            // reflective invocation as a last resort; slower but guarantees correctness
             return event -> {
                 try {
                     if (isStatic) {
