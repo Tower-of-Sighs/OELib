@@ -9,6 +9,9 @@ import java.util.List;
 import java.util.Set;
 
 public class MixinPlugin implements IMixinConfigPlugin {
+    private static final String MODMENU_ID = "modmenu";
+    private static final String FABRIC_ICON_HANDLER_MIXIN = "cc.sighs.oelib.fabric.mixin.FabricIconHandlerMixin";
+
     @Override
     public void onLoad(String mixinPackage) {
     }
@@ -20,8 +23,12 @@ public class MixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        if (!FABRIC_ICON_HANDLER_MIXIN.equals(mixinClassName)) {
+            return true;
+        }
+
         try {
-            return FabricLoader.getInstance().isModLoaded("modmenu");
+            return FabricLoader.getInstance().isModLoaded(MODMENU_ID);
         } catch (Throwable t) {
             return false;
         }

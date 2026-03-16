@@ -13,7 +13,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(MouseHandler.class)
@@ -23,39 +22,45 @@ public class MouseHandlerMixin {
     @Final
     private Minecraft minecraft;
 
-    @Redirect(
-            method = "method_1611",
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/Screen;mouseClicked(DDI)Z")
+    @SuppressWarnings("UnresolvedMixinReference")
+    @WrapOperation(
+            method = {"lambda$onPress$0", "method_1611"},
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/Screen;mouseClicked(DDI)Z"),
+            remap = false
     )
-    private static boolean redirectMouseClicked(Screen screen, double d0, double d1, int i) {
+    private static boolean wrapMouseClicked(Screen screen, double d0, double d1, int i, Operation<Boolean> original) {
         if (OELHookClient.onScreenMouseClickedPre(screen, d0, d1, i)) {
             return true;
         }
-        boolean handled = screen.mouseClicked(d0, d1, i);
+        boolean handled = original.call(screen, d0, d1, i);
         return OELHookClient.onScreenMouseClickedPost(screen, d0, d1, i, handled);
     }
 
-    @Redirect(
-            method = "method_1605",
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/Screen;mouseReleased(DDI)Z")
+    @SuppressWarnings("UnresolvedMixinReference")
+    @WrapOperation(
+            method = {"lambda$onPress$1", "method_1605"},
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/Screen;mouseReleased(DDI)Z"),
+            remap = false
     )
-    private static boolean redirectMouseReleased(Screen screen, double d0, double d1, int i) {
+    private static boolean wrapMouseReleased(Screen screen, double d0, double d1, int i, Operation<Boolean> original) {
         if (OELHookClient.onScreenMouseReleasedPre(screen, d0, d1, i)) {
             return true;
         }
-        boolean handled = screen.mouseReleased(d0, d1, i);
+        boolean handled = original.call(screen, d0, d1, i);
         return OELHookClient.onScreenMouseReleasedPost(screen, d0, d1, i, handled);
     }
 
-    @Redirect(
-            method = "method_1602",
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/Screen;mouseDragged(DDIDD)Z")
+    @SuppressWarnings("UnresolvedMixinReference")
+    @WrapOperation(
+            method = {"method_1602", "lambda$onMove$11"},
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/Screen;mouseDragged(DDIDD)Z"),
+            remap = false
     )
-    private boolean redirectMouseDragged(Screen screen, double mouseX, double mouseY, int button, double dragX, double dragY) {
+    private boolean wrapMouseDragged(Screen screen, double mouseX, double mouseY, int button, double dragX, double dragY, Operation<Boolean> original) {
         if (OELHookClient.onScreenMouseDragPre(screen, mouseX, mouseY, button, dragX, dragY)) {
             return true;
         }
-        boolean handled = screen.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        boolean handled = original.call(screen, mouseX, mouseY, button, dragX, dragY);
         if (handled) {
             return true;
         }
