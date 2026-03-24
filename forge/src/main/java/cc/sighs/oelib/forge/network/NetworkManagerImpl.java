@@ -28,15 +28,28 @@ import java.util.function.Consumer;
 
 public class NetworkManagerImpl implements INetworkManager {
     private static final String PROTOCOL_VERSION = "1";
-    private static final String CHANNEL_NAME = "oelib_auto";
-    private static final Map<String, SimpleChannel> CHANNELS = new ConcurrentHashMap<>();
+    private static final String SERVERBOUND_CHANNEL_NAME = "oelib_c2s";
+    private static final String CLIENTBOUND_CHANNEL_NAME = "oelib_s2c";
+    private static final Map<String, SimpleChannel> SERVERBOUND_CHANNELS = new ConcurrentHashMap<>();
+    private static final Map<String, SimpleChannel> CLIENTBOUND_CHANNELS = new ConcurrentHashMap<>();
     private static final Map<CustomPacketPayload.Type<?>, NetworkUtil.PacketInfo<?>> REGISTERED = new ConcurrentHashMap<>();
-    private static final Map<CustomPacketPayload.Type<?>, SimpleChannel> TYPE_TO_CHANNEL = new ConcurrentHashMap<>();
-    private static final Map<String, Integer> NEXT_ID = new ConcurrentHashMap<>();
+    private static final Map<CustomPacketPayload.Type<?>, SimpleChannel> TYPE_TO_SERVERBOUND_CHANNEL = new ConcurrentHashMap<>();
+    private static final Map<CustomPacketPayload.Type<?>, SimpleChannel> TYPE_TO_CLIENTBOUND_CHANNEL = new ConcurrentHashMap<>();
+    private static final Map<String, Integer> NEXT_SERVERBOUND_ID = new ConcurrentHashMap<>();
+    private static final Map<String, Integer> NEXT_CLIENTBOUND_ID = new ConcurrentHashMap<>();
 
-    private static SimpleChannel channelOf(String modId) {
-        return CHANNELS.computeIfAbsent(modId, id -> NetworkRegistry.newSimpleChannel(
-                new ResourceLocation(id, CHANNEL_NAME),
+    private static SimpleChannel serverboundChannelOf(String modId) {
+        return SERVERBOUND_CHANNELS.computeIfAbsent(modId, id -> NetworkRegistry.newSimpleChannel(
+                new ResourceLocation(id, SERVERBOUND_CHANNEL_NAME),
+                () -> PROTOCOL_VERSION,
+                PROTOCOL_VERSION::equals,
+                PROTOCOL_VERSION::equals
+        ));
+    }
+
+    private static SimpleChannel clientboundChannelOf(String modId) {
+        return CLIENTBOUND_CHANNELS.computeIfAbsent(modId, id -> NetworkRegistry.newSimpleChannel(
+                new ResourceLocation(id, CLIENTBOUND_CHANNEL_NAME),
                 () -> PROTOCOL_VERSION,
                 PROTOCOL_VERSION::equals,
                 PROTOCOL_VERSION::equals
@@ -66,10 +79,19 @@ public class NetworkManagerImpl implements INetworkManager {
         var codec = NetworkSerialization.autoCodec(clazz);
         REGISTERED.put(type, new NetworkUtil.PacketInfo<>(type, codec));
         var side = meta.side();
-        var channel = channelOf(type.id().getNamespace());
-        TYPE_TO_CHANNEL.put(type, channel);
-        int id = NEXT_ID.merge(type.id().getNamespace(), 1, Integer::sum) - 1;
+        /*
+         * Forge's IndexedMessageCodec uses a single map for ID/Direction mapping.
+         * Registering the same class for BOTH sides on one channel causes the
+         * second registration (usually S2C) to overwrite the first (C2S).
+         * This leads to a 'PLAY_TO_SERVER' packet being validated against a
+         * 'PLAY_TO_CLIENT' expectation on the server, triggering a disconnect.
+         *
+         * We separate traffic into two physical channels: 'oelib_c2s' and 'oelib_s2c'.
+         */
         if (side == Side.SERVER || side == Side.BOTH) {
+            var channel = serverboundChannelOf(type.id().getNamespace());
+            TYPE_TO_SERVERBOUND_CHANNEL.put(type, channel);
+            int id = NEXT_SERVERBOUND_ID.merge(type.id().getNamespace(), 1, Integer::sum) - 1;
             channel.messageBuilder(clazz, id, NetworkDirection.PLAY_TO_SERVER)
                     .encoder((msg, buf) -> codec.encode(buf, (T) msg))
                     .decoder(codec::decode)
@@ -77,6 +99,9 @@ public class NetworkManagerImpl implements INetworkManager {
                     .add();
         }
         if (side == Side.CLIENT || side == Side.BOTH) {
+            var channel = clientboundChannelOf(type.id().getNamespace());
+            TYPE_TO_CLIENTBOUND_CHANNEL.put(type, channel);
+            int id = NEXT_CLIENTBOUND_ID.merge(type.id().getNamespace(), 1, Integer::sum) - 1;
             channel.messageBuilder(clazz, id, NetworkDirection.PLAY_TO_CLIENT)
                     .encoder((msg, buf) -> codec.encode(buf, (T) msg))
                     .decoder(codec::decode)
@@ -89,6 +114,7 @@ public class NetworkManagerImpl implements INetworkManager {
     public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToPlayer(T packet, ServerPlayer player) {
         if (player == null) return;
         executeSend(packet,
+                TYPE_TO_CLIENTBOUND_CHANNEL,
                 ch -> ch.send(PacketDistributor.PLAYER.with(() -> player), packet),
                 data -> NetworkUtil.sendChunkedPacket(data, getTypeId(packet), Collections.singletonList(player), getThreshold(packet))
         );
@@ -97,6 +123,7 @@ public class NetworkManagerImpl implements INetworkManager {
     @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToServer(T packet) {
         executeSend(packet,
+                TYPE_TO_SERVERBOUND_CHANNEL,
                 ch -> ch.sendToServer(packet),
                 data -> NetworkUtil.sendChunkedPacketToServer(data, getTypeId(packet), getThreshold(packet))
         );
@@ -107,6 +134,7 @@ public class NetworkManagerImpl implements INetworkManager {
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
         if (server == null) return;
         executeSend(packet,
+                TYPE_TO_CLIENTBOUND_CHANNEL,
                 ch -> ch.send(PacketDistributor.ALL.noArg(), packet),
                 data -> NetworkUtil.sendChunkedPacketToAll(data, getTypeId(packet), getThreshold(packet))
         );
@@ -115,6 +143,7 @@ public class NetworkManagerImpl implements INetworkManager {
     @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToWorld(T packet, ServerLevel level) {
         executeSend(packet,
+                TYPE_TO_CLIENTBOUND_CHANNEL,
                 ch -> ch.send(PacketDistributor.DIMENSION.with(level::dimension), packet),
                 data -> NetworkUtil.sendChunkedPacket(data, getTypeId(packet), level.players(), getThreshold(packet))
         );
@@ -123,6 +152,7 @@ public class NetworkManagerImpl implements INetworkManager {
     @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNear(T packet, ServerLevel level, Vec3 pos, double radius) {
         executeSend(packet,
+                TYPE_TO_CLIENTBOUND_CHANNEL,
                 ch -> ch.send(PacketDistributor.NEAR.with(PacketDistributor.TargetPoint.p(pos.x, pos.y, pos.z, radius, level.dimension())), packet),
                 data -> NetworkUtil.sendChunkedPacket(data, getTypeId(packet), level.players(), getThreshold(packet))
         );
@@ -131,6 +161,7 @@ public class NetworkManagerImpl implements INetworkManager {
     @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToNearExcept(T packet, ServerLevel level, Vec3 pos, double radius, ServerPlayer excluded) {
         executeSend(packet,
+                TYPE_TO_CLIENTBOUND_CHANNEL,
                 ch -> ch.send(PacketDistributor.NEAR.with(PacketDistributor.TargetPoint.p(pos.x, pos.y, pos.z, radius, level.dimension())), packet),
                 data -> {
                     var players = level.players().stream().filter(p -> p != excluded).toList();
@@ -142,6 +173,7 @@ public class NetworkManagerImpl implements INetworkManager {
     @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingEntity(T packet, Entity entity) {
         executeSend(packet,
+                TYPE_TO_CLIENTBOUND_CHANNEL,
                 ch -> ch.send(PacketDistributor.TRACKING_ENTITY.with(() -> entity), packet),
                 data -> NetworkUtil.sendChunkedPacket(data, getTypeId(packet), levelPlayers(entity), getThreshold(packet))
         );
@@ -150,6 +182,7 @@ public class NetworkManagerImpl implements INetworkManager {
     @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingEntityAndSelf(T packet, Entity entity) {
         executeSend(packet,
+                TYPE_TO_CLIENTBOUND_CHANNEL,
                 ch -> ch.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> entity), packet),
                 data -> NetworkUtil.sendChunkedPacket(data, getTypeId(packet), levelPlayersIncluding(entity), getThreshold(packet))
         );
@@ -158,6 +191,7 @@ public class NetworkManagerImpl implements INetworkManager {
     @Override
     public <T extends INetworkPacket<T> & CustomPacketPayload> void sendToTrackingChunk(T packet, ServerLevel level, ChunkPos chunkPos) {
         executeSend(packet,
+                TYPE_TO_CLIENTBOUND_CHANNEL,
                 ch -> {
                     var chunk = level.getChunkSource().getChunk(chunkPos.x, chunkPos.z, false);
                     if (chunk != null) {
@@ -174,6 +208,7 @@ public class NetworkManagerImpl implements INetworkManager {
     @SuppressWarnings("unchecked")
     private <T extends INetworkPacket<T> & CustomPacketPayload> void executeSend(
             T packet,
+            Map<CustomPacketPayload.Type<?>, SimpleChannel> channels,
             Consumer<SimpleChannel> normalSender,
             Consumer<byte[]> chunkedSender) {
 
@@ -190,7 +225,7 @@ public class NetworkManagerImpl implements INetworkManager {
                 buf,
                 threshold,
                 () -> {
-                    var ch = TYPE_TO_CHANNEL.get(type);
+                    var ch = channels.get(type);
                     if (ch != null) normalSender.accept(ch);
                 },
                 chunkedSender
