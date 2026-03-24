@@ -9,7 +9,6 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -40,16 +39,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 @SuppressWarnings({"unused", "unchecked"})
 public final class ServerRegistrationHandler {
 
-    private static final Map<ResourceKey<?>, List<ListenEntry<?>>> ENTRY_LISTENERS = new ConcurrentHashMap<>();
     private static final Map<ResourceLocation, List<Supplier<ItemStack>>> TAB_APPENDS = new ConcurrentHashMap<>();
     private static final Map<ResourceLocation, List<CreativeTabModifyCallback>> TAB_MODIFIERS = new ConcurrentHashMap<>();
-    private static final Map<ResourceKey<?>, List<RegisterSupplier<?>>> REGISTERED_ENTRIES = new ConcurrentHashMap<>();
     private static final List<CommandRegisterAction> SERVER_COMMANDS = new CopyOnWriteArrayList<>();
 
     private static final Map<Supplier<? extends EntityType<? extends LivingEntity>>, Supplier<AttributeSupplier.Builder>> ATTRIBUTES = new ConcurrentHashMap<>();
@@ -70,13 +66,6 @@ public final class ServerRegistrationHandler {
     public void perform(RegistrationAction action) {
         if (action instanceof RegistryBatchAction<?> batchRaw) {
             performRegistryBatch((RegistryBatchAction<Object>) batchRaw);
-            return;
-        }
-
-        if (action instanceof ListenAction<?> laRaw) {
-            var la = (ListenAction<Object>) laRaw;
-            ENTRY_LISTENERS.computeIfAbsent(la.registryKey(), k -> new CopyOnWriteArrayList<>())
-                    .add(new ListenEntry<>(la.supplier(), la.callback()));
             return;
         }
 
@@ -140,38 +129,26 @@ public final class ServerRegistrationHandler {
         var key = batch.registryKey();
         var modid = batch.modid();
         var dr = DeferredRegister.create(key, modid);
-        dr.register(FMLJavaModLoadingContext.get().getModEventBus());
+        var bus = FMLJavaModLoadingContext.get().getModEventBus();
+        dr.register(bus);
         for (RegisterSupplier<? extends T> entry : batch.entries()) {
             Supplier<T> supplier = (Supplier<T>) entry.getCreator();
             var ro = dr.register(entry.id().getPath(), supplier);
             ((RegisterSupplier<T>) entry).setGetter(ro);
         }
-        REGISTERED_ENTRIES.computeIfAbsent(key, _k -> new CopyOnWriteArrayList<>()).addAll(batch.entries());
-    }
-
-    private record ListenEntry<T>(RegisterSupplier<? extends T> supplier, Consumer<? super T> callback) {
+        
+        bus.addListener(EventPriority.LOWEST, (RegisterEvent event) -> {
+            if (event.getRegistryKey().equals(key)) {
+                for (RegisterSupplier<? extends T> entry : batch.entries()) {
+                    Object obj = entry.get();
+                    ((RegisterSupplier<Object>) entry).bindInstance(obj);
+                }
+            }
+        });
     }
 
     @Mod.EventBusSubscriber(modid = OELib.MODID, bus = Mod.EventBusSubscriber.Bus.MOD)
     public static class ModEventHooks {
-        @SubscribeEvent(priority = EventPriority.LOWEST)
-        public static void onNotifyRegistered(RegisterEvent event) {
-            var entries = REGISTERED_ENTRIES.remove(event.getRegistryKey());
-            if (entries != null) {
-                for (var e : entries) {
-                    Object obj = e.get();
-                    ((RegisterSupplier<Object>) e).bindInstance(obj);
-                }
-            }
-            var list = ENTRY_LISTENERS.remove(event.getRegistryKey());
-            if (list != null) {
-                for (var leRaw : list) {
-                    var le = (ListenEntry<Object>) leRaw;
-                    le.callback.accept(le.supplier.get());
-                }
-            }
-        }
-
         @SubscribeEvent
         public static void onBuildCreative(BuildCreativeModeTabContentsEvent event) {
             var id = BuiltInRegistries.CREATIVE_MODE_TAB.getKey(event.getTab());
