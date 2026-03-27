@@ -43,4 +43,8 @@ public class Platform {
     public static Collection<ServerPlayer> getAllPlayers(MinecraftServer server) {
         return INSTANCE.getAllPlayers(server);
     }
+
+    public static MinecraftServer getCurrentServer() {
+        return INSTANCE.getCurrentServer();
+    }
 }

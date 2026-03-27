@@ -1,5 +1,6 @@
 package cc.sighs.oelib.fabric.platform;
 
+import cc.sighs.oelib.fabric.data.DataManager;
 import cc.sighs.oelib.platform.IPlatform;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
@@ -49,5 +50,10 @@ public class PlatformImpl implements IPlatform {
     @Override
     public Collection<ServerPlayer> getAllPlayers(MinecraftServer server) {
         return PlayerLookup.all(server);
+    }
+
+    @Override
+    public MinecraftServer getCurrentServer() {
+        return DataManager.getCurrentServer();
     }
 }

@@ -1,11 +1,12 @@
 package cc.sighs.oelib.network.api;
 
 import cc.sighs.oelib.OELib;
-import cc.sighs.oelib.network.spi.INetworkAutoRegistration;
+import cc.sighs.oelib.util.AnnotationScanUtil;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
 import java.util.LinkedHashSet;
-import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.function.Predicate;
 
 public final class NetworkAutoRegistration {
 
@@ -32,13 +33,14 @@ public final class NetworkAutoRegistration {
     public static Set<Class<? extends INetworkPacket<?>>> findAllAnnotatedPackets() {
         Set<Class<? extends INetworkPacket<?>>> result = new LinkedHashSet<>();
         OELib.LOGGER.debug("Scanning for annotated packets in base packages: {}", BASE_PACKAGES);
-        ServiceLoader<INetworkAutoRegistration> loader = ServiceLoader.load(INetworkAutoRegistration.class);
-        for (INetworkAutoRegistration impl : loader) {
-            try {
-                result.addAll(impl.findAnnotatedPackets(Set.copyOf(BASE_PACKAGES)));
-            } catch (Throwable t) {
-                OELib.LOGGER.error("Network auto registration provider {} failed", impl.getClass().getName(), t);
-            }
+        Predicate<Class<?>> filter = AnnotationScanUtil.nonAbstractNonInterface()
+                .and(INetworkPacket.class::isAssignableFrom)
+                .and(CustomPacketPayload.class::isAssignableFrom);
+        Set<Class<?>> classes = AnnotationScanUtil.findAnnotatedClasses(NetworkPacket.class, Set.copyOf(BASE_PACKAGES), filter);
+        for (Class<?> clazz : classes) {
+            @SuppressWarnings("unchecked")
+            Class<? extends INetworkPacket<?>> packetClass = (Class<? extends INetworkPacket<?>>) clazz;
+            result.add(packetClass);
         }
         return result;
     }

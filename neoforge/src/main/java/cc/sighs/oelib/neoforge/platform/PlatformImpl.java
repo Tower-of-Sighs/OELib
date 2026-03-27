@@ -1,5 +1,6 @@
 package cc.sighs.oelib.neoforge.platform;
 
+import cc.sighs.oelib.neoforge.data.DataManager;
 import cc.sighs.oelib.platform.IPlatform;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -53,10 +54,11 @@ public class PlatformImpl implements IPlatform {
     public Collection<ServerPlayer> getAllPlayers(MinecraftServer server) {
         Objects.requireNonNull(server, "The server cannot be null");
 
-        if (server.getPlayerList() != null) {
-            return Collections.unmodifiableCollection(server.getPlayerList().getPlayers());
-        }
+        return Collections.unmodifiableCollection(server.getPlayerList().getPlayers());
+    }
 
-        return Collections.emptyList();
+    @Override
+    public MinecraftServer getCurrentServer() {
+        return DataManager.getCurrentServer();
     }
 }

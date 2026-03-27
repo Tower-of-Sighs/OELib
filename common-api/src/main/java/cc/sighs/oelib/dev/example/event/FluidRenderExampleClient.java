@@ -1,8 +1,9 @@
-package cc.sighs.oelib.neoforge.example;
+package cc.sighs.oelib.dev.example.event;
 
-import cc.sighs.oelib.OELib;
 import cc.sighs.oelib.dev.DevConfig;
 import cc.sighs.oelib.dev.example.net.OpenGuiPacket;
+import cc.sighs.oelib.event.Subscribe;
+import cc.sighs.oelib.event.events.ClientTickEvent;
 import cc.sighs.oelib.registry.extra.KeyMappingRegister;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -10,14 +11,9 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.phys.BlockHitResult;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
 import org.lwjgl.glfw.GLFW;
 
-@EventBusSubscriber(modid = OELib.MODID, value = Dist.CLIENT)
-public final class FluidRenderExampleClient {
+public class FluidRenderExampleClient {
     private static KeyMapping openExample;
 
     public static void onRegisterKeys() {
@@ -27,7 +23,7 @@ public final class FluidRenderExampleClient {
         }
     }
 
-    @SubscribeEvent
+    @Subscribe
     public static void onClientTick(ClientTickEvent.Post event) {
         if (DevConfig.UNIT.get().enableExampleContent()) {
             if (openExample != null && openExample.consumeClick()) {
@@ -35,9 +31,7 @@ public final class FluidRenderExampleClient {
                 if (mc.level != null && mc.hitResult instanceof BlockHitResult blockHitResult) {
                     var pos = blockHitResult.getBlockPos();
                     var title = Component.literal("Fluid Example");
-
                     var registry = mc.level.registryAccess().registryOrThrow(Registries.ENCHANTMENT);
-
                     var holder = registry.getHolder(Enchantments.EFFICIENCY);
 
                     if (holder.isPresent()) {

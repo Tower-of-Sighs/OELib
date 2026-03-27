@@ -22,4 +22,6 @@ public interface IPlatform {
     boolean isModLoaded(String modId);
 
     Collection<ServerPlayer> getAllPlayers(MinecraftServer server);
+
+    MinecraftServer getCurrentServer();
 }

@@ -3,7 +3,7 @@ package cc.sighs.oelib.neoforge;
 import cc.sighs.oelib.OELib;
 import cc.sighs.oelib.OELibClient;
 import cc.sighs.oelib.config.ui.screen.ConfigScreen;
-import cc.sighs.oelib.neoforge.example.FluidRenderExampleClient;
+import cc.sighs.oelib.neoforge.event.TickBridge;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -15,8 +15,8 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 public class OELibNeoForgeClient {
 
     public OELibNeoForgeClient(IEventBus eventBus, ModContainer container) {
+        TickBridge.initClient();
         OELibClient.initClient();
         ModLoadingContext.get().registerExtensionPoint(IConfigScreenFactory.class, () -> (minecraft, parent) -> new ConfigScreen(parent, OELib.MODID));
-        FluidRenderExampleClient.onRegisterKeys();
     }
 }
