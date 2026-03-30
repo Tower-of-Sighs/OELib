@@ -1,0 +1,39 @@
+{
+  "itemGroup.oelib.general": "OELib",
+  "item.oelib.example_item": "示例物品",
+  "block.oelib.example_block": "示例方块",
+
+  "config.oelib.title": "OELib 配置",
+  "config.oelib.reset": "重置",
+  "config.oelib.search": "搜索...",
+  "config.oelib.done": "保存并退出",
+
+  "config.oelib.festival_toast.title": "节日祝福设置",
+  "config.oelib.dev_features.title": "开发者功能设置",
+  "config.oelib.festival_toast.enabled": "启用节日祝福",
+  "config.oelib.festival_toast.enabled.tooltip": "启用节日祝福Toast",
+  "config.oelib.festival_toast.chineseFestivalsOnlyForChineseLanguage": "仅中文语言显示中文节日",
+  "config.oelib.festival_toast.chineseFestivalsOnlyForChineseLanguage.tooltip": "只有 zh_cn、zh_hk、zh_tw 等带 zh 的语言才会触发中国节日的祝福",
+  "config.oelib.festival_toast.festivals": "节日详情",
+  "config.oelib.dev_features.testList": "List 测试",
+  "config.oelib.dev_features.testString": "String 测试",
+  "config.oelib.dev_features.testDouble": "Double 测试",
+  "config.oelib.dev_features.testInt": "Int 测试",
+  "config.oelib.dev_features.testEnum": "Enum 测试",
+  "config.oelib.dev_features.testEnum.TEST": "Enum 测试 1",
+  "config.oelib.dev_features.testEnum.TEST2": "Enum 测试 2",
+  "config.oelib.dev_features.enableExampleContent": "启用示例内容",
+  "config.oelib.dev_features.enableExampleContent.tooltip": "内部测试用",
+
+  "overlay.exampletoast.chongyang.title": "登高望远·重阳节",
+  "overlay.exampletoast.chongyang.line1": "云随山高，心共秋澄。愿你步履所至，皆是清朗。",
+  "overlay.exampletoast.chongyang.line2": "叹息之塔团队陪你登高望远，也守你归途安稳。",
+
+  "overlay.exampletoast.new_year.title": "万象更新·春节",
+  "overlay.exampletoast.new_year.line1": "爆竹声暖，新桃换旧。愿你岁岁常欢愉，年年胜旧年。",
+  "overlay.exampletoast.new_year.line2": "叹息之塔团队祝你新春安康，所求皆如愿，所行化坦途。",
+
+  "overlay.exampletoast.valentine.title": "心心相映·情人节",
+  "overlay.exampletoast.valentine.line1": "愿你在这一日，被真心看见，被温柔拥抱。",
+  "overlay.exampletoast.valentine.line2": "无论独行还是并肩，叹息之塔团队都在为你点亮一盏心灯。"
+}

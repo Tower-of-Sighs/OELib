@@ -1,0 +1,95 @@
+plugins {
+    id 'multiloader-common'
+    id 'net.neoforged.moddev'
+}
+
+neoForge {
+    neoFormVersion = neo_form_version
+    // Automatically enable AccessTransformers if the file exists
+    def at = file('src/main/resources/META-INF/accesstransformer.cfg')
+    if (at.exists()) {
+        accessTransformers.from(at.absolutePath)
+    }
+}
+
+dependencies {
+    compileOnly group: 'org.spongepowered', name: 'mixin', version: '0.8.5'
+    // fabric and neoforge both bundle mixinextras, so it is safe to use it in common
+    compileOnly group: 'io.github.llamalad7', name: 'mixinextras-common', version: '0.3.5'
+    annotationProcessor group: 'io.github.llamalad7', name: 'mixinextras-common', version: '0.3.5'
+    compileOnly "cn.6tail:lunar:1.7.3"
+    compileOnly "de.marhali:json5-java:3.0.0"
+    compileOnly "org.mvel:mvel2:2.5.0.Final"
+    compileOnly "com.electronwill.night-config:toml:3.8.3"
+}
+
+// Allow by `group`, `artifact`, or full `group:artifact`.
+// Add an item here to keep that dependency in the published POM.
+mavenDependencyWhitelist = [
+        'org.spongepowered:mixin',
+        'io.github.llamalad7:mixinextras-common'
+]
+
+configurations {
+    commonJava {
+        canBeResolved = false
+        canBeConsumed = true
+    }
+    commonResources {
+        canBeResolved = false
+        canBeConsumed = true
+    }
+}
+
+artifacts {
+    commonJava sourceSets.main.java.sourceDirectories.singleFile
+    commonResources sourceSets.main.resources.sourceDirectories.singleFile
+}
+
+// Implement mcgradleconventions loader attribute
+def loaderAttribute = Attribute.of('io.github.mcgradleconventions.loader', String)
+['apiElements', 'runtimeElements', 'sourcesElements'].each { variant ->
+    configurations.named("$variant") {
+        attributes {
+            attribute(loaderAttribute, 'common')
+        }
+    }
+}
+sourceSets.configureEach {
+    [it.compileClasspathConfigurationName, it.runtimeClasspathConfigurationName].each { variant->
+        configurations.named("$variant") {
+            attributes {
+                attribute(loaderAttribute, 'common')
+            }
+        }
+    }
+}
+
+publishing {
+    repositories {
+        def modVersion = project.version ?: 'unknown'
+        boolean isSnapshot = modVersion.toLowerCase().contains('snapshot')
+        def publishUrl = isSnapshot ?
+                "https://maven.sighs.cc/repository/maven-snapshots/" :
+                "https://maven.sighs.cc/repository/maven-releases/"
+
+        maven {
+            name = "remoteRepo"
+            url = uri(publishUrl)
+            credentials {
+                username = System.getenv("SIGHS_PUBLISH_USER")
+                password = System.getenv("SIGHS_PUBLISH_PASSWORD")
+            }
+        }
+    }
+
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            groupId = project.group
+            artifactId = base.archivesName.get()
+            version = project.version
+            applyPomDependencyWhitelist(delegate as MavenPublication)
+        }
+    }
+}

@@ -1,0 +1,116 @@
+plugins {
+    id 'multiloader-loader'
+    id 'net.neoforged.moddev'
+}
+
+neoForge {
+    version = neoforge_version
+    // Automatically enable neoforge AccessTransformers if the file exists
+    def at = project(':common').file('src/main/resources/META-INF/accesstransformer.cfg')
+    if (at.exists()) {
+        accessTransformers.from(at.absolutePath)
+    }
+    runs {
+        configureEach {
+            systemProperty('neoforge.enabledGameTestNamespaces', mod_id)
+            ideName = "NeoForge ${it.name.capitalize()} (${project.path})" // Unify the run config names with fabric
+        }
+        client {
+            client()
+            gameDirectory = this.mkdir(this.file("runs/client"))
+        }
+        data {
+            clientData()
+            gameDirectory = this.mkdir(this.file("runs/data"))
+            // DataGen can be run by - "./gradlew :neoforge:runData" in Terminal.
+            // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
+            programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
+        }
+        server {
+            server()
+            this.file("runs/server").createParentDirectories()
+            gameDirectory = this.mkdir(this.file("runs/server"))
+        }
+    }
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+dependencies {
+//    modImplementation("mezz.jei:jei-$rootProject.minecraft_version-neoforge:${jei_version}")
+    annotationProcessor project(path: ':common')
+    implementation("org.mvel:mvel2:2.5.0.Final")
+    jarJar(implementation("cn.6tail:lunar:1.7.3")) {
+        version {
+            strictly "[1.7.3]"
+            prefer "1.7.3"
+        }
+    }
+    jarJar(implementation("de.marhali:json5-java:3.0.0")) {
+        version {
+            strictly "[3.0.0]"
+            prefer "3.0.0"
+        }
+    }
+}
+
+// Allow by `group`, `artifact`, or full `group:artifact`.
+// Add an item here to keep that dependency in the published POM.
+mavenDependencyWhitelist = [
+        'org.mvel:mvel2',
+        'cn.6tail:lunar',
+        'de.marhali:json5-java'
+]
+
+// Implement mcgradleconventions loader attribute
+def loaderAttribute = Attribute.of('io.github.mcgradleconventions.loader', String)
+['apiElements', 'runtimeElements', 'sourcesElements'].each { variant ->
+    configurations.named("$variant") {
+        attributes {
+            attribute(loaderAttribute, 'neoforge')
+        }
+    }
+}
+sourceSets.configureEach {
+    [it.compileClasspathConfigurationName, it.runtimeClasspathConfigurationName, it.getTaskName(null, 'jarJar')].each { variant ->
+        configurations.named("$variant") {
+            attributes {
+                attribute(loaderAttribute, 'neoforge')
+            }
+        }
+    }
+}
+
+publishing {
+    repositories {
+        def modVersion = project.version ?: 'unknown'
+        boolean isSnapshot = modVersion.toLowerCase().contains('snapshot')
+        def publishUrl = isSnapshot ?
+                "https://maven.sighs.cc/repository/maven-snapshots/" :
+                "https://maven.sighs.cc/repository/maven-releases/"
+
+        maven {
+            name = "remoteRepo"
+            url = uri(publishUrl)
+            credentials {
+                username = System.getenv("SIGHS_PUBLISH_USER")
+                password = System.getenv("SIGHS_PUBLISH_PASSWORD")
+            }
+        }
+    }
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            groupId = project.group
+            artifactId = base.archivesName.get()
+            version = project.version
+
+            applyPomDependencyWhitelist(delegate as MavenPublication)
+        }
+    }
+}

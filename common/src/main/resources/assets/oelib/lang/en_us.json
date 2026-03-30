@@ -1,0 +1,40 @@
+{
+  "itemGroup.oelib.general": "OELib",
+  "item.oelib.example_item": "Example Item",
+  "block.oelib.example_block": "Example Block",
+
+  "config.oelib.title": "OELib Config",
+  "config.oelib.save": "Save",
+  "config.oelib.reset": "Reset",
+  "config.oelib.search": "Search...",
+  "config.oelib.done": "Save and exit",
+
+  "config.oelib.festival_toast.title": "Festival Blessings Settings",
+  "config.oelib.dev_features.title": "Developer Features Settings",
+  "config.oelib.festival_toast.enabled": "Enable Festival Blessings",
+  "config.oelib.festival_toast.enabled.tooltip": "Enable festival blessing toasts",
+  "config.oelib.festival_toast.chineseFestivalsOnlyForChineseLanguage": "Chinese festivals only under Chinese language",
+  "config.oelib.festival_toast.chineseFestivalsOnlyForChineseLanguage.tooltip": "Chinese festivals are only triggered when the game language is zh_cn, zh_hk, zh_tw, or other variants containing 'zh'",
+  "config.oelib.festival_toast.festivals": "Festival Details",
+  "config.oelib.dev_features.testList": "List Test",
+  "config.oelib.dev_features.testString": "String Test",
+  "config.oelib.dev_features.testDouble": "Double Test",
+  "config.oelib.dev_features.testInt": "Int Test",
+  "config.oelib.dev_features.testEnum": "Enum Test",
+  "config.oelib.dev_features.testEnum.TEST": "Enum Test 1",
+  "config.oelib.dev_features.testEnum.TEST2": "Enum Test 2",
+  "config.oelib.dev_features.enableExampleContent": "Enable Example Content",
+  "config.oelib.dev_features.enableExampleContent.tooltip": "For internal testing purposes",
+
+  "overlay.exampletoast.chongyang.title": "Cloud-Ascent · Double Ninth",
+  "overlay.exampletoast.chongyang.line1": "May your spirit rise with the sky.",
+  "overlay.exampletoast.chongyang.line2": "The Tower of Sighs walks with you.",
+
+  "overlay.exampletoast.new_year.title": "A Fresh Dawn · Spring Festival",
+  "overlay.exampletoast.new_year.line1": "Wishing you peace and endless light.",
+  "overlay.exampletoast.new_year.line2": "The Tower of Sighs celebrates with you.",
+
+  "overlay.exampletoast.valentine.title": "Hearts Afloat · Valentine's",
+  "overlay.exampletoast.valentine.line1": "May your heart be warmly held.",
+  "overlay.exampletoast.valentine.line2": "The Tower of Sighs walks with you."
+}
