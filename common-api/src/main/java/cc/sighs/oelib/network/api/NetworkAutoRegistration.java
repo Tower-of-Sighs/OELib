@@ -1,16 +1,25 @@
 package cc.sighs.oelib.network.api;
 
-import cc.sighs.oelib.OELib;
 import cc.sighs.oelib.util.AnnotationScanUtil;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 public final class NetworkAutoRegistration {
 
-    private static final Set<String> BASE_PACKAGES = new LinkedHashSet<>();
+    private static final Logger LOGGER = LogManager.getLogger();
+    private static final Set<String> BASE_PACKAGES = Collections.synchronizedSet(new LinkedHashSet<>());
+    private static final Set<String> SCANNED_PACKAGES = new HashSet<>();
+    private static final Set<Class<? extends INetworkPacket<?>>> REGISTERED_PACKET_CLASSES = ConcurrentHashMap.newKeySet();
+    private static final Object REGISTRATION_LOCK = new Object();
+    private static volatile boolean registrationStarted = false;
 
     static {
         BASE_PACKAGES.add("cc.sighs.oelib.config.net");
@@ -26,30 +35,108 @@ public final class NetworkAutoRegistration {
         if (basePackage == null || basePackage.isEmpty()) {
             return;
         }
-        BASE_PACKAGES.add(basePackage);
-        OELib.LOGGER.debug("Added base package for packet scan: {}", basePackage);
+
+        boolean added = BASE_PACKAGES.add(basePackage);
+        if (!added) {
+            return;
+        }
+
+        if (registrationStarted) {
+            LOGGER.info("[NetworkAutoReg] Late base package registered: {}. Scanning now.", basePackage);
+            scanAndCollect(Set.of(basePackage));
+            return;
+        }
+
+        LOGGER.debug("[NetworkAutoReg] Registered base package: {}", basePackage);
     }
 
     public static Set<Class<? extends INetworkPacket<?>>> findAllAnnotatedPackets() {
-        Set<Class<? extends INetworkPacket<?>>> result = new LinkedHashSet<>();
-        OELib.LOGGER.debug("Scanning for annotated packets in base packages: {}", BASE_PACKAGES);
-        Predicate<Class<?>> filter = AnnotationScanUtil.nonAbstractNonInterface()
-                .and(INetworkPacket.class::isAssignableFrom)
-                .and(CustomPacketPayload.class::isAssignableFrom);
-        Set<Class<?>> classes = AnnotationScanUtil.findAnnotatedClasses(NetworkPacket.class, Set.copyOf(BASE_PACKAGES), filter);
-        for (Class<?> clazz : classes) {
-            @SuppressWarnings("unchecked")
-            Class<? extends INetworkPacket<?>> packetClass = (Class<? extends INetworkPacket<?>>) clazz;
-            result.add(packetClass);
+        registrationStarted = true;
+
+        Set<String> packagesSnapshot = Set.copyOf(BASE_PACKAGES);
+        if (packagesSnapshot.isEmpty()) {
+            LOGGER.debug("[NetworkAutoReg] No base packages registered; skipping scan.");
+            return Set.of();
         }
-        return result;
+
+        Set<String> unscanned = new LinkedHashSet<>();
+        synchronized (REGISTRATION_LOCK) {
+            for (String pkg : packagesSnapshot) {
+                if (!SCANNED_PACKAGES.contains(pkg)) {
+                    unscanned.add(pkg);
+                }
+            }
+        }
+
+        if (!unscanned.isEmpty()) {
+            LOGGER.info("[NetworkAutoReg] Scanning {} package(s) for packets...", unscanned.size());
+            scanAndCollect(unscanned);
+        } else {
+            LOGGER.debug("[NetworkAutoReg] All base packages already scanned; skipping scan.");
+        }
+
+        return Set.copyOf(REGISTERED_PACKET_CLASSES);
+    }
+
+    private static void scanAndCollect(Set<String> packagesToScan) {
+        synchronized (REGISTRATION_LOCK) {
+
+            Set<String> newPackages = new LinkedHashSet<>();
+            for (String pkg : packagesToScan) {
+                if (pkg != null && !pkg.isEmpty() && !SCANNED_PACKAGES.contains(pkg)) {
+                    newPackages.add(pkg);
+                }
+            }
+
+            if (newPackages.isEmpty()) {
+                return;
+            }
+
+            Predicate<Class<?>> filter = AnnotationScanUtil.nonAbstractNonInterface()
+                    .and(INetworkPacket.class::isAssignableFrom)
+                    .and(CustomPacketPayload.class::isAssignableFrom);
+
+            Set<Class<?>> classes;
+            try {
+                classes = AnnotationScanUtil.findAnnotatedClasses(
+                        NetworkPacket.class,
+                        Set.copyOf(newPackages),
+                        filter
+                );
+            } catch (Throwable t) {
+                LOGGER.error("[NetworkAutoReg] Failed to scan packages: {}", newPackages, t);
+                return;
+            }
+
+            SCANNED_PACKAGES.addAll(newPackages);
+
+            int added = 0;
+            int skipped = 0;
+
+            for (Class<?> clazz : classes) {
+                @SuppressWarnings("unchecked")
+                Class<? extends INetworkPacket<?>> packetClass =
+                        (Class<? extends INetworkPacket<?>>) clazz;
+
+                if (!REGISTERED_PACKET_CLASSES.add(packetClass)) {
+                    skipped++;
+                    continue;
+                }
+
+                added++;
+
+                LOGGER.debug("[NetworkAutoReg] Found packet: {} (chunkThreshold={})",
+                        packetClass.getName(),
+                        getChunkThreshold(packetClass));
+            }
+
+            LOGGER.info("[NetworkAutoReg] Scan packages: {} | found: {} | added: {} | skipped: {}",
+                    newPackages, classes.size(), added, skipped);
+        }
     }
 
     public static int getChunkThreshold(Class<?> clazz) {
-        if (clazz.isAnnotationPresent(NetworkPacket.class)) {
-            return clazz.getAnnotation(NetworkPacket.class).chunkThreshold();
-        }
-        return 0;
+        NetworkPacket annotation = clazz.getAnnotation(NetworkPacket.class);
+        return annotation != null ? annotation.chunkThreshold() : 0;
     }
-
 }
