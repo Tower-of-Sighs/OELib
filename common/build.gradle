@@ -46,6 +46,118 @@ artifacts {
     commonResources sourceSets.main.resources.sourceDirectories.singleFile
 }
 
+// -----------------------------------------------------------------------------
+// JMH source set + tasks
+// -----------------------------------------------------------------------------
+// Usage:
+// - Quick run: `./gradlew :common:jmhQuick`
+// - Stable run:`./gradlew :common:jmh`
+// - Filter:    `./gradlew :common:jmhQuick -PjmhInclude=RecordCodec`
+// - Extra args `./gradlew :common:jmhQuick -PjmhArgs="-prof gc"`
+
+sourceSets {
+    jmh {
+        java.srcDir 'src/jmh/java'
+        resources.srcDir 'src/jmh/resources'
+
+        compileClasspath += sourceSets.main.output + configurations.compileClasspath
+        runtimeClasspath += output + compileClasspath + configurations.runtimeClasspath
+    }
+}
+
+configurations {
+    jmhImplementation.extendsFrom implementation
+    jmhRuntimeOnly.extendsFrom runtimeOnly
+}
+
+dependencies {
+    // --- JMH (microbenchmarks) ---
+    // Kept intentionally lightweight so a quick run finishes fast (< 1 min).
+    def jmhVersion = '1.37'
+    jmhImplementation "org.openjdk.jmh:jmh-core:${jmhVersion}"
+    jmhAnnotationProcessor "org.openjdk.jmh:jmh-generator-annprocess:${jmhVersion}"
+}
+
+tasks.register('jmhQuick', JavaExec) {
+    group = 'benchmark'
+    description = 'Run JMH benchmarks (quick defaults)'
+    classpath = sourceSets.jmh.runtimeClasspath
+    mainClass = 'org.openjdk.jmh.Main'
+    dependsOn tasks.named('jmhClasses')
+
+    // Defaults are tuned for short feedback loops.
+    // Override via -PjmhArgs or -PjmhInclude if you need more.
+    args '-wi', '2',
+            '-i', '3',
+            '-f', '1',
+            '-w', '300ms',
+            '-r', '300ms',
+            '-tu', 'ns'
+
+    if (project.hasProperty('jmhInclude')) {
+        args project.property('jmhInclude').toString()
+    }
+    if (project.hasProperty('jmhArgs')) {
+        project.property('jmhArgs')
+                .toString()
+                .trim()
+                .split(/\s+/)
+                .findAll { !it.isBlank() }
+                .each { args it }
+    }
+}
+
+def configureJmhArgs = { JavaExec execTask ->
+    if (project.hasProperty('jmhInclude')) {
+        execTask.args project.property('jmhInclude').toString()
+    }
+    if (project.hasProperty('jmhArgs')) {
+        project.property('jmhArgs')
+                .toString()
+                .trim()
+                .split(/\s+/)
+                .findAll { !it.isBlank() }
+                .each { execTask.args it }
+    }
+}
+
+tasks.register('jmh', JavaExec) {
+    group = 'benchmark'
+    description = 'Run JMH benchmarks (more stable defaults)'
+    classpath = sourceSets.jmh.runtimeClasspath
+    mainClass = 'org.openjdk.jmh.Main'
+    dependsOn tasks.named('jmhClasses')
+
+    // More stable defaults: still "not hours", but much less noisy.
+    // Rough estimate with current benchmark count: a few minutes.
+    args '-wi', '5',
+            '-i', '5',
+            '-f', '2',
+            '-w', '1s',
+            '-r', '1s',
+            '-tu', 'ns'
+
+    configureJmhArgs(delegate as JavaExec)
+}
+
+tasks.register('jmhGc', JavaExec) {
+    group = 'benchmark'
+    description = 'Run JMH benchmarks with -prof gc (stable defaults)'
+    classpath = sourceSets.jmh.runtimeClasspath
+    mainClass = 'org.openjdk.jmh.Main'
+    dependsOn tasks.named('jmhClasses')
+
+    args '-wi', '5',
+            '-i', '5',
+            '-f', '2',
+            '-w', '1s',
+            '-r', '1s',
+            '-tu', 'ns',
+            '-prof', 'gc'
+
+    configureJmhArgs(delegate as JavaExec)
+}
+
 // Implement mcgradleconventions loader attribute
 def loaderAttribute = Attribute.of('io.github.mcgradleconventions.loader', String)
 ['apiElements', 'runtimeElements', 'sourcesElements'].each { variant ->

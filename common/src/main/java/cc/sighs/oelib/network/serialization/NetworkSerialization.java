@@ -12,13 +12,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Shared helpers for network payload serialization.
- * <p>
- * Provides JSON-based codecs as well as reflection-based utilities that
- * simplify encoding and decoding of common payload types across platforms.
- * Most Minecraft primitives and frequently used value types are handled
- * automatically using {@link RegistryFriendlyByteBuf} helpers and built-in
- * {@link StreamCodec}s.
- * </p>
+ *
+ * <p>This class provides:</p>
+ * <ul>
+ *     <li>{@link #jsonCodec(Codec)}: encode values as JSON strings</li>
+ *     <li>{@link #autoCodec(Class)}: build and cache a {@link StreamCodec} for a record packet</li>
+ * </ul>
  */
 public final class NetworkSerialization {
 
@@ -70,16 +69,13 @@ public final class NetworkSerialization {
     }
 
     /**
-     * Creates a {@link StreamCodec} for a Java record type using reflection.
-     * <p>
-     * The codec encodes all record components in declaration order using a
-     * mapping provided by {@link NetworkRecordCodecBuilder}, which delegates to
-     * low-level I/O helpers for common Java and Minecraft types and to
-     * {@link NetFieldCodec}-backed custom
-     * codecs where present.
-     * </p>
+     * Returns a cached {@link StreamCodec} for a Java record type.
      *
-     * @param recordClass record type
+     * <p>The codec encodes all record components in declaration order.
+     * Custom codecs can be provided via annotations such as {@link NetFieldCodec},
+     * {@link JsonCodec} and {@link RegistryCodec}.</p>
+     *
+     * @param recordClass record type (must be a record)
      * @param <T>         record type
      * @return cached stream codec for the given record class
      */
@@ -88,12 +84,9 @@ public final class NetworkSerialization {
         if (!recordClass.isRecord()) {
             throw new IllegalArgumentException("autoCodec only supports record types: " + recordClass.getName());
         }
-        var existing = (StreamCodec<RegistryFriendlyByteBuf, T>) RECORD_CODEC_CACHE.get(recordClass);
-        if (existing != null) {
-            return existing;
-        }
-        StreamCodec<RegistryFriendlyByteBuf, T> built = NetworkRecordCodecBuilder.build(recordClass);
-        var prev = (StreamCodec<RegistryFriendlyByteBuf, T>) RECORD_CODEC_CACHE.putIfAbsent(recordClass, built);
-        return prev != null ? prev : built;
+        return (StreamCodec<RegistryFriendlyByteBuf, T>) RECORD_CODEC_CACHE.computeIfAbsent(
+                recordClass,
+                cls -> NetworkRecordCodecBuilder.build((Class) cls)
+        );
     }
 }

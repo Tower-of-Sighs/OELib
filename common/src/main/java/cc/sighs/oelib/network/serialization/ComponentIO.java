@@ -44,6 +44,58 @@ import java.util.function.Supplier;
 final class ComponentIO {
     static final int MAX_DEPTH = 64;
 
+    private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
+
+    // Prebuilt immutable plans for common leaf types.
+    // These are safe to share as long as plans are treated as read-only after creation.
+    private static final ComponentPlan PLAN_INT = bindStatic(new ComponentPlan(Kind.INT), "readVarIntW", int.class, "writeVarIntW", int.class);
+    private static final ComponentPlan PLAN_LONG = bindStatic(new ComponentPlan(Kind.LONG), "readVarLongW", long.class, "writeVarLongW", long.class);
+    private static final ComponentPlan PLAN_BOOLEAN = bindStatic(new ComponentPlan(Kind.BOOLEAN), "readBooleanW", boolean.class, "writeBooleanW", boolean.class);
+    private static final ComponentPlan PLAN_FLOAT = bindStatic(new ComponentPlan(Kind.FLOAT), "readFloatW", float.class, "writeFloatW", float.class);
+    private static final ComponentPlan PLAN_DOUBLE = bindStatic(new ComponentPlan(Kind.DOUBLE), "readDoubleW", double.class, "writeDoubleW", double.class);
+    private static final ComponentPlan PLAN_BYTE = bindStatic(new ComponentPlan(Kind.BYTE), "readByteW", byte.class, "writeByteW", byte.class);
+    private static final ComponentPlan PLAN_SHORT = bindStatic(new ComponentPlan(Kind.SHORT), "readShortW", short.class, "writeShortW", short.class);
+    private static final ComponentPlan PLAN_STRING = bindStatic(new ComponentPlan(Kind.STRING), "readUtfW", String.class, "writeUtfW", String.class);
+    private static final ComponentPlan PLAN_UUID = bindStatic(new ComponentPlan(Kind.UUID), "readUUIDW", UUID.class, "writeUUIDW", UUID.class);
+    private static final ComponentPlan PLAN_BYTE_ARRAY = bindStatic(new ComponentPlan(Kind.BYTE_ARRAY), "readByteArrayW", byte[].class, "writeByteArrayW", byte[].class);
+    private static final ComponentPlan PLAN_INT_ARRAY = bindStatic(new ComponentPlan(Kind.INT_ARRAY), "readVarIntArrayW", int[].class, "writeVarIntArrayW", int[].class);
+    private static final ComponentPlan PLAN_LONG_ARRAY = bindStatic(new ComponentPlan(Kind.LONG_ARRAY), "readLongArrayW", long[].class, "writeLongArrayW", long[].class);
+    private static final ComponentPlan PLAN_INSTANT = bindStatic(new ComponentPlan(Kind.INSTANT), "readInstantW", Instant.class, "writeInstantW", Instant.class);
+    private static final ComponentPlan PLAN_BITSET = bindStatic(new ComponentPlan(Kind.BITSET), "readBitSetW", BitSet.class, "writeBitSetW", BitSet.class);
+    private static final ComponentPlan PLAN_PUBLIC_KEY = bindStatic(new ComponentPlan(Kind.PUBLIC_KEY), "readPublicKeyW", PublicKey.class, "writePublicKeyW", PublicKey.class);
+    private static final ComponentPlan PLAN_INT_LIST = bindStatic(new ComponentPlan(Kind.INT_LIST), "readIntIdListW", IntList.class, "writeIntIdListW", IntList.class);
+    private static final ComponentPlan PLAN_RESOURCE_KEY = bindStatic(new ComponentPlan(Kind.RESOURCE_KEY), "readRegistryKeyW", ResourceKey.class, "writeResourceKeyW", ResourceKey.class);
+    private static final ComponentPlan PLAN_BLOCK_POS = bindStatic(new ComponentPlan(Kind.BLOCK_POS), "readBlockPosW", BlockPos.class, "writeBlockPosW", BlockPos.class);
+    private static final ComponentPlan PLAN_CHUNK_POS = bindStatic(new ComponentPlan(Kind.CHUNK_POS), "readChunkPosW", ChunkPos.class, "writeChunkPosW", ChunkPos.class);
+    private static final ComponentPlan PLAN_GLOBAL_POS = bindStatic(new ComponentPlan(Kind.GLOBAL_POS), "readGlobalPosW", GlobalPos.class, "writeGlobalPosW", GlobalPos.class);
+    private static final ComponentPlan PLAN_VECTOR3F = bindStatic(new ComponentPlan(Kind.VECTOR3F), "readVector3fW", Vector3f.class, "writeVector3fW", Vector3f.class);
+    private static final ComponentPlan PLAN_QUATERNIONF = bindStatic(new ComponentPlan(Kind.QUATERNIONF), "readQuaternionW", Quaternionf.class, "writeQuaternionW", Quaternionf.class);
+    private static final ComponentPlan PLAN_RESOURCE_LOCATION = bindStatic(new ComponentPlan(Kind.RESOURCE_LOCATION), "readIdentifierW", Identifier.class, "writeIdentifierW", Identifier.class);
+    private static final ComponentPlan PLAN_BLOCK_HIT_RESULT = bindStatic(new ComponentPlan(Kind.BLOCK_HIT_RESULT), "readBlockHitResultW", BlockHitResult.class, "writeBlockHitResultW", BlockHitResult.class);
+    private static final ComponentPlan PLAN_COMPOUND_TAG = bindStatic(new ComponentPlan(Kind.COMPOUND_TAG), "readCompoundTagW", CompoundTag.class, "writeCompoundTagW", CompoundTag.class);
+    private static final ComponentPlan PLAN_TAG = bindStatic(new ComponentPlan(Kind.TAG), "readTagW", Tag.class, "writeTagW", Tag.class);
+
+    private static final ClassValue<ComponentPlan> ENUM_PLAN_CACHE = new ClassValue<>() {
+        @Override
+        protected ComponentPlan computeValue(Class<?> type) {
+            if (!type.isEnum()) {
+                throw new IllegalStateException("Not an enum: " + type.getName());
+            }
+            ComponentPlan p = new ComponentPlan(Kind.ENUM);
+            p.enumClass = (Class<? extends Enum>) type;
+            try {
+                var r = LOOKUP.findStatic(ComponentIO.class, "readEnumW",
+                        MethodType.methodType(Enum.class, RegistryFriendlyByteBuf.class, Class.class));
+                p.readHandle = MethodHandles.insertArguments(r, 1, p.enumClass);
+                p.writeHandle = LOOKUP.findStatic(ComponentIO.class, "writeEnumW",
+                        MethodType.methodType(void.class, RegistryFriendlyByteBuf.class, Enum.class));
+                return p;
+            } catch (NoSuchMethodException | IllegalAccessException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+    };
+
     private ComponentIO() {
     }
 
@@ -228,49 +280,37 @@ final class ComponentIO {
             p.codec = (StreamCodec<RegistryFriendlyByteBuf, Object>) NetworkSerialization.autoCodec((Class) rawType);
             return p;
         }
-        if (rawType == int.class || rawType == Integer.class) return bindStatic(new ComponentPlan(Kind.INT), "readVarIntW", int.class, "writeVarIntW", int.class);
-        if (rawType == long.class || rawType == Long.class) return bindStatic(new ComponentPlan(Kind.LONG), "readVarLongW", long.class, "writeVarLongW", long.class);
-        if (rawType == boolean.class || rawType == Boolean.class) return bindStatic(new ComponentPlan(Kind.BOOLEAN), "readBooleanW", boolean.class, "writeBooleanW", boolean.class);
-        if (rawType == float.class || rawType == Float.class) return bindStatic(new ComponentPlan(Kind.FLOAT), "readFloatW", float.class, "writeFloatW", float.class);
-        if (rawType == double.class || rawType == Double.class) return bindStatic(new ComponentPlan(Kind.DOUBLE), "readDoubleW", double.class, "writeDoubleW", double.class);
-        if (rawType == byte.class || rawType == Byte.class) return bindStatic(new ComponentPlan(Kind.BYTE), "readByteW", byte.class, "writeByteW", byte.class);
-        if (rawType == short.class || rawType == Short.class) return bindStatic(new ComponentPlan(Kind.SHORT), "readShortW", short.class, "writeShortW", short.class);
-        if (rawType == String.class) return bindStatic(new ComponentPlan(Kind.STRING), "readUtfW", String.class, "writeUtfW", String.class);
-        if (rawType == UUID.class) return bindStatic(new ComponentPlan(Kind.UUID), "readUUIDW", UUID.class, "writeUUIDW", UUID.class);
-        if (rawType == byte[].class) return bindStatic(new ComponentPlan(Kind.BYTE_ARRAY), "readByteArrayW", byte[].class, "writeByteArrayW", byte[].class);
-        if (rawType == int[].class) return bindStatic(new ComponentPlan(Kind.INT_ARRAY), "readVarIntArrayW", int[].class, "writeVarIntArrayW", int[].class);
-        if (rawType == long[].class) return bindStatic(new ComponentPlan(Kind.LONG_ARRAY), "readLongArrayW", long[].class, "writeLongArrayW", long[].class);
-        if (rawType == Instant.class) return bindStatic(new ComponentPlan(Kind.INSTANT), "readInstantW", Instant.class, "writeInstantW", Instant.class);
-        if (rawType == BitSet.class) return bindStatic(new ComponentPlan(Kind.BITSET), "readBitSetW", BitSet.class, "writeBitSetW", BitSet.class);
-        if (rawType == PublicKey.class) return bindStatic(new ComponentPlan(Kind.PUBLIC_KEY), "readPublicKeyW", PublicKey.class, "writePublicKeyW", PublicKey.class);
+        if (rawType == int.class || rawType == Integer.class) return PLAN_INT;
+        if (rawType == long.class || rawType == Long.class) return PLAN_LONG;
+        if (rawType == boolean.class || rawType == Boolean.class) return PLAN_BOOLEAN;
+        if (rawType == float.class || rawType == Float.class) return PLAN_FLOAT;
+        if (rawType == double.class || rawType == Double.class) return PLAN_DOUBLE;
+        if (rawType == byte.class || rawType == Byte.class) return PLAN_BYTE;
+        if (rawType == short.class || rawType == Short.class) return PLAN_SHORT;
+        if (rawType == String.class) return PLAN_STRING;
+        if (rawType == UUID.class) return PLAN_UUID;
+        if (rawType == byte[].class) return PLAN_BYTE_ARRAY;
+        if (rawType == int[].class) return PLAN_INT_ARRAY;
+        if (rawType == long[].class) return PLAN_LONG_ARRAY;
+        if (rawType == Instant.class) return PLAN_INSTANT;
+        if (rawType == BitSet.class) return PLAN_BITSET;
+        if (rawType == PublicKey.class) return PLAN_PUBLIC_KEY;
 
-        if (rawType == IntList.class) return bindStatic(new ComponentPlan(Kind.INT_LIST), "readIntIdListW", IntList.class, "writeIntIdListW", IntList.class);
-        if (rawType == ResourceKey.class) return bindStatic(new ComponentPlan(Kind.RESOURCE_KEY), "readRegistryKeyW", ResourceKey.class, "writeResourceKeyW", ResourceKey.class);
+        if (rawType == IntList.class) return PLAN_INT_LIST;
+        if (rawType == ResourceKey.class) return PLAN_RESOURCE_KEY;
 
-        if (rawType == BlockPos.class) return bindStatic(new ComponentPlan(Kind.BLOCK_POS), "readBlockPosW", BlockPos.class, "writeBlockPosW", BlockPos.class);
-        if (rawType == ChunkPos.class) return bindStatic(new ComponentPlan(Kind.CHUNK_POS), "readChunkPosW", ChunkPos.class, "writeChunkPosW", ChunkPos.class);
-        if (rawType == GlobalPos.class) return bindStatic(new ComponentPlan(Kind.GLOBAL_POS), "readGlobalPosW", GlobalPos.class, "writeGlobalPosW", GlobalPos.class);
-        if (rawType == Vector3f.class) return bindStatic(new ComponentPlan(Kind.VECTOR3F), "readVector3fW", Vector3f.class, "writeVector3fW", Vector3f.class);
-        if (rawType == Quaternionf.class) return bindStatic(new ComponentPlan(Kind.QUATERNIONF), "readQuaternionW", Quaternionf.class, "writeQuaternionW", Quaternionf.class);
-        if (rawType == Identifier.class) return bindStatic(new ComponentPlan(Kind.RESOURCE_LOCATION), "readIdentifierW", Identifier.class, "writeIdentifierW", Identifier.class);
-        if (rawType == BlockHitResult.class) return bindStatic(new ComponentPlan(Kind.BLOCK_HIT_RESULT), "readBlockHitResultW", BlockHitResult.class, "writeBlockHitResultW", BlockHitResult.class);
+        if (rawType == BlockPos.class) return PLAN_BLOCK_POS;
+        if (rawType == ChunkPos.class) return PLAN_CHUNK_POS;
+        if (rawType == GlobalPos.class) return PLAN_GLOBAL_POS;
+        if (rawType == Vector3f.class) return PLAN_VECTOR3F;
+        if (rawType == Quaternionf.class) return PLAN_QUATERNIONF;
+        if (rawType == Identifier.class) return PLAN_RESOURCE_LOCATION;
+        if (rawType == BlockHitResult.class) return PLAN_BLOCK_HIT_RESULT;
 
-        if (rawType == CompoundTag.class) return bindStatic(new ComponentPlan(Kind.COMPOUND_TAG), "readCompoundTagW", CompoundTag.class, "writeCompoundTagW", CompoundTag.class);
-        if (rawType == Tag.class) return bindStatic(new ComponentPlan(Kind.TAG), "readTagW", Tag.class, "writeTagW", Tag.class);
+        if (rawType == CompoundTag.class) return PLAN_COMPOUND_TAG;
+        if (rawType == Tag.class) return PLAN_TAG;
 
-        if (rawType.isEnum()) {
-            ComponentPlan p = new ComponentPlan(Kind.ENUM);
-            p.enumClass = (Class<? extends Enum>) rawType;
-            try {
-                var lookup = MethodHandles.lookup();
-                var r = lookup.findStatic(ComponentIO.class, "readEnumW", MethodType.methodType(Enum.class, RegistryFriendlyByteBuf.class, Class.class));
-                p.readHandle = MethodHandles.insertArguments(r, 1, p.enumClass);
-                p.writeHandle = lookup.findStatic(ComponentIO.class, "writeEnumW", MethodType.methodType(void.class, RegistryFriendlyByteBuf.class, Enum.class));
-            } catch (NoSuchMethodException | IllegalAccessException e) {
-                throw new IllegalStateException(e);
-            }
-            return p;
-        }
+        if (rawType.isEnum()) return ENUM_PLAN_CACHE.get(rawType);
 
         // Fastutil specialized raw types without generics
         if (rawType == IntSet.class) {
@@ -564,9 +604,8 @@ final class ComponentIO {
 
     private static ComponentPlan bindStatic(ComponentPlan p, String readName, Class<?> readType, String writeName, Class<?> writeArgType) {
         try {
-            var lookup = MethodHandles.lookup();
-            p.readHandle = lookup.findStatic(ComponentIO.class, readName, MethodType.methodType(readType, RegistryFriendlyByteBuf.class));
-            p.writeHandle = lookup.findStatic(ComponentIO.class, writeName, MethodType.methodType(void.class, RegistryFriendlyByteBuf.class, writeArgType));
+            p.readHandle = LOOKUP.findStatic(ComponentIO.class, readName, MethodType.methodType(readType, RegistryFriendlyByteBuf.class));
+            p.writeHandle = LOOKUP.findStatic(ComponentIO.class, writeName, MethodType.methodType(void.class, RegistryFriendlyByteBuf.class, writeArgType));
             return p;
         } catch (NoSuchMethodException | IllegalAccessException e) {
             throw new IllegalStateException(e);
