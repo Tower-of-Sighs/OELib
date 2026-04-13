@@ -9,6 +9,8 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 public final class NetworkAutoRegistration {
@@ -17,6 +19,7 @@ public final class NetworkAutoRegistration {
     private static final Set<String> BASE_PACKAGES = Collections.synchronizedSet(new LinkedHashSet<>());
     private static final Set<String> SCANNED_PACKAGES = new HashSet<>();
     private static final Set<Class<? extends INetworkPacket<?>>> REGISTERED_PACKET_CLASSES = ConcurrentHashMap.newKeySet();
+    private static final CopyOnWriteArrayList<Consumer<Class<? extends INetworkPacket<?>>>> PACKET_LISTENERS = new CopyOnWriteArrayList<>();
     private static final Object REGISTRATION_LOCK = new Object();
     private static volatile boolean registrationStarted = false;
 
@@ -47,6 +50,29 @@ public final class NetworkAutoRegistration {
         }
 
         LOGGER.debug("[NetworkAutoReg] Registered base package: {}", basePackage);
+    }
+
+    /**
+     * Registers a callback that will be invoked whenever a new {@link INetworkPacket}
+     * class is discovered via {@link #findAllAnnotatedPackets()} or late package scans.
+     * <p>
+     * This is primarily used by platform implementations to register newly discovered packet classes into their runtime channels/codecs.
+     * </p>
+     *
+     * @param listener callback
+     */
+    public static void addPacketRegistrationListener(Consumer<Class<? extends INetworkPacket<?>>> listener) {
+        if (listener == null) {
+            return;
+        }
+        PACKET_LISTENERS.addIfAbsent(listener);
+    }
+
+    public static void removePacketRegistrationListener(Consumer<Class<? extends INetworkPacket<?>>> listener) {
+        if (listener == null) {
+            return;
+        }
+        PACKET_LISTENERS.remove(listener);
     }
 
     public static Set<Class<? extends INetworkPacket<?>>> findAllAnnotatedPackets() {
@@ -123,6 +149,7 @@ public final class NetworkAutoRegistration {
                 }
 
                 added++;
+                notifyPacketDiscovered(packetClass);
 
                 LOGGER.debug("[NetworkAutoReg] Found packet: {} (chunkThreshold={})",
                         packetClass.getName(),
@@ -131,6 +158,19 @@ public final class NetworkAutoRegistration {
 
             LOGGER.info("[NetworkAutoReg] Scan packages: {} | found: {} | added: {} | skipped: {}",
                     newPackages, classes.size(), added, skipped);
+        }
+    }
+
+    private static void notifyPacketDiscovered(Class<? extends INetworkPacket<?>> packetClass) {
+        if (PACKET_LISTENERS.isEmpty()) {
+            return;
+        }
+        for (var listener : PACKET_LISTENERS) {
+            try {
+                listener.accept(packetClass);
+            } catch (Throwable t) {
+                LOGGER.warn("[NetworkAutoReg] Packet listener failed for {}", packetClass.getName(), t);
+            }
         }
     }
 

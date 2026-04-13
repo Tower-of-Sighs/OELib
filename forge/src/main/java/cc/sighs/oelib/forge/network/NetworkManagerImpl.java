@@ -37,6 +37,7 @@ public class NetworkManagerImpl implements INetworkManager {
     private static final Map<CustomPacketPayload.Type<?>, SimpleChannel> TYPE_TO_CLIENTBOUND_CHANNEL = new ConcurrentHashMap<>();
     private static final Map<String, Integer> NEXT_SERVERBOUND_ID = new ConcurrentHashMap<>();
     private static final Map<String, Integer> NEXT_CLIENTBOUND_ID = new ConcurrentHashMap<>();
+    private static boolean AUTO_REGISTRATION_HOOK_INSTALLED = false;
 
     private static SimpleChannel serverboundChannelOf(String modId) {
         return SERVERBOUND_CHANNELS.computeIfAbsent(modId, id -> NetworkRegistry.newSimpleChannel(
@@ -70,12 +71,31 @@ public class NetworkManagerImpl implements INetworkManager {
         return list;
     }
 
+    /**
+     * Installs a hook so that packets discovered via {@link NetworkAutoRegistration}
+     * (including late {@code registerBasePackage(...)} calls from other mods) are
+     * immediately registered into Forge {@link SimpleChannel}s.
+     */
+    public static void installAutoRegistrationHook() {
+        if (AUTO_REGISTRATION_HOOK_INSTALLED) {
+            return;
+        }
+        AUTO_REGISTRATION_HOOK_INSTALLED = true;
+        NetworkAutoRegistration.addPacketRegistrationListener(packetClass -> {
+            try {
+                new NetworkManagerImpl().registerAnnotated(packetClass);
+            } catch (Throwable ignored) {
+            }
+        });
+    }
+
     @SuppressWarnings("unchecked")
     public <T extends INetworkPacket<T> & CustomPacketPayload> void registerAnnotated(Class<? extends INetworkPacket<?>> rawClass) {
         Class<T> clazz = (Class<T>) rawClass;
         var meta = clazz.getAnnotation(NetworkPacket.class);
         if (meta == null || !clazz.isRecord()) return;
         var type = NetworkPacketTypes.typeOf(clazz);
+        if (REGISTERED.containsKey(type)) return;
         var codec = NetworkSerialization.autoCodec(clazz);
         REGISTERED.put(type, new NetworkUtil.PacketInfo<>(type, codec));
         var side = meta.side();
@@ -93,7 +113,7 @@ public class NetworkManagerImpl implements INetworkManager {
             TYPE_TO_SERVERBOUND_CHANNEL.put(type, channel);
             int id = NEXT_SERVERBOUND_ID.merge(type.id().getNamespace(), 1, Integer::sum) - 1;
             channel.messageBuilder(clazz, id, NetworkDirection.PLAY_TO_SERVER)
-                    .encoder((msg, buf) -> codec.encode(buf, (T) msg))
+                    .encoder((msg, buf) -> codec.encode(buf, msg))
                     .decoder(codec::decode)
                     .consumerMainThread((msg, ctx) -> msg.handle(new ForgeNetworkContext(ctx.get())))
                     .add();
@@ -103,7 +123,7 @@ public class NetworkManagerImpl implements INetworkManager {
             TYPE_TO_CLIENTBOUND_CHANNEL.put(type, channel);
             int id = NEXT_CLIENTBOUND_ID.merge(type.id().getNamespace(), 1, Integer::sum) - 1;
             channel.messageBuilder(clazz, id, NetworkDirection.PLAY_TO_CLIENT)
-                    .encoder((msg, buf) -> codec.encode(buf, (T) msg))
+                    .encoder((msg, buf) -> codec.encode(buf, msg))
                     .decoder(codec::decode)
                     .consumerMainThread((msg, ctx) -> msg.handle(new ForgeNetworkContext(ctx.get())))
                     .add();

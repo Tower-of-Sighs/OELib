@@ -16,22 +16,53 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class NetworkManagerImpl implements INetworkManager {
 
     private static final Map<CustomPacketPayload.Type<?>, NetworkUtil.PacketInfo<?>> registeredPackets = new ConcurrentHashMap<>();
+    private static final Set<CustomPacketPayload.Type<?>> commonReceiversRegistered = ConcurrentHashMap.newKeySet();
+    private static final Set<CustomPacketPayload.Type<?>> clientReceiversRegistered = ConcurrentHashMap.newKeySet();
+    private static volatile boolean autoRegistrationHookInstalled = false;
+    private static volatile boolean commonInitialized = false;
+    private static volatile boolean clientInitialized = false;
 
     public static void initialize() {
+        commonInitialized = true;
+        installAutoRegistrationHook();
         processRegistration(RegistrationPhase.COMMON);
     }
 
     public static void initializeClient() {
+        clientInitialized = true;
+        installAutoRegistrationHook();
         processRegistration(RegistrationPhase.CLIENT);
+    }
+
+    /**
+     * Installs a hook so that packets discovered via {@link NetworkAutoRegistration}
+     * (including late {@code registerBasePackage(...)} calls from other mods) are
+     * immediately registered into Fabric's global receivers.
+     */
+    public static void installAutoRegistrationHook() {
+        if (autoRegistrationHookInstalled) {
+            return;
+        }
+        autoRegistrationHookInstalled = true;
+
+        NetworkAutoRegistration.addPacketRegistrationListener(packetClass -> {
+            try {
+                NetworkManagerImpl impl = new NetworkManagerImpl();
+                if (commonInitialized) {
+                    impl.registerAnnotated(packetClass, RegistrationPhase.COMMON);
+                }
+                if (clientInitialized) {
+                    impl.registerAnnotated(packetClass, RegistrationPhase.CLIENT);
+                }
+            } catch (Throwable ignored) {
+            }
+        });
     }
 
     private static void processRegistration(RegistrationPhase phase) {
@@ -51,10 +82,13 @@ public class NetworkManagerImpl implements INetworkManager {
         var side = meta.side();
 
         var codec = NetworkSerialization.autoCodec(clazz);
-        registeredPackets.put(type, new NetworkUtil.PacketInfo<>(type, codec));
+        registeredPackets.putIfAbsent(type, new NetworkUtil.PacketInfo<>(type, codec));
 
         if (phase == RegistrationPhase.COMMON) {
             if (side == Side.SERVER || side == Side.BOTH) {
+                if (!commonReceiversRegistered.add(type)) {
+                    return;
+                }
                 ServerPlayNetworking.registerGlobalReceiver(type.id(), (server, player, handler, buf, sender) -> {
                     T payload = codec.decode(buf);
                     server.execute(() -> payload.handle(new FabricServerNetworkContext(server, player)));
@@ -63,6 +97,9 @@ public class NetworkManagerImpl implements INetworkManager {
             OELib.LOGGER.info("Common registration for {}: Side={}, TypeID={}", clazz.getSimpleName(), side, type.id());
         } else {
             if (side == Side.CLIENT || side == Side.BOTH) {
+                if (!clientReceiversRegistered.add(type)) {
+                    return;
+                }
                 ClientPlayNetworking.registerGlobalReceiver(type.id(), (client, handler, buf, sender) -> {
                     T payload = codec.decode(buf);
                     client.execute(() -> payload.handle(new FabricClientNetworkContext(client)));
