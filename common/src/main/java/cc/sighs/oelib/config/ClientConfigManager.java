@@ -5,21 +5,23 @@ import cc.sighs.oelib.config.model.ConfigSide;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
+import org.jspecify.annotations.NonNull;
 
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Holds all client-side configurations and integrates with resource reload.
- * <p>
- * This manager is responsible for:
- * <ul>
- *     <li>Registering client configs backed by {@link ConfigUnit}</li>
- *     <li>Reloading client configs on resource reload</li>
- * </ul>
- * The public facade {@link ConfigManager} delegates client-related operations here.
- * </p>
+ * Registry for client-side configuration units.
+ *
+ * <p>This manager stores all configurations whose {@link ConfigSide} is
+ * {@link ConfigSide#CLIENT}. It reloads configs when the Minecraft resource
+ * manager triggers a reload, which covers resource-pack switches and
+ * locale changes.
+ *
+ * <p>The public-facing {@link ConfigManager} delegates client-related
+ * operations to this class. Direct use is rarely needed outside the
+ * framework internals.
  */
 public class ClientConfigManager implements ResourceManagerReloadListener {
     private static final Map<Identifier, ConfigUnit<?>> CONFIGS = new ConcurrentHashMap<>();
@@ -40,6 +42,11 @@ public class ClientConfigManager implements ResourceManagerReloadListener {
         return Optional.ofNullable(CONFIGS.get(id));
     }
 
+    /**
+     * Returns an unmodifiable snapshot of all registered client configurations.
+     *
+     * @return a map of configuration identifiers to units
+     */
     public static Map<Identifier, ConfigUnit<?>> all() {
         return Map.copyOf(CONFIGS);
     }
@@ -52,7 +59,7 @@ public class ClientConfigManager implements ResourceManagerReloadListener {
 
 
     @Override
-    public void onResourceManagerReload(ResourceManager resourceManager) {
+    public void onResourceManagerReload(@NonNull ResourceManager resourceManager) {
         reloadAll();
         OELib.LOGGER.info("Successfully reload {} client config(s).", CONFIGS.size());
     }

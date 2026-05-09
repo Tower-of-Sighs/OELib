@@ -2,6 +2,12 @@ package cc.sighs.oelib.config.ui.scissor;
 
 import org.apache.commons.lang3.builder.ReflectionToStringBuilder;
 
+/**
+ * A double-precision rectangle used for sub-pixel-accurate scissor
+ * calculations in the UI rendering pipeline.
+ *
+ * <p>Adapted from Cloth Config's geometry primitives.
+ */
 public class FloatingRectangle implements Cloneable {
     public double x;
     public double y;

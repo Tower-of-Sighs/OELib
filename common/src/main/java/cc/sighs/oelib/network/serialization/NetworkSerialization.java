@@ -8,7 +8,12 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.NotNull;
 
+import java.lang.invoke.MethodHandles;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Shared helpers for network payload serialization.
@@ -21,7 +26,11 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class NetworkSerialization {
 
-    private static final ConcurrentHashMap<Class<?>, StreamCodec<RegistryFriendlyByteBuf, ?>> RECORD_CODEC_CACHE = new ConcurrentHashMap<>();
+    private static final MethodHandles.Lookup INTERNAL_LOOKUP = MethodHandles.lookup();
+    private static final ConcurrentHashMap<CacheKey, CompletableFuture<StreamCodec<RegistryFriendlyByteBuf, ?>>> RECORD_CODEC_CACHE =
+            new ConcurrentHashMap<>();
+    private static final ThreadLocal<MethodHandles.Lookup> ACTIVE_LOOKUP = new ThreadLocal<>();
+    private static final ThreadLocal<Deque<CacheKey>> BUILD_STACK = ThreadLocal.withInitial(ArrayDeque::new);
 
     private NetworkSerialization() {
     }
@@ -79,14 +88,88 @@ public final class NetworkSerialization {
      * @param <T>         record type
      * @return cached stream codec for the given record class
      */
-    @SuppressWarnings("unchecked")
     public static <T> StreamCodec<RegistryFriendlyByteBuf, T> autoCodec(Class<T> recordClass) {
+        MethodHandles.Lookup lookup = ACTIVE_LOOKUP.get();
+        if (lookup == null) {
+            lookup = INTERNAL_LOOKUP;
+        }
+        return autoCodec(lookup, recordClass);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> StreamCodec<RegistryFriendlyByteBuf, T> autoCodec(MethodHandles.Lookup lookup, Class<T> recordClass) {
+        if (lookup == null) {
+            throw new IllegalArgumentException("lookup cannot be null");
+        }
         if (!recordClass.isRecord()) {
             throw new IllegalArgumentException("autoCodec only supports record types: " + recordClass.getName());
         }
-        return (StreamCodec<RegistryFriendlyByteBuf, T>) RECORD_CODEC_CACHE.computeIfAbsent(
-                recordClass,
-                cls -> NetworkRecordCodecBuilder.build((Class) cls)
-        );
+
+        CacheKey key = new CacheKey(recordClass, lookup.lookupClass());
+
+        CompletableFuture<StreamCodec<RegistryFriendlyByteBuf, ?>> existing = RECORD_CODEC_CACHE.get(key);
+        if (existing != null) {
+            return (StreamCodec<RegistryFriendlyByteBuf, T>) awaitCodec(key, existing);
+        }
+
+        CompletableFuture<StreamCodec<RegistryFriendlyByteBuf, ?>> created = new CompletableFuture<>();
+        CompletableFuture<StreamCodec<RegistryFriendlyByteBuf, ?>> winner = RECORD_CODEC_CACHE.putIfAbsent(key, created);
+        if (winner != null) {
+            return (StreamCodec<RegistryFriendlyByteBuf, T>) awaitCodec(key, winner);
+        }
+
+        Deque<CacheKey> stack = BUILD_STACK.get();
+        if (stack.contains(key)) {
+            RECORD_CODEC_CACHE.remove(key, created);
+            throw new IllegalStateException("Cyclic network record codec dependency detected: "
+                    + recordClass.getName() + " @" + key.lookupClass().getName());
+        }
+
+        MethodHandles.Lookup previous = ACTIVE_LOOKUP.get();
+        stack.push(key);
+        ACTIVE_LOOKUP.set(lookup);
+        try {
+            StreamCodec<RegistryFriendlyByteBuf, T> built = NetworkRecordCodecBuilder.build(lookup, recordClass);
+            created.complete(built);
+            return built;
+        } catch (Throwable t) {
+            created.completeExceptionally(t);
+            RECORD_CODEC_CACHE.remove(key, created);
+            throw new IllegalStateException("Failed to build network codec for " + recordClass.getName(), t);
+        } finally {
+            stack.pop();
+            if (stack.isEmpty()) {
+                BUILD_STACK.remove();
+            }
+            if (previous == null) {
+                ACTIVE_LOOKUP.remove();
+            } else {
+                ACTIVE_LOOKUP.set(previous);
+            }
+        }
+    }
+
+    private static StreamCodec<RegistryFriendlyByteBuf, ?> awaitCodec(
+            CacheKey key,
+            CompletableFuture<StreamCodec<RegistryFriendlyByteBuf, ?>> future
+    ) {
+        Deque<CacheKey> stack = BUILD_STACK.get();
+        if (stack.contains(key) && !future.isDone()) {
+            throw new IllegalStateException("Cyclic network record codec dependency detected: "
+                    + key.recordClass().getName() + " @" + key.lookupClass().getName());
+        }
+        try {
+            return future.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for codec build: "
+                    + key.recordClass().getName(), e);
+        } catch (ExecutionException e) {
+            throw new IllegalStateException("Failed to build network codec for "
+                    + key.recordClass().getName(), e.getCause());
+        }
+    }
+
+    private record CacheKey(Class<?> recordClass, Class<?> lookupClass) {
     }
 }

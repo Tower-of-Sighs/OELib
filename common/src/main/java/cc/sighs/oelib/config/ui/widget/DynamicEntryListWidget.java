@@ -5,32 +5,85 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.resources.Identifier;
 
+/**
+ * A smooth-scrolling list widget for the auto-generated config screen.
+ *
+ * <p>Extends {@link DynamicElementListWidget} with a frame-rate-independent
+ * scrolling implementation that uses exponential smoothing for a natural
+ * feel. The scroll bounds are recalculated on every frame based on the
+ * total height of all child entries.
+ */
 public class DynamicEntryListWidget extends DynamicElementListWidget {
+    /** The texture identifier for the vertical header separator. */
     public static final Identifier VERTICAL_HEADER_SEPARATOR = Identifier.withDefaultNamespace("textures/gui/menu_list_background.png");
     private final Scroller scroller = new Scroller();
 
+    /**
+     * Constructs a scrolling list widget.
+     *
+     * @param minecraft the Minecraft instance
+     * @param width     the total width
+     * @param height    the total height
+     * @param top       the top y coordinate of the visible area
+     * @param bottom    the bottom y coordinate of the visible area
+     */
     public DynamicEntryListWidget(Minecraft minecraft, int width, int height, int top, int bottom) {
         super(minecraft, width, height, top, bottom);
     }
 
+    /**
+     * Scrolls to the given pixel offset.
+     *
+     * @param pixels   the target scroll offset
+     * @param animated {@code true} for smooth scrolling, {@code false} for instant
+     */
     public void scrollTo(int pixels, boolean animated) {
         scroller.scrollTo(pixels, animated);
     }
 
+    /**
+     * Offsets the scroll position by the given amount.
+     *
+     * @param pixels the offset, positive to scroll down
+     */
     public void offset(double pixels) {
         scroller.offset(pixels);
     }
 
+    /**
+     * Returns the current scroll offset in pixels.
+     *
+     * @return the scroll offset
+     */
     public int getScrollOffset() {
         return scroller.currentInt();
     }
 
-    @Override
-    public void render(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    /**
+     * Returns the target scroll offset (may differ during smooth scrolling).
+     *
+     * @return the target scroll offset
+     */
+    public int getScrollTargetOffset() {
+        return scroller.targetInt();
+    }
+
+    /**
+     * Recalculates the scroll bounds based on the total height of all
+     * child entries.
+     */
+    public void refreshScrollBounds() {
         int totalHeight = 0;
-        for (AbstractConfigEntry<?> entry : children) totalHeight += entry.getItemHeight();
+        for (AbstractConfigEntry<?> entry : children) {
+            totalHeight += entry.getItemHeight();
+        }
         int maxScroll = Math.max(0, totalHeight - (bottom - top));
         scroller.setMax(maxScroll);
+    }
+
+    @Override
+    public void render(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        refreshScrollBounds();
         scroller.update();
         int y = top - scroller.currentInt();
         for (int i = 0; i < children.size(); i++) {
@@ -90,6 +143,10 @@ public class DynamicEntryListWidget extends DynamicElementListWidget {
 
         int currentInt() {
             return (int) Math.round(value);
+        }
+
+        int targetInt() {
+            return (int) Math.round(target);
         }
 
         private double clamp(double v) {

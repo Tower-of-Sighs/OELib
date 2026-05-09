@@ -2,6 +2,11 @@ package cc.sighs.oelib.config.ui.scissor;
 
 import org.apache.commons.lang3.builder.ReflectionToStringBuilder;
 
+/**
+ * An integer-based 2D point used for scissor-region positioning.
+ *
+ * <p>Adapted from Cloth Config's geometry primitives.
+ */
 public class Point implements Cloneable {
     public int x;
     public int y;

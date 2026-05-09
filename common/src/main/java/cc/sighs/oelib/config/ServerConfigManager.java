@@ -13,22 +13,29 @@ import cc.sighs.oelib.platform.Platform;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
+import org.jspecify.annotations.NonNull;
 
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Holds all server-side configurations and integrates with resource reload.
- * <p>
- * This manager is responsible for:
+ * Registry for server-side configuration units.
+ *
+ * <p>This manager stores all configurations whose {@link ConfigSide} is
+ * {@link ConfigSide#SERVER}. In addition to the basic register/lookup/reload
+ * operations, it handles:
  * <ul>
- *     <li>Registering server configs backed by {@link ConfigUnit}</li>
- *     <li>Reloading server configs on data pack reload</li>
- *     <li>Encoding and applying remote updates for server-owned configs</li>
+ *   <li>Encoding config values for network synchronization</li>
+ *   <li>Applying remote updates received from clients (with permission checks)</li>
+ *   <li>Broadcasting config changes to connected players via
+ *       {@link ConfigSyncPacket}</li>
+ *   <li>Tracking the last broadcast payload to avoid redundant syncs</li>
  * </ul>
- * The public facade {@link ConfigManager} delegates server-related operations here.
- * </p>
+ *
+ * <p>The public-facing {@link ConfigManager} delegates server-related
+ * operations to this class. Direct use is rarely needed outside the
+ * framework internals.
  */
 public class ServerConfigManager implements ResourceManagerReloadListener {
     private static final Map<Identifier, ConfigUnit<?>> CONFIGS = new ConcurrentHashMap<>();
@@ -55,27 +62,66 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
         return Optional.ofNullable(CONFIGS.get(id));
     }
 
+    /**
+     * Returns an unmodifiable snapshot of all registered server configurations.
+     *
+     * @return a map of configuration identifiers to units
+     */
     public static Map<Identifier, ConfigUnit<?>> all() {
         return Map.copyOf(CONFIGS);
     }
 
+    /**
+     * Returns the permission checker registered for the given configuration,
+     * if any.
+     *
+     * @param id the configuration identifier
+     * @return the permission checker, or {@link Optional#empty()}
+     */
     public static Optional<IConfigPermissionChecker> getPermissionChecker(Identifier id) {
         return Optional.ofNullable(PERMISSIONS.get(id));
     }
 
+    /**
+     * Records a broadcast payload for the given configuration so that
+     * redundant syncs can be suppressed.
+     *
+     * @param id      the configuration identifier
+     * @param payload the encoded payload
+     */
     public static void recordBroadcast(Identifier id, String payload) {
         LAST_BROADCAST.put(id, payload);
         CLIENT_KNOWN_SERVER.put(id, payload);
     }
 
+    /**
+     * Returns the last broadcast payload for the given configuration.
+     *
+     * @param id the configuration identifier
+     * @return the last broadcast payload, or {@link Optional#empty()}
+     */
     public static Optional<String> getLastBroadcast(Identifier id) {
         return Optional.ofNullable(LAST_BROADCAST.get(id));
     }
 
+    /**
+     * Records a payload that the client is known to have for the given
+     * configuration.
+     *
+     * @param id      the configuration identifier
+     * @param payload the encoded payload
+     */
     public static void recordClientKnownServer(Identifier id, String payload) {
         CLIENT_KNOWN_SERVER.put(id, payload);
     }
 
+    /**
+     * Returns the payload that the client is known to have for the given
+     * configuration.
+     *
+     * @param id the configuration identifier
+     * @return the known payload, or {@link Optional#empty()}
+     */
     public static Optional<String> getClientKnownServer(Identifier id) {
         return Optional.ofNullable(CLIENT_KNOWN_SERVER.get(id));
     }
@@ -145,7 +191,7 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
     }
 
     @Override
-    public void onResourceManagerReload(ResourceManager resourceManager) {
+    public void onResourceManagerReload(@NonNull ResourceManager resourceManager) {
         reloadAll();
         OELib.LOGGER.info("Successfully reload {} server config(s).", CONFIGS.size());
     }

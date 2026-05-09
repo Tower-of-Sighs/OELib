@@ -1,70 +1,127 @@
 package cc.sighs.oelib.config;
 
-import org.jetbrains.annotations.NotNull;
+import cc.sighs.oelib.config.optics.ConfigLens;
+import org.jspecify.annotations.NonNull;
 
 import java.io.Serializable;
-import java.lang.invoke.SerializedLambda;
+import java.lang.invoke.MethodHandles;
 import java.util.Objects;
 import java.util.function.Function;
 
+/**
+ * Convenience wrapper for reading and writing individual fields of a {@link ConfigUnit}
+ * through lenses derived from record accessor method references.
+ *
+ * <p>An {@code ConfigAccess} instance is bound to a single {@code ConfigUnit}.
+ * The {@link #set(Accessor, Object) set} and {@link #lens(Accessor) lens} methods
+ * accept a serializable method reference (typically {@code RecordType::component})
+ * and resolve it to a {@link ConfigLens} automatically.
+ *
+ * <p>Null values are rejected at the boundary: every {@code set} method
+ * throws {@link NullPointerException} if the value argument is {@code null}.
+ *
+ * @param <T> the type of the configuration record
+ */
 public class ConfigAccess<T> {
     private final ConfigUnit<T> unit;
 
+    /**
+     * Constructs an accessor for the given configuration unit.
+     *
+     * @param unit the configuration unit to read from and write to
+     */
     public ConfigAccess(ConfigUnit<T> unit) {
         this.unit = unit;
     }
 
-    public <V> void set(@NotNull Accessor<T, V> getter, @NotNull V value) {
+    /**
+     * Sets the field addressed by the given accessor method reference to the
+     * specified value, using the caller's lookup context.
+     *
+     * <p>The accessor must be a serializable method reference to a record
+     * component accessor (for example {@code MyConfig::port}). The value is
+     * written through a lens and persisted immediately.
+     *
+     * @param <V>    the type of the field value
+     * @param getter a serializable method reference to a record component accessor
+     * @param value  the new value; must not be {@code null}
+     * @throws NullPointerException if {@code getter} or {@code value} is {@code null}
+     */
+    public <V> void set(@NonNull Accessor<T, V> getter, @NonNull V value) {
+        set(MethodHandles.lookup(), getter, value);
+    }
+
+    /**
+     * Sets the field addressed by the given accessor method reference using an
+     * explicit lookup for access control.
+     *
+     * @param <V>    the type of the field value
+     * @param lookup the lookup to use for resolving the lens
+     * @param getter a serializable method reference to a record component accessor
+     * @param value  the new value; must not be {@code null}
+     * @throws NullPointerException if any argument is {@code null}
+     */
+    public <V> void set(MethodHandles.Lookup lookup, @NonNull Accessor<T, V> getter, @NonNull V value) {
         Objects.requireNonNull(value, "Config value cannot be null");
-        T current = unit.get();
-        String property = extractPropertyName(getter);
-        T updated = updateRecord(current, property, value);
-        unit.setValue(updated);
-        unit.save();
+        Objects.requireNonNull(lookup);
+        @SuppressWarnings("unchecked")
+        Class<T> recordClass = (Class<T>) unit.get().getClass();
+        ConfigLens<T, V> lens = RecordLensBuilder.lens(lookup, recordClass, getter);
+        unit.update(lens, ignored -> value);
     }
 
-    private String extractPropertyName(Accessor<T, ?> getter) {
-        try {
-            var m = getter.getClass().getDeclaredMethod("writeReplace");
-            m.setAccessible(true);
-            var sl = (SerializedLambda) m.invoke(getter);
-            return sl.getImplMethodName();
-        } catch (Exception e) {
-            throw new RuntimeException("If the resolving field name cannot be referenced by a method, check if it is the Record class", e);
-        }
+    /**
+     * Sets a field using a pre-resolved lens.
+     *
+     * @param <V>   the type of the field value
+     * @param lens  the lens targeting the field
+     * @param value the new value; must not be {@code null}
+     * @throws NullPointerException if {@code lens} or {@code value} is {@code null}
+     */
+    public <V> void set(@NonNull ConfigLens<T, V> lens, @NonNull V value) {
+        Objects.requireNonNull(lens);
+        Objects.requireNonNull(value, "Config value cannot be null");
+        unit.update(lens, ignored -> value);
     }
 
-    @SuppressWarnings("unchecked")
-    private <V> T updateRecord(T current, String property, V value) {
-        var cls = current.getClass();
-        if (!cls.isRecord()) {
-            throw new IllegalArgumentException("ConfigAccess only the Record type is supported:" + cls.getName());
-        }
-
-        try {
-            var components = cls.getRecordComponents();
-            Object[] args = new Object[components.length];
-            Class<?>[] types = new Class<?>[components.length];
-
-            for (int i = 0; i < components.length; i++) {
-                var comp = components[i];
-                types[i] = comp.getType();
-                if (comp.getName().equals(property)) {
-                    args[i] = value;
-                } else {
-                    args[i] = comp.getAccessor().invoke(current);
-                }
-            }
-
-            var ctor = cls.getDeclaredConstructor(types);
-            ctor.setAccessible(true);
-            return (T) ctor.newInstance(args);
-        } catch (Exception e) {
-            throw new RuntimeException("Unable to build a new Record instance to update fields:" + property, e);
-        }
+    /**
+     * Resolves a {@link ConfigLens} for the given record component accessor
+     * using the caller's lookup context.
+     *
+     * @param <V>    the type of the component value
+     * @param getter a serializable method reference to a record component accessor
+     * @return a lens targeting that component
+     * @throws NullPointerException if {@code getter} is {@code null}
+     */
+    public <V> ConfigLens<T, V> lens(@NonNull Accessor<T, V> getter) {
+        return lens(MethodHandles.lookup(), getter);
     }
 
+    /**
+     * Resolves a {@link ConfigLens} for the given record component accessor
+     * using an explicit lookup.
+     *
+     * @param <V>    the type of the component value
+     * @param lookup the lookup to use for resolving the lens
+     * @param getter a serializable method reference to a record component accessor
+     * @return a lens targeting that component
+     * @throws NullPointerException if {@code lookup} or {@code getter} is {@code null}
+     */
+    public <V> ConfigLens<T, V> lens(MethodHandles.Lookup lookup, @NonNull Accessor<T, V> getter) {
+        Objects.requireNonNull(lookup);
+        @SuppressWarnings("unchecked")
+        Class<T> recordClass = (Class<T>) unit.get().getClass();
+        return RecordLensBuilder.lens(lookup, recordClass, getter);
+    }
+
+    /**
+     * A serializable function that also implements {@link RecordLensBuilder.LensGetter},
+     * allowing method references to record accessors to be passed to {@link ConfigAccess}.
+     *
+     * @param <T> the record type
+     * @param <R> the component type
+     */
     @FunctionalInterface
-    public interface Accessor<T, R> extends Function<T, R>, Serializable {
+    public interface Accessor<T, R> extends RecordLensBuilder.LensGetter<T, R>, Function<T, R>, Serializable {
     }
 }

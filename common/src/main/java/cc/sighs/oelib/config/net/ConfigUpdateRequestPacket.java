@@ -10,7 +10,19 @@ import cc.sighs.oelib.network.api.NetworkPacket;
 import cc.sighs.oelib.network.api.Side;
 import net.minecraft.resources.Identifier;
 
-
+/**
+ * A client-to-server packet requesting an update to a server-side
+ * configuration.
+ *
+ * <p>On receipt, the server validates permissions, checks for concurrent
+ * server-side modifications, and applies the update via
+ * {@link ConfigIOUtil#applyUpdate}.
+ *
+ * @param configId the configuration identifier
+ * @param payload  the encoded configuration content
+ * @param format   the serialization format of the payload
+ * @param save     {@code true} to persist the update to disk
+ */
 @NetworkPacket(modId = OELib.MODID, id = "config_update_request", side = Side.SERVER)
 public record ConfigUpdateRequestPacket(
         Identifier configId,

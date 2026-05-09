@@ -4,20 +4,22 @@ import cc.sighs.oelib.util.AnnotationScanUtil;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.ApiStatus;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.lang.invoke.MethodHandles;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 public final class NetworkAutoRegistration {
 
     private static final Logger LOGGER = LogManager.getLogger();
+    private static final MethodHandles.Lookup INTERNAL_LOOKUP = MethodHandles.lookup();
     private static final Set<String> BASE_PACKAGES = Collections.synchronizedSet(new LinkedHashSet<>());
+    private static final Map<String, MethodHandles.Lookup> PACKAGE_LOOKUPS = new ConcurrentHashMap<>();
     private static final Set<String> SCANNED_PACKAGES = new HashSet<>();
     private static final Set<Class<? extends INetworkPacket<?>>> REGISTERED_PACKET_CLASSES = ConcurrentHashMap.newKeySet();
+    private static final Map<Class<?>, MethodHandles.Lookup> PACKET_LOOKUPS = new ConcurrentHashMap<>();
     private static final Object REGISTRATION_LOCK = new Object();
     private static volatile boolean registrationStarted = false;
 
@@ -26,18 +28,34 @@ public final class NetworkAutoRegistration {
         BASE_PACKAGES.add("cc.sighs.oelib.data.net");
         BASE_PACKAGES.add("cc.sighs.oelib.dev.example.net");
         BASE_PACKAGES.add("cc.sighs.oelib.network.chunk");
+        PACKAGE_LOOKUPS.put("cc.sighs.oelib.config.net", INTERNAL_LOOKUP);
+        PACKAGE_LOOKUPS.put("cc.sighs.oelib.data.net", INTERNAL_LOOKUP);
+        PACKAGE_LOOKUPS.put("cc.sighs.oelib.dev.example.net", INTERNAL_LOOKUP);
+        PACKAGE_LOOKUPS.put("cc.sighs.oelib.network.chunk", INTERNAL_LOOKUP);
     }
 
     private NetworkAutoRegistration() {
     }
 
+    @ApiStatus.Internal
     public static void registerBasePackage(String basePackage) {
+        registerBasePackage(basePackage, INTERNAL_LOOKUP);
+    }
+
+    public static void registerBasePackage(String basePackage, MethodHandles.Lookup lookup) {
         if (basePackage == null || basePackage.isEmpty()) {
             return;
         }
+        if (lookup == null) {
+            throw new IllegalArgumentException("lookup cannot be null");
+        }
 
         boolean added = BASE_PACKAGES.add(basePackage);
+        PACKAGE_LOOKUPS.put(basePackage, lookup);
         if (!added) {
+            if (registrationStarted) {
+                refreshPacketLookupsForPackage(basePackage, lookup);
+            }
             return;
         }
 
@@ -48,6 +66,14 @@ public final class NetworkAutoRegistration {
         }
 
         LOGGER.debug("[NetworkAutoReg] Registered base package: {}", basePackage);
+    }
+
+    public static MethodHandles.Lookup lookupForPacketClass(Class<?> packetClass) {
+        MethodHandles.Lookup lookup = PACKET_LOOKUPS.get(packetClass);
+        if (lookup != null) {
+            return lookup;
+        }
+        return INTERNAL_LOOKUP;
     }
 
     public static Set<Class<? extends INetworkPacket<?>>> findAllAnnotatedPackets() {
@@ -123,6 +149,7 @@ public final class NetworkAutoRegistration {
                     continue;
                 }
 
+                PACKET_LOOKUPS.put(packetClass, resolveLookup(packetClass));
                 added++;
 
                 LOGGER.debug("[NetworkAutoReg] Found packet: {} (chunkThreshold={})",
@@ -138,5 +165,28 @@ public final class NetworkAutoRegistration {
     public static int getChunkThreshold(Class<?> clazz) {
         NetworkPacket annotation = clazz.getAnnotation(NetworkPacket.class);
         return annotation != null ? annotation.chunkThreshold() : 0;
+    }
+
+    private static MethodHandles.Lookup resolveLookup(Class<?> packetClass) {
+        String className = packetClass.getName();
+        MethodHandles.Lookup best = INTERNAL_LOOKUP;
+        int bestLen = -1;
+        for (Map.Entry<String, MethodHandles.Lookup> entry : PACKAGE_LOOKUPS.entrySet()) {
+            String pkg = entry.getKey();
+            if (className.startsWith(pkg + ".") && pkg.length() > bestLen) {
+                bestLen = pkg.length();
+                best = entry.getValue();
+            }
+        }
+        return best;
+    }
+
+    private static void refreshPacketLookupsForPackage(String basePackage, MethodHandles.Lookup lookup) {
+        for (Class<? extends INetworkPacket<?>> packetClass : REGISTERED_PACKET_CLASSES) {
+            String className = packetClass.getName();
+            if (className.startsWith(basePackage + ".")) {
+                PACKET_LOOKUPS.put(packetClass, lookup);
+            }
+        }
     }
 }

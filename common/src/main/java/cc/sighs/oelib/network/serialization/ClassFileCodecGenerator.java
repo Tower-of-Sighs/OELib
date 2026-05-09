@@ -64,9 +64,15 @@ final class ClassFileCodecGenerator {
 
     @SuppressWarnings("unchecked")
     static <T> StreamCodec<RegistryFriendlyByteBuf, T> tryGenerate(Class<T> recordClass) {
+        return tryGenerate(MethodHandles.lookup(), recordClass);
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> StreamCodec<RegistryFriendlyByteBuf, T> tryGenerate(MethodHandles.Lookup lookup, Class<T> recordClass) {
         if (!ENABLED || disabledAfterOome) {
             return null;
         }
+        Objects.requireNonNull(lookup, "lookup");
         Objects.requireNonNull(recordClass, "recordClass");
         if (!recordClass.isRecord()) {
             return null;
@@ -103,7 +109,6 @@ final class ClassFileCodecGenerator {
             }
 
             byte[] bytes = buildClassBytes(id, recordClass, components, hasCustom, kinds);
-            var lookup = MethodHandles.lookup();
 
             // Hidden classes avoid name collisions and reduce classloader pollution.
             var hiddenLookup = lookup.defineHiddenClass(bytes, true);

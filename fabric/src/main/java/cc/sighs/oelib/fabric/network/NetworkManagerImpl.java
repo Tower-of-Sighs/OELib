@@ -52,7 +52,8 @@ public class NetworkManagerImpl implements INetworkManager {
         var side = meta.side();
 
         if (phase == RegistrationPhase.COMMON) {
-            var codec = NetworkSerialization.autoCodec(clazz);
+            var lookup = NetworkAutoRegistration.lookupForPacketClass(clazz);
+            var codec = NetworkSerialization.autoCodec(lookup, clazz);
             registeredPackets.put(type, new NetworkUtil.PacketInfo<>(type, codec));
 
             if (side == Side.CLIENT || side == Side.BOTH) {

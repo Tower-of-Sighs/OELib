@@ -6,9 +6,18 @@ import net.minecraft.network.chat.Component;
 
 import java.util.Optional;
 
+/**
+ * A non-interactive category header rendered as centered text.
+ */
 public class CategoryTextEntry extends AbstractConfigEntry<Object> {
     private final Component category;
 
+    /**
+     * Constructs a category text entry.
+     *
+     * @param category the category label
+     * @param text     (unused) reserved for future use
+     */
     public CategoryTextEntry(Component category, Component text) {
         this.category = category;
     }
@@ -21,7 +30,6 @@ public class CategoryTextEntry extends AbstractConfigEntry<Object> {
     @Override
     public void render(GuiGraphicsExtractor graphics, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean isHovered, float delta) {
         int centerX = x + entryWidth / 2;
-        graphics.fill(x, y + entryHeight - 1, x + entryWidth, y + entryHeight, 0x80FFFFFF);
         graphics.centeredText(Minecraft.getInstance().font, category, centerX, y + 6, 0xFFFFFFFF);
     }
 

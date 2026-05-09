@@ -21,6 +21,9 @@ dependencies {
     compileOnly "de.marhali:json5-java:3.0.0"
     compileOnly "org.mvel:mvel2:2.5.0.Final"
     compileOnly "com.electronwill.night-config:toml:3.8.3"
+    testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.11.4"
+    testImplementation files(sourceSets.main.compileClasspath)
 }
 
 // Allow by `group`, `artifact`, or full `group:artifact`.
@@ -39,6 +42,7 @@ configurations {
         canBeResolved = false
         canBeConsumed = true
     }
+    testImplementation.extendsFrom compileOnly
 }
 
 artifacts {
@@ -156,6 +160,14 @@ tasks.register('jmhGc', JavaExec) {
             '-prof', 'gc'
 
     configureJmhArgs(delegate as JavaExec)
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+
+tasks.named('processJmhResources') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 // Implement mcgradleconventions loader attribute

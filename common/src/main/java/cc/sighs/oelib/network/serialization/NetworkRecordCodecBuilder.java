@@ -3,6 +3,8 @@ package cc.sighs.oelib.network.serialization;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 
+import java.lang.invoke.MethodHandles;
+
 /**
  * Internal utility for building {@link StreamCodec}s for Java records.
  *
@@ -29,7 +31,11 @@ public final class NetworkRecordCodecBuilder {
      * @return a new StreamCodec for the record
      */
     public static <T> StreamCodec<RegistryFriendlyByteBuf, T> build(Class<T> recordClass) {
-        StreamCodec<RegistryFriendlyByteBuf, T> generated = ClassFileCodecGenerator.tryGenerate(recordClass);
+        return build(MethodHandles.lookup(), recordClass);
+    }
+
+    public static <T> StreamCodec<RegistryFriendlyByteBuf, T> build(MethodHandles.Lookup lookup, Class<T> recordClass) {
+        StreamCodec<RegistryFriendlyByteBuf, T> generated = ClassFileCodecGenerator.tryGenerate(lookup, recordClass);
         if (generated != null) {
             return generated;
         }

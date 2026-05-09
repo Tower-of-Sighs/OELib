@@ -7,7 +7,9 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.ApiStatus;
 
+import java.lang.invoke.MethodHandles;
 import java.util.ServiceLoader;
 
 /**
@@ -29,8 +31,13 @@ public class NetworkManager {
                 .orElseThrow(() -> new IllegalStateException("No INetworkManager implementation found"));
     }
 
+    @ApiStatus.Internal
     public static void registerPacketScanPackage(String basePackage) {
         NetworkAutoRegistration.registerBasePackage(basePackage);
+    }
+
+    public static void registerPacketScanPackage(String basePackage, MethodHandles.Lookup lookup) {
+        NetworkAutoRegistration.registerBasePackage(basePackage, lookup);
     }
 
     /**

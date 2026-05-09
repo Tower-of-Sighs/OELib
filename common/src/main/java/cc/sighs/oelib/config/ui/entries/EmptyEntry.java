@@ -5,9 +5,18 @@ import net.minecraft.network.chat.Component;
 
 import java.util.Optional;
 
+/**
+ * A transparent spacer entry that reserves vertical space without
+ * rendering any content.
+ */
 public class EmptyEntry extends AbstractConfigEntry<Object> {
     private final int height;
 
+    /**
+     * Constructs an empty entry with the given height.
+     *
+     * @param height the height in pixels
+     */
     public EmptyEntry(int height) {
         this.height = height;
     }

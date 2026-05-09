@@ -17,11 +17,26 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+/**
+ * File I/O helpers for loading, saving, migrating, and applying remote
+ * updates to configuration files.
+ */
 public final class ConfigIOUtil {
 
     private ConfigIOUtil() {
     }
 
+    /**
+     * Applies a client-originated update to a server configuration, after
+     * verifying permissions and checking for concurrent server-side changes.
+     *
+     * @param unit    the configuration unit
+     * @param player  the player requesting the update
+     * @param payload the encoded configuration content
+     * @param format  the serialization format
+     * @param save    {@code true} to persist the update to disk
+     * @param <T>     the configuration value type
+     */
     public static <T> void applyUpdate(ConfigUnit<T> unit, ServerPlayer player, String payload, ConfigStorageFormat format, boolean save) {
         if (unit.meta().side() != ConfigSide.SERVER) {
             OELib.LOGGER.warn("Rejected update for non-server config {}", unit.id());
@@ -71,6 +86,13 @@ public final class ConfigIOUtil {
         }
     }
 
+    /**
+     * Creates a configuration file with the default value if it does not
+     * already exist on disk.
+     *
+     * @param unit the configuration unit
+     * @param <T>  the configuration value type
+     */
     public static <T> void initializeIfMissing(ConfigUnit<T> unit) {
         var path = resolveSavePath(unit.meta());
         try {
@@ -100,6 +122,13 @@ public final class ConfigIOUtil {
         }
     }
 
+    /**
+     * Runs automatic migration on a configuration file when a unit is
+     * registered, applying datafix chains and migrating format if needed.
+     *
+     * @param unit the configuration unit
+     * @param <T>  the configuration value type
+     */
     public static <T> void applyAutoMigrationOnRegister(ConfigUnit<T> unit) {
         var meta = unit.meta();
         try {
@@ -155,6 +184,13 @@ public final class ConfigIOUtil {
         }
     }
 
+    /**
+     * Resolves the base directory for a configuration, considering any
+     * custom sub-directory in its metadata.
+     *
+     * @param meta the configuration metadata
+     * @return the base directory path
+     */
     public static Path resolveBaseDirectory(ConfigMeta meta) {
         var base = Platform.getConfigPath();
         if (meta.directory() != null && !meta.directory().isEmpty()) {
@@ -163,6 +199,13 @@ public final class ConfigIOUtil {
         return base;
     }
 
+    /**
+     * Resolves the load path, trying extension-based lookup and falling
+     * back to the configured extension.
+     *
+     * @param meta the configuration metadata
+     * @return the resolved load path
+     */
     public static Path resolveLoadPath(ConfigMeta meta) {
         var base = resolveBaseDirectory(meta);
         var name = meta.fileName();
@@ -181,6 +224,13 @@ public final class ConfigIOUtil {
         return extPath;
     }
 
+    /**
+     * Resolves the save path for a configuration, always using the
+     * configured extension.
+     *
+     * @param meta the configuration metadata
+     * @return the resolved save path
+     */
     public static Path resolveSavePath(ConfigMeta meta) {
         var base = resolveBaseDirectory(meta);
         var name = meta.fileName();
@@ -191,6 +241,12 @@ public final class ConfigIOUtil {
         return base.resolve(name + "." + ext);
     }
 
+    /**
+     * Searches for an existing configuration file in any supported format.
+     *
+     * @param meta the configuration metadata
+     * @return the path if found, or {@code null}
+     */
     public static Path findExistingPathAnyFormat(ConfigMeta meta) {
         var base = resolveBaseDirectory(meta);
         var name = meta.fileName();
@@ -209,6 +265,13 @@ public final class ConfigIOUtil {
         return Files.exists(direct) ? direct : null;
     }
 
+    /**
+     * Detects the storage format from a file path by examining its extension.
+     *
+     * @param path     the file path
+     * @param fallback the format to return if detection fails
+     * @return the detected format
+     */
     public static ConfigStorageFormat detectFormatFromPath(Path path, ConfigStorageFormat fallback) {
         String fn = path.getFileName().toString().toLowerCase();
         if (fn.endsWith(".json")) return ConfigStorageFormat.JSON;

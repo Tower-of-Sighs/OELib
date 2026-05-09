@@ -7,6 +7,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * Default implementation of {@link ScissorsHandler} that uses OpenGL
+ * scissor tests for viewport clipping.
+ *
+ * <p>Adapted from Cloth Config's scissor system.
+ */
 public final class ScissorsHandlerImpl implements ScissorsHandler {
     private final List<Rectangle> scissorsAreas = new ArrayList<>();
 
@@ -79,4 +85,3 @@ public final class ScissorsHandlerImpl implements ScissorsHandler {
         }
     }
 }
-

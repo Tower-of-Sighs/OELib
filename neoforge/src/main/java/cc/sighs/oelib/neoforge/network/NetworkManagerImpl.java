@@ -77,7 +77,8 @@ public class NetworkManagerImpl implements INetworkManager {
         if (meta == null || !clazz.isRecord()) return;
 
         CustomPacketPayload.Type<T> type = NetworkPacketTypes.typeOf(clazz);
-        StreamCodec<RegistryFriendlyByteBuf, T> codec = NetworkSerialization.autoCodec(clazz);
+        var lookup = NetworkAutoRegistration.lookupForPacketClass(clazz);
+        StreamCodec<RegistryFriendlyByteBuf, T> codec = NetworkSerialization.autoCodec(lookup, clazz);
         registeredPackets.put(type, new NetworkUtil.PacketInfo<>(type, codec));
 
         var side = meta.side();

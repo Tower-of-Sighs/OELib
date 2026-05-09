@@ -26,13 +26,36 @@ import net.minecraft.resources.Identifier;
 
 import java.util.*;
 
+/**
+ * An auto-generated screen for viewing and editing configuration values
+ * at runtime.
+ *
+ * <p>The screen renders a scrollable list of {@link AbstractConfigEntry}
+ * instances, one per visible field, with a sidebar showing available
+ * configurations for the current mod. Changes are validated on save and,
+ * for server-side configs, sent to the server via
+ * {@link ConfigUpdateRequestPacket}.
+ *
+ * <p>The screen is opened via the mod's configuration key binding or
+ * through the Mod Menu integration.
+ */
 public class ConfigScreen extends Screen {
+    private static final int DIVIDER_HEIGHT = 8;
+    private static final int DIVIDER_COLOR = 0x50FFFFFF;
+    private static final int DIVIDER_BASE_INSET = 10;
+    private static final int DIVIDER_NESTED_STEP = 14;
+    private static final int NESTED_INNER_GAP = 4;
+    private static final int NESTED_OUTER_GAP = 4;
+
+    /** The identifier of the configuration being edited. */
     public final Identifier configId;
     private final ConfigUnit<Object> unit;
+    /** The codec for this configuration. */
     public final ConfigCodec<Object> codec;
     private final List<ConfigValueMeta> fields;
     private final List<Runnable> applyActions = new ArrayList<>();
     private final Map<String, Component> errors = new HashMap<>();
+    private final Map<String, Boolean> groupExpanded = new HashMap<>();
     private final int contentTop = 36;
     private final int rowHeight = 24;
     private final Scroller refScroller = new Scroller();
@@ -54,6 +77,12 @@ public class ConfigScreen extends Screen {
     private int sideExpandLimit = 120;
     private List<Identifier> modConfigs = new ArrayList<>();
 
+    /**
+     * Constructs a config screen for the given mod.
+     *
+     * @param parent the parent screen
+     * @param modid  the mod identifier whose configs to display
+     */
     public ConfigScreen(Screen parent, String modid) {
         super(Component.translatable("config." + modid + ".title"));
         Set<Identifier> ids = new HashSet<>();
@@ -99,6 +128,36 @@ public class ConfigScreen extends Screen {
         return sidebarWidth() - 14;
     }
 
+    private static String idToGroupStateKey(Identifier configId, String groupPath) {
+        return configId.toString() + "|" + groupPath;
+    }
+
+    private static String parentPathOf(String key) {
+        int idx = key.lastIndexOf('.');
+        if (idx <= 0) {
+            return null;
+        }
+        return key.substring(0, idx);
+    }
+
+    private void applyEdits() {
+        applyActions.forEach(Runnable::run);
+        applyActions.clear();
+    }
+
+    private static int depthOfPath(String path) {
+        if (path == null || path.isBlank()) {
+            return 0;
+        }
+        int depth = 0;
+        for (int i = 0; i < path.length(); i++) {
+            if (path.charAt(i) == '.') {
+                depth++;
+            }
+        }
+        return depth;
+    }
+
     @Override
     protected void init() {
         super.init();
@@ -109,7 +168,11 @@ public class ConfigScreen extends Screen {
         if (unit == null || codec == null) {
             return;
         }
-        int initialScroll = listWidget != null ? listWidget.getScrollOffset() : 0;
+        int initialScroll = 0;
+        if (listWidget != null) {
+            initialScroll = Math.max(listWidget.getScrollOffset(), listWidget.getScrollTargetOffset());
+        }
+        Map<Identifier, JsonObject> preservedWorking = snapshotWorkingByConfig();
         contexts.clear();
         int sidebar = sidebarWidth();
         int labelWidth = 160;
@@ -154,39 +217,18 @@ public class ConfigScreen extends Screen {
             var u = ConfigGuiUtil.castUnit(optUnit.get());
             u.reload();
             var c = u.codec();
-            var workingJson = ConfigGuiUtil.encodeToJsonObject(c.codec(), u.get());
+            var preserved = preservedWorking.get(id);
+            var workingJson = preserved != null
+                    ? preserved.deepCopy()
+                    : ConfigGuiUtil.encodeToJsonObject(c.codec(), u.get());
             var defaultObj = c.codec().parse(JsonOps.INSTANCE, new JsonObject()).result().orElse(null);
             var defaultsJson = defaultObj != null ? ConfigGuiUtil.encodeToJsonObject(c.codec(), defaultObj) : new JsonObject();
             var flds = c.fields();
             contexts.add(new ConfigCtx(id, u, c, flds, workingJson, defaultsJson));
             items.add(new CategoryTextEntry(Component.translatable("config." + id.getNamespace() + "." + id.getPath() + ".title"), Component.empty()));
+            items.add(new DividerEntry());
             items.add(new EmptyEntry(5));
-            for (ConfigValueMeta meta : flds) {
-                if (meta.hidden()) continue;
-                if (!searchText.isEmpty()) {
-                    var display = meta.translationKey()
-                            .map(k -> Component.translatable(k).getString())
-                            .orElse(meta.key());
-                    if (!display.toLowerCase(Locale.ROOT).contains(searchLower)) continue;
-                }
-                var label = meta.translationKey().map(Component::translatable).orElse(Component.literal(meta.key()));
-                var v = ConfigGuiUtil.getPath(workingJson, meta.key());
-                if (v != null && v.isJsonArray()) {
-                    ListEntry le = new ListEntry(meta.key(), label, workingJson, listControlWidth, rowHeight,
-                            meta.tooltip().map(Component::translatable).orElse(null));
-                    items.add(le);
-                    entryDefaults.put(le, defaultsJson);
-                } else if (v != null && v.isJsonObject()) {
-                    MapEntry me = new MapEntry(meta.key(), label, workingJson, listControlWidth, rowHeight,
-                            meta.tooltip().map(Component::translatable).orElse(null));
-                    items.add(me);
-                    entryDefaults.put(me, defaultsJson);
-                } else {
-                    FieldEntry fe = new FieldEntry(meta, workingJson, labelWidth, fieldControlWidth, rowHeight);
-                    items.add(fe);
-                    entryDefaults.put(fe, defaultsJson);
-                }
-            }
+            appendNestedFieldEntries(id, items, entryDefaults, flds, workingJson, defaultsJson, searchLower, labelWidth, fieldControlWidth, listControlWidth);
         }
         references = refs;
         int longest = 0;
@@ -197,7 +239,6 @@ public class ConfigScreen extends Screen {
         sideExpandLimit = Math.min(Math.max(80, longest + 16), this.width / 4);
         sideSlider.setMaxScroll(sideExpandLimit - 14);
         sideSlider.offset(sidebarExpanded ? sideExpandLimit - 14 : -sideExpandLimit);
-        // create controls once to avoid widget leak
         int attachY = y;
         for (AbstractConfigEntry<?> entry : items) {
             var def = entryDefaults.getOrDefault(entry, new JsonObject());
@@ -211,6 +252,7 @@ public class ConfigScreen extends Screen {
             attachY += entry.getItemHeight();
         }
         if (initialScroll > 0 && listWidget != null) {
+            listWidget.refreshScrollBounds();
             listWidget.scrollTo(initialScroll, false);
         }
         if (!references.isEmpty()) {
@@ -228,79 +270,9 @@ public class ConfigScreen extends Screen {
 
     private void onSave() {
         applyEdits();
-        syncAndSaveConfigs();
-        dirty = false;
-        Minecraft.getInstance().setScreen(null);
-    }
-
-    private void applyEdits() {
-        applyActions.forEach(Runnable::run);
-        applyActions.clear();
-    }
-
-    public void markDirty() {
-        this.dirty = true;
-    }
-
-    @Override
-    public void onClose() {
-        if (!dirty) {
-            super.onClose();
-            return;
-        }
-        Minecraft.getInstance().setScreen(new ConfirmScreen(confirm -> {
-            if (confirm) {
-                applyEdits();
-                syncAndSaveConfigs();
-            }
+        if (syncAndSaveConfigs()) {
+            dirty = false;
             Minecraft.getInstance().setScreen(null);
-        }, Component.translatable("config.oelib.unsaved.title"), Component.translatable("config.oelib.unsaved.message")));
-    }
-
-    private void syncAndSaveConfigs() {
-        for (ConfigCtx ctx : contexts) {
-            for (var rootEntry : ctx.working.entrySet()) {
-                var v = rootEntry.getValue();
-                if (v.isJsonObject()) {
-                    GsonUtil.removeBlankStringValues(v.getAsJsonObject());
-                } else if (v.isJsonArray()) {
-                    GsonUtil.removeBlankStringElements(v.getAsJsonArray());
-                }
-            }
-
-            var parseResult = ctx.codec.codec().parse(JsonOps.INSTANCE, ctx.working);
-            if (parseResult.error().isPresent()) {
-                OELib.LOGGER.error("Failed to parse edited config {}: {}", ctx.id, parseResult.error().get().message());
-                continue;
-            }
-
-            parseResult.result().ifPresent(value -> {
-                var side = ctx.codec.meta().side();
-                if (side == ConfigSide.CLIENT) {
-                    ctx.unit.setValue(value);
-                    try {
-                        ctx.unit.save();
-                    } catch (Throwable t) {
-                        OELib.LOGGER.error("Save failed for client config {}: {}", ctx.id, t.getMessage(), t);
-                    }
-                } else if (side == ConfigSide.SERVER) {
-                    ctx.unit.setValue(value);
-                    try {
-                        ctx.unit.save();
-                    } catch (Throwable t) {
-                        OELib.LOGGER.error("Save failed for server config {}: {}", ctx.id, t.getMessage(), t);
-                    }
-                    if (Minecraft.getInstance().getConnection() != null) {
-                        var format = ctx.codec.meta().format();
-                        var encoded = ConfigSerializationUtil.encodeToString(value, format, ctx.codec.codec(), ctx.codec.fields());
-                        if (encoded.isEmpty()) {
-                            OELib.LOGGER.error("Failed to encode server config {} for update request", ctx.id);
-                            return;
-                        }
-                        NetworkManager.sendToServer(new ConfigUpdateRequestPacket(ctx.id, encoded.get(), format, true));
-                    }
-                }
-            });
         }
     }
 
@@ -413,18 +385,94 @@ public class ConfigScreen extends Screen {
         }
     }
 
-    public int getContentTop() {
-        return contentTop;
+    /**
+     * Marks this screen as having unsaved changes.
+     */
+    public void markDirty() {
+        this.dirty = true;
     }
 
-    public int getContentBottom() {
-        return this.height - 32;
+    @Override
+    public void onClose() {
+        if (!dirty) {
+            super.onClose();
+            return;
+        }
+        Minecraft.getInstance().setScreen(new ConfirmScreen(confirm -> {
+            if (confirm) {
+                applyEdits();
+                if (syncAndSaveConfigs()) {
+                    dirty = false;
+                    Minecraft.getInstance().setScreen(null);
+                    return;
+                }
+                Minecraft.getInstance().setScreen(this);
+                return;
+            }
+            Minecraft.getInstance().setScreen(this);
+        }, Component.translatable("config.oelib.unsaved.title"), Component.translatable("config.oelib.unsaved.message")));
     }
 
-    public void setHoverTooltip(Component tooltip, int mouseX, int mouseY) {
-        this.lastTooltip = tooltip;
-        this.mouseXLast = mouseX;
-        this.mouseYLast = mouseY;
+    private boolean syncAndSaveConfigs() {
+        errors.clear();
+        boolean allOk = true;
+        for (ConfigCtx ctx : contexts) {
+            for (var rootEntry : ctx.working.entrySet()) {
+                var v = rootEntry.getValue();
+                if (v.isJsonObject()) {
+                    GsonUtil.removeBlankStringValues(v.getAsJsonObject());
+                } else if (v.isJsonArray()) {
+                    GsonUtil.removeBlankStringElements(v.getAsJsonArray());
+                }
+            }
+
+            var parseResult = ctx.codec.codec().parse(JsonOps.INSTANCE, ctx.working);
+            if (parseResult.error().isPresent()) {
+                String message = parseResult.error().get().message();
+                OELib.LOGGER.error("Failed to parse edited config {}: {}", ctx.id, message);
+                errors.put(ctx.id.toString(), Component.literal("[" + ctx.id + "] " + message));
+                allOk = false;
+                continue;
+            }
+
+            var valueOpt = parseResult.result();
+            if (valueOpt.isEmpty()) {
+                String message = "Parse returned empty result";
+                OELib.LOGGER.error("Failed to parse edited config {}: {}", ctx.id, message);
+                errors.put(ctx.id.toString(), Component.literal("[" + ctx.id + "] " + message));
+                allOk = false;
+                continue;
+            }
+
+            var value = valueOpt.get();
+            try {
+                var side = ctx.codec.meta().side();
+                if (side == ConfigSide.CLIENT) {
+                    ctx.unit.setValue(value);
+                    ctx.unit.save();
+                } else if (side == ConfigSide.SERVER) {
+                    ctx.unit.setValue(value);
+                    ctx.unit.save();
+                    if (Minecraft.getInstance().getConnection() != null) {
+                        var format = ctx.codec.meta().format();
+                        var encoded = ConfigSerializationUtil.encodeToString(value, format, ctx.codec.codec(), ctx.codec.fields());
+                        if (encoded.isEmpty()) {
+                            String message = "Failed to encode payload for server update";
+                            OELib.LOGGER.error("{} {}", message, ctx.id);
+                            errors.put(ctx.id.toString(), Component.literal("[" + ctx.id + "] " + message));
+                            allOk = false;
+                            continue;
+                        }
+                        NetworkManager.sendToServer(new ConfigUpdateRequestPacket(ctx.id, encoded.get(), format, true));
+                    }
+                }
+            } catch (Throwable t) {
+                OELib.LOGGER.error("Exception while saving config {}: {}", ctx.id, t.getMessage(), t);
+                errors.put(ctx.id.toString(), Component.literal("[" + ctx.id + "] " + t.getMessage()));
+                allOk = false;
+            }
+        }
+        return allOk;
     }
 
     @Override
@@ -434,79 +482,13 @@ public class ConfigScreen extends Screen {
         super.mouseMoved(mouseX, mouseY);
     }
 
-    @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        double mouseX = event.x();
-        double mouseY = event.y();
-        int button = event.button();
-
-        int bottomBarTop = this.height - 32;
-        if (mouseY >= bottomBarTop) {
-            boolean handled = false;
-            if (saveButton != null) {
-                handled = saveButton.mouseClicked(event, doubleClick);
-            }
-            if (!handled && cancelButton != null) {
-                handled = cancelButton.mouseClicked(event, doubleClick);
-            }
-            return true;
-        }
-        int sidebar = sidebarWidth();
-        int sliderX = sidebar - 14;
-        if (button == 0) {
-            if (mouseX >= sliderX && mouseX <= sidebar && mouseY >= 0 && mouseY <= this.height) {
-                sidebarExpanded = !sidebarExpanded;
-                sideSlider.offset(sidebarExpanded ? sideExpandLimit - 14 : -(sideExpandLimit - 14));
-                return true;
-            }
-            if (sidebarExpanded && mouseX >= 0 && mouseX <= sliderX && mouseY >= 0 && mouseY <= this.height) {
-                int refX = 4;
-                int refY = 8 - refScroller.currentInt();
-                int h = this.font.lineHeight + 6;
-                for (Identifier modConfig : modConfigs) {
-                    if (refY + h > this.height - 32) break;
-                    if (mouseX >= refX && mouseX <= sliderX && mouseY >= refY && mouseY <= refY + h) {
-                        var id = modConfig;
-                        int offset = 0;
-                        for (AbstractConfigEntry<?> entry : listWidget.children()) {
-                            if (entry instanceof CategoryTextEntry cte) {
-                                if (cte.getFieldName().getString().equals(Component.translatable("config." + id.getNamespace() + "." + id.getPath() + ".title").getString())) {
-                                    listWidget.scrollTo(offset, true);
-                                    break;
-                                }
-                            }
-                            offset += entry.getItemHeight();
-                        }
-                        return true;
-                    }
-                    refY += h;
-                }
-            }
-            if (listWidget != null && mouseX >= sliderX && mouseX <= this.width && mouseY >= contentTop && mouseY <= this.height - 32) {
-                int yIt = listWidget.top - listWidget.getScrollOffset();
-                for (AbstractConfigEntry<?> entry : listWidget.children()) {
-                    int headerH = 20;
-                    if (entry instanceof MapEntry me) {
-                        if (mouseY >= yIt && mouseY <= yIt + headerH) {
-                            if (me.toggleIfHit(mouseX, mouseY)) {
-                                return true;
-                            }
-                        }
-                        yIt += me.getItemHeight();
-                    } else if (entry instanceof ListEntry le) {
-                        if (mouseY >= yIt && mouseY <= yIt + headerH) {
-                            if (le.toggleIfHit(mouseX, mouseY)) {
-                                return true;
-                            }
-                        }
-                        yIt += le.getItemHeight();
-                    } else {
-                        yIt += entry.getItemHeight();
-                    }
-                }
-            }
-        }
-        return super.mouseClicked(event, doubleClick);
+    /**
+     * Returns the top y coordinate of the scrollable content area.
+     *
+     * @return the content top
+     */
+    public int getContentTop() {
+        return contentTop;
     }
 
     @Override
@@ -611,5 +593,241 @@ public class ConfigScreen extends Screen {
 
     private record ConfigCtx(Identifier id, ConfigUnit<Object> unit, ConfigCodec<Object> codec,
                              List<ConfigValueMeta> fields, JsonObject working, JsonObject defaults) {
+    }
+
+    /**
+     * Returns the bottom y coordinate of the scrollable content area.
+     *
+     * @return the content bottom
+     */
+    public int getContentBottom() {
+        return this.height - 32;
+    }
+
+    /**
+     * Sets the tooltip to be rendered at the given position in the next frame.
+     *
+     * @param tooltip the tooltip component
+     * @param mouseX  the mouse x position
+     * @param mouseY  the mouse y position
+     */
+    public void setHoverTooltip(Component tooltip, int mouseX, int mouseY) {
+        this.lastTooltip = tooltip;
+        this.mouseXLast = mouseX;
+        this.mouseYLast = mouseY;
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        double mouseX = event.x();
+        double mouseY = event.y();
+        int button = event.button();
+
+        int bottomBarTop = this.height - 32;
+        if (mouseY >= bottomBarTop) {
+            boolean handled = false;
+            if (saveButton != null) {
+                handled = saveButton.mouseClicked(event, doubleClick);
+            }
+            if (!handled && cancelButton != null) {
+                handled = cancelButton.mouseClicked(event, doubleClick);
+            }
+            return true;
+        }
+        int sidebar = sidebarWidth();
+        int sliderX = sidebar - 14;
+        if (button == 0) {
+            if (mouseX >= sliderX && mouseX <= sidebar && mouseY >= 0 && mouseY <= this.height) {
+                sidebarExpanded = !sidebarExpanded;
+                sideSlider.offset(sidebarExpanded ? sideExpandLimit - 14 : -(sideExpandLimit - 14));
+                return true;
+            }
+            if (sidebarExpanded && mouseX >= 0 && mouseX <= sliderX && mouseY >= 0 && mouseY <= this.height) {
+                int refX = 4;
+                int refY = 8 - refScroller.currentInt();
+                int h = this.font.lineHeight + 6;
+                for (Identifier modConfig : modConfigs) {
+                    if (refY + h > this.height - 32) break;
+                    if (mouseX >= refX && mouseX <= sliderX && mouseY >= refY && mouseY <= refY + h) {
+                        var id = modConfig;
+                        int offset = 0;
+                        for (AbstractConfigEntry<?> entry : listWidget.children()) {
+                            if (entry instanceof CategoryTextEntry cte) {
+                                if (cte.getFieldName().getString().equals(Component.translatable("config." + id.getNamespace() + "." + id.getPath() + ".title").getString())) {
+                                    listWidget.scrollTo(offset, true);
+                                    break;
+                                }
+                            }
+                            offset += entry.getItemHeight();
+                        }
+                        return true;
+                    }
+                    refY += h;
+                }
+            }
+            if (listWidget != null && mouseX >= sliderX && mouseX <= this.width && mouseY >= contentTop && mouseY <= this.height - 32) {
+                int yIt = listWidget.top - listWidget.getScrollOffset();
+                for (AbstractConfigEntry<?> entry : listWidget.children()) {
+                    int headerH = 20;
+                    if (entry instanceof MapEntry me) {
+                        if (mouseY >= yIt && mouseY <= yIt + headerH) {
+                            if (me.toggleIfHit(mouseX, mouseY)) {
+                                return true;
+                            }
+                        }
+                        yIt += me.getItemHeight();
+                    } else if (entry instanceof ListEntry le) {
+                        if (mouseY >= yIt && mouseY <= yIt + headerH) {
+                            if (le.toggleIfHit(mouseX, mouseY)) {
+                                return true;
+                            }
+                        }
+                        yIt += le.getItemHeight();
+                    } else if (entry instanceof PathGroupEntry ge) {
+                        if (mouseY >= yIt && mouseY <= yIt + headerH) {
+                            if (ge.toggleIfHit(mouseX, mouseY)) {
+                                setGroupExpanded(ge.stateKey(), ge.expanded());
+                                init();
+                                return true;
+                            }
+                        }
+                        yIt += ge.getItemHeight();
+                    } else {
+                        yIt += entry.getItemHeight();
+                    }
+                }
+            }
+        }
+        return super.mouseClicked(event, doubleClick);
+    }
+
+    private Map<Identifier, JsonObject> snapshotWorkingByConfig() {
+        Map<Identifier, JsonObject> snapshot = new HashMap<>();
+        for (ConfigCtx ctx : contexts) {
+            snapshot.put(ctx.id(), ctx.working().deepCopy());
+        }
+        return snapshot;
+    }
+
+    private void appendNestedFieldEntries(
+            Identifier configId,
+            List<AbstractConfigEntry<?>> items,
+            Map<AbstractConfigEntry<?>, JsonObject> defaultsMap,
+            List<ConfigValueMeta> fields,
+            JsonObject workingJson,
+            JsonObject defaultsJson,
+            String searchLower,
+            int labelWidth,
+            int fieldControlWidth,
+            int listControlWidth
+    ) {
+        List<ConfigValueMeta> visible = fields.stream()
+                .filter(meta -> !meta.hidden())
+                .filter(meta -> {
+                    if (searchLower.isEmpty()) {
+                        return true;
+                    }
+                    String display = meta.translationKey()
+                            .map(k -> Component.translatable(k).getString())
+                            .orElse(meta.key());
+                    return display.toLowerCase(Locale.ROOT).contains(searchLower);
+                })
+                .sorted(Comparator.comparing(ConfigValueMeta::key))
+                .toList();
+
+        Set<String> emittedGroups = new HashSet<>();
+        Set<String> startedGroups = new HashSet<>();
+        for (int idx = 0; idx < visible.size(); idx++) {
+            ConfigValueMeta meta = visible.get(idx);
+            String[] parts = meta.key().split("\\.");
+            boolean ancestorsExpanded = true;
+            StringBuilder pathBuilder = new StringBuilder();
+            for (int depth = 0; depth < parts.length - 1; depth++) {
+                if (depth > 0) {
+                    pathBuilder.append('.');
+                }
+                pathBuilder.append(parts[depth]);
+                String groupPath = pathBuilder.toString();
+                if (emittedGroups.add(groupPath)) {
+                    String stateKey = idToGroupStateKey(configId, groupPath);
+                    boolean expanded = isGroupExpanded(stateKey);
+                    String translationKey = "config." + configId.getNamespace() + "." + configId.getPath() + "." + groupPath;
+                    items.add(new PathGroupEntry(stateKey, groupPath, Component.translatable(translationKey), depth, expanded));
+                }
+                ancestorsExpanded = ancestorsExpanded && isGroupExpanded(idToGroupStateKey(configId, groupPath));
+                if (!ancestorsExpanded) {
+                    break;
+                }
+            }
+            if (!ancestorsExpanded) {
+                continue;
+            }
+
+            if (parts.length > 1) {
+                String parentPath = parentPathOf(meta.key());
+                int parentDepth = depthOfPath(parentPath);
+                if (parentPath != null && startedGroups.add(parentPath)) {
+                    addDivider(items, parentDepth);
+                    items.add(new EmptyEntry(NESTED_INNER_GAP));
+                }
+            }
+
+            addFieldEntry(meta, items, defaultsMap, workingJson, defaultsJson, labelWidth, fieldControlWidth, listControlWidth);
+
+            if (parts.length > 1) {
+                String parentPath = parentPathOf(meta.key());
+                String nextParentPath = idx + 1 < visible.size() ? parentPathOf(visible.get(idx + 1).key()) : null;
+                if (!Objects.equals(parentPath, nextParentPath)) {
+                    int parentDepth = depthOfPath(parentPath);
+                    items.add(new EmptyEntry(NESTED_INNER_GAP));
+                    addDivider(items, parentDepth);
+                    items.add(new EmptyEntry(NESTED_OUTER_GAP));
+                }
+            }
+        }
+    }
+
+    private void addFieldEntry(
+            ConfigValueMeta meta,
+            List<AbstractConfigEntry<?>> items,
+            Map<AbstractConfigEntry<?>, JsonObject> defaultsMap,
+            JsonObject workingJson,
+            JsonObject defaultsJson,
+            int labelWidth,
+            int fieldControlWidth,
+            int listControlWidth
+    ) {
+        var label = meta.translationKey().map(Component::translatable).orElse(Component.literal(meta.key()));
+        var value = ConfigGuiUtil.getPath(workingJson, meta.key());
+        if (value != null && value.isJsonArray()) {
+            ListEntry listEntry = new ListEntry(meta.key(), label, workingJson, listControlWidth, rowHeight,
+                    meta.tooltip().map(Component::translatable).orElse(null));
+            items.add(listEntry);
+            defaultsMap.put(listEntry, defaultsJson);
+            return;
+        }
+        if (value != null && value.isJsonObject()) {
+            MapEntry mapEntry = new MapEntry(meta.key(), label, workingJson, listControlWidth, rowHeight,
+                    meta.tooltip().map(Component::translatable).orElse(null));
+            items.add(mapEntry);
+            defaultsMap.put(mapEntry, defaultsJson);
+            return;
+        }
+        FieldEntry fieldEntry = new FieldEntry(meta, workingJson, labelWidth, fieldControlWidth, rowHeight);
+        items.add(fieldEntry);
+        defaultsMap.put(fieldEntry, defaultsJson);
+    }
+
+    private boolean isGroupExpanded(String stateKey) {
+        return groupExpanded.getOrDefault(stateKey, true);
+    }
+
+    private void setGroupExpanded(String key, boolean expanded) {
+        groupExpanded.put(key, expanded);
+    }
+
+    private void addDivider(List<AbstractConfigEntry<?>> items, int depth) {
+        int inset = DIVIDER_BASE_INSET + Math.max(0, depth) * DIVIDER_NESTED_STEP;
+        items.add(new DividerEntry(DIVIDER_HEIGHT, DIVIDER_COLOR, inset));
     }
 }

@@ -10,8 +10,22 @@ import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
+/**
+ * A {@link DynamicOps} implementation that reads and writes TOML-compatible
+ * object trees.
+ *
+ * <p>Two instances are available: {@link #INSTANCE} for standard TOML
+ * encoding and {@link #COMPRESSED} for a mode where numeric and string
+ * conversions are more permissive (numbers may be read as strings and
+ * vice versa).
+ *
+ * <p>This class is an internal implementation detail of the TOML serialization
+ * pipeline and is not intended for direct use outside the config framework.
+ */
 public class TomlOps implements DynamicOps<Object> {
+    /** Standard TOML operations instance. */
     public static final TomlOps INSTANCE = new TomlOps(false);
+    /** Compressed-mode TOML operations with relaxed type conversions. */
     public static final TomlOps COMPRESSED = new TomlOps(true);
 
     private static final Object EMPTY = new Object();
@@ -430,4 +444,3 @@ public class TomlOps implements DynamicOps<Object> {
         }
     }
 }
-
