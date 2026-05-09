@@ -24,17 +24,10 @@ public class OverlayRenderer {
         double mouseX = minecraft.mouseHandler.xpos() * (double) width / (double) minecraft.getWindow().getScreenWidth();
         double mouseY = minecraft.mouseHandler.ypos() * (double) height / (double) minecraft.getWindow().getScreenHeight();
 
-        var pose = guiGraphics.pose();
-
-        pose.pushPose();
-        pose.translate(0.0F, 0.0F, 500.0F);
-
         for (AbstractShaderOverlay overlay : REGISTERED_OVERLAYS) {
             if (overlay.isActive()) {
                 overlay.render(guiGraphics, partialTick, (int) mouseX, (int) mouseY, width, height);
             }
         }
-
-        pose.popPose();
     }
 }
