@@ -11,6 +11,7 @@ import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
@@ -56,7 +57,6 @@ public abstract class AbstractShaderOverlay {
             onHide(minecraft);
             return;
         }
-
         renderShaderBackground(guiGraphics, shader, animationState, mouseX, mouseY, width, height);
 
         renderTextContent(guiGraphics, animationState);
@@ -126,6 +126,10 @@ public abstract class AbstractShaderOverlay {
         bufferBuilder.vertex(currentPose, (float) state.overlayWidth, 0.0F, 0.0F).uv(1.0F, 0.0F).endVertex();
         BufferUploader.drawWithShader(bufferBuilder.end());
         pose.popPose();
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        RenderSystem.setShader(GameRenderer::getPositionTexShader);
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.disableBlend();
     }
 
     private void renderTextContent(GuiGraphics guiGraphics, AnimationState state) {

@@ -30,11 +30,6 @@ public class OverlayRenderer {
         double mouseY = minecraft.mouseHandler.ypos() * (double) height / (double) event.getWindow().getScreenHeight();
 
         var guiGraphics = event.getGuiGraphics();
-        var pose = guiGraphics.pose();
-
-        pose.pushPose();
-        pose.translate(0.0F, 0.0F, 1000.0F);
-
         float partialTick = event.getPartialTick();
 
         for (AbstractShaderOverlay overlay : REGISTERED_OVERLAYS) {
@@ -42,7 +37,5 @@ public class OverlayRenderer {
                 overlay.render(guiGraphics, partialTick, (int) mouseX, (int) mouseY, width, height);
             }
         }
-
-        pose.popPose();
     }
 }
