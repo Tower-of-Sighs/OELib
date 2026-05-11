@@ -8,6 +8,8 @@
   "config.oelib.reset": "重置",
   "config.oelib.search": "搜索...",
   "config.oelib.done": "保存并退出",
+  "config.oelib.unsaved.title": "存在未保存更改",
+  "config.oelib.unsaved.message": "你有未保存的配置更改，是否保存后退出？",
 
   "config.oelib.festival_toast.title": "节日祝福设置",
   "config.oelib.dev_features.title": "开发者功能设置",
@@ -25,6 +27,9 @@
   "config.oelib.dev_features.testEnum.TEST2": "Enum 测试 2",
   "config.oelib.dev_features.enableExampleContent": "启用示例内容",
   "config.oelib.dev_features.enableExampleContent.tooltip": "内部测试用",
+  "config.oelib.dev_features.nestedDemo": "嵌套示例",
+  "config.oelib.dev_features.nestedDemo.enabled": "启用嵌套示例",
+  "config.oelib.dev_features.nestedDemo.level": "嵌套等级",
 
   "overlay.exampletoast.chongyang.title": "登高望远·重阳节",
   "overlay.exampletoast.chongyang.line1": "云随山高，心共秋澄。愿你步履所至，皆是清朗。",
