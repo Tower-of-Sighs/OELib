@@ -19,7 +19,7 @@ mixin {
 legacyForge {
     version = "${mcVersion}-${forgeVer}"
 
-    val at = project(":common-api").file("src/main/resources/META-INF/accesstransformer.cfg")
+    val at = project(":common").file("src/main/resources/META-INF/accesstransformer.cfg")
     if (at.exists()) {
         accessTransformers.from(at.absolutePath)
     }
@@ -63,7 +63,7 @@ sourceSets.named("main") {
 
 dependencies {
     annotationProcessor("org.spongepowered:mixin:0.8.5-SNAPSHOT:processor")
-    annotationProcessor(project(":common-api"))
+    annotationProcessor(project(":common"))
 
 //    modImplementation("mezz.jei:jei-${mcVersion}-forge:${jeiVer}")
 

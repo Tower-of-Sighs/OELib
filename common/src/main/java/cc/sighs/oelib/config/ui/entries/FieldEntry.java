@@ -4,8 +4,6 @@ import cc.sighs.oelib.config.model.ConfigValueMeta;
 import cc.sighs.oelib.config.ui.ConfigUiHint;
 import cc.sighs.oelib.config.ui.screen.ConfigScreen;
 import cc.sighs.oelib.config.util.ConfigGuiUtil;
-import cc.sighs.oelib.mixin.access.CheckboxAccessor;
-import cc.sighs.oelib.mixin.access.ScreenInvoker;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
@@ -93,7 +91,7 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
                 if (screen instanceof ConfigScreen cs) cs.markDirty();
             }
         };
-        ((ScreenInvoker) screen).invokeAddRenderableWidget(toggle);
+        screen.addRenderableWidget(toggle);
     }
 
     private void createSliderControl(int controlX, int y, JsonElement currentValue) {
@@ -103,7 +101,7 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
         double cur = getDoubleValue(currentValue, min);
 
         slider = createSlider(controlX, y, controlWidth, min, max, step, cur);
-        ((ScreenInvoker) screen).invokeAddRenderableWidget(slider);
+        screen.addRenderableWidget(slider);
     }
 
     private AbstractSliderButton createSlider(int x, int y, int width,
@@ -148,12 +146,12 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
                             updateResetButtonState();
                             if (screen instanceof ConfigScreen cs) cs.markDirty();
                         });
-        ((ScreenInvoker) screen).invokeAddRenderableWidget(dropdown);
+        screen.addRenderableWidget(dropdown);
     }
 
     private void createTextBoxControl(int controlX, int y, JsonElement currentValue) {
         textBox = ConfigGuiUtil.createEditBox(ConfigGuiUtil.jsonToString(currentValue), controlX, y, controlWidth);
-        ((ScreenInvoker) screen).invokeAddRenderableWidget(textBox);
+        screen.addRenderableWidget(textBox);
 
         textBox.setResponder(str -> {
             var currentEl = ConfigGuiUtil.getPath(working, meta.key());
@@ -172,7 +170,7 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
         resetButton = Button.builder(Component.translatable("config.oelib.reset"),
                         b -> resetToDefault())
                 .bounds(resetX, y, 72, 20).build();
-        ((ScreenInvoker) screen).invokeAddRenderableWidget(resetButton);
+        screen.addRenderableWidget(resetButton);
     }
 
     private void resetToDefault() {
@@ -191,7 +189,7 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
             case TOGGLE -> {
                 if (toggle != null && defaultValueElement.isJsonPrimitive()
                         && defaultValueElement.getAsJsonPrimitive().isBoolean()) {
-                    ((CheckboxAccessor) toggle).setSelected(defaultValueElement.getAsBoolean());
+                    toggle.selected = defaultValueElement.getAsBoolean();
                 }
             }
             case SLIDER -> {
@@ -226,7 +224,7 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
         slider.visible = false;
 
         slider = createSlider(sx, sy, sw, min, max, step, defaultValue);
-        ((ScreenInvoker) screen).invokeAddRenderableWidget(slider);
+        screen.addRenderableWidget(slider);
     }
 
     @Override

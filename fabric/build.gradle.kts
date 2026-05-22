@@ -34,7 +34,7 @@ dependencies {
     implementation("com.electronwill.night-config:toml:3.8.3")
     implementation("de.marhali:json5-java:3.0.0")
     implementation("org.mvel:mvel2:2.5.0.Final")
-    annotationProcessor(project(":common-api"))
+    annotationProcessor(project(":common"))
     include("cn.6tail:lunar:1.7.3")
     include("com.electronwill.night-config:core:3.8.3")
     include("com.electronwill.night-config:toml:3.8.3")
@@ -42,7 +42,7 @@ dependencies {
 }
 
 loom {
-    accessWidenerPath = project(":common-api").file("src/main/resources/oelib.accesswidener")
+    accessWidenerPath = project(":common").file("src/main/resources/oelib.accesswidener")
     mixin {
         defaultRefmapName = "${modId}.refmap.json"
     }

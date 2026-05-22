@@ -19,13 +19,12 @@ val licenseVal: String = property("license") as String
 val creditsVal: String = findProperty("credits") as String? ?: ""
 
 base {
-    archivesName = "${modId}-${project.name}-${mcVersion}"
+    archivesName = "${modName}-${project.name}-${mcVersion}"
 }
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(javaVersion)
     withSourcesJar()
-    withJavadocJar()
 }
 
 repositories {
@@ -58,7 +57,7 @@ repositories {
     }
 }
 
-listOf("apiElements", "runtimeElements", "sourcesElements", "javadocElements").forEach { variant ->
+listOf("apiElements", "runtimeElements", "sourcesElements").forEach { variant ->
     configurations.getByName(variant).outgoing {
         capability("${mavenGroup}:${project.name}:${modVersion}")
         capability("${mavenGroup}:${base.archivesName.get()}:${modVersion}")

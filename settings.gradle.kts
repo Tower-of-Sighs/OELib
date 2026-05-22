@@ -21,6 +21,6 @@ plugins {
 }
 
 rootProject.name = "oelib"
-include("common-api")
+include("common")
 include("fabric")
 include("forge")

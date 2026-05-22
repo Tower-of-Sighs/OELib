@@ -15,13 +15,13 @@ configurations {
 }
 
 dependencies {
-    compileOnly(project(":common-api")) {
+    compileOnly(project(":common")) {
         capabilities {
             requireCapability("${mavenGroup}:${modId}")
         }
     }
-    add("commonJava", project(":common-api", "commonJava"))
-    add("commonResources", project(":common-api", "commonResources"))
+    add("commonJava", project(":common", "commonJava"))
+    add("commonResources", project(":common", "commonResources"))
 }
 
 tasks.named<JavaCompile>("compileJava") {
@@ -34,10 +34,6 @@ tasks.named<ProcessResources>("processResources") {
     from(configurations.getByName("commonResources"))
 }
 
-tasks.named<Javadoc>("javadoc") {
-    dependsOn(configurations.getByName("commonJava"))
-    source(configurations.getByName("commonJava"))
-}
 
 tasks.named<Jar>("sourcesJar") {
     dependsOn(configurations.getByName("commonJava"))
