@@ -78,7 +78,10 @@ public final class NetworkAutoRegistration {
     public static Set<Class<? extends INetworkPacket<?>>> findAllAnnotatedPackets() {
         registrationStarted = true;
 
-        Set<String> packagesSnapshot = Set.copyOf(BASE_PACKAGES);
+        Set<String> packagesSnapshot;
+        synchronized (BASE_PACKAGES) {
+            packagesSnapshot = Set.copyOf(BASE_PACKAGES);
+        }
         if (packagesSnapshot.isEmpty()) {
             LOGGER.debug("[NetworkAutoReg] No base packages registered; skipping scan.");
             return Set.of();
