@@ -2,6 +2,12 @@ package cc.sighs.oelib.config.ui.scissor;
 
 import org.apache.commons.lang3.builder.ReflectionToStringBuilder;
 
+/**
+ * An integer-based dimension (width, height) used for scissor-region
+ * calculations and UI layout.
+ *
+ * <p>Adapted from Cloth Config's geometry primitives.
+ */
 public class Dimension implements Cloneable {
     public int width;
     public int height;

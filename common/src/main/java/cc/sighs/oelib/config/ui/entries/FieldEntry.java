@@ -2,6 +2,7 @@ package cc.sighs.oelib.config.ui.entries;
 
 import cc.sighs.oelib.config.model.ConfigValueMeta;
 import cc.sighs.oelib.config.ui.ConfigUiHint;
+import cc.sighs.oelib.config.ui.ConfigWidgetRegistry;
 import cc.sighs.oelib.config.ui.screen.ConfigScreen;
 import cc.sighs.oelib.config.util.ConfigGuiUtil;
 import com.google.gson.JsonElement;
@@ -17,6 +18,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
+/**
+ * An interactive entry for a single configuration field, rendering the
+ * appropriate widget based on the field's {@link ConfigUiHint}.
+ *
+ * <p>Supported widgets include text boxes, toggles (checkboxes), sliders,
+ * dropdowns, and custom widgets registered via {@link ConfigWidgetRegistry}.
+ * A reset button next to each field reverts it to the default value.
+ */
 public class FieldEntry extends AbstractConfigEntry<Object> {
     private final ConfigValueMeta meta;
     private final JsonObject working;
@@ -31,10 +40,21 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
     private EditBox textBox;
     private AbstractSliderButton slider;
     private CycleButton<String> dropdown;
+    private AbstractWidget customWidget;
+    private ConfigWidgetRegistry.CustomWidgetHandle customHandle;
     private Button resetButton;
     private JsonElement defaultValueElement;
     private Screen screen;
 
+    /**
+     * Constructs a field entry.
+     *
+     * @param meta         the field metadata
+     * @param working      the working JSON object being edited
+     * @param labelWidth   the reserved width for the label
+     * @param controlWidth the width of the control widget
+     * @param rowHeight    the row height
+     */
     public FieldEntry(ConfigValueMeta meta, JsonObject working, int labelWidth, int controlWidth, int rowHeight) {
         this.meta = meta;
         this.working = working;
@@ -52,6 +72,14 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
         return rowHeight;
     }
 
+    /**
+     * Attaches this entry to a screen, creating widgets at the given position.
+     *
+     * @param screen   the parent screen
+     * @param x        the x position
+     * @param y        the y position
+     * @param defaults the default values JSON object
+     */
     public void attach(Screen screen, int x, int y, JsonObject defaults) {
         if (created) return;
         this.screen = screen;
@@ -69,11 +97,16 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
     }
 
     private void createUiControl(int controlX, int y, JsonElement currentValue) {
-        switch (hint.type()) {
-            case TOGGLE -> createToggleControl(controlX, y, currentValue);
-            case SLIDER -> createSliderControl(controlX, y, currentValue);
-            case DROPDOWN -> createDropdownControl(controlX, y, currentValue);
-            default -> createTextBoxControl(controlX, y, currentValue);
+        if (hint instanceof ConfigUiHint.Toggle) {
+            createToggleControl(controlX, y, currentValue);
+        } else if (hint instanceof ConfigUiHint.Slider sliderHint) {
+            createSliderControl(controlX, y, currentValue, sliderHint);
+        } else if (hint instanceof ConfigUiHint.Dropdown dropdownHint) {
+            createDropdownControl(controlX, y, currentValue, dropdownHint);
+        } else if (hint instanceof ConfigUiHint.Custom customHint) {
+            createCustomControl(controlX, y, currentValue, customHint);
+        } else {
+            createTextBoxControl(controlX, y, currentValue);
         }
     }
 
@@ -94,10 +127,10 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
         screen.addRenderableWidget(toggle);
     }
 
-    private void createSliderControl(int controlX, int y, JsonElement currentValue) {
-        double min = hint.min() != null ? hint.min() : 0.0;
-        double max = hint.max() != null ? hint.max() : 1.0;
-        double step = hint.step() != null ? hint.step() : 0.01;
+    private void createSliderControl(int controlX, int y, JsonElement currentValue, ConfigUiHint.Slider sliderHint) {
+        double min = sliderHint.min();
+        double max = sliderHint.max();
+        double step = sliderHint.step();
         double cur = getDoubleValue(currentValue, min);
 
         slider = createSlider(controlX, y, controlWidth, min, max, step, cur);
@@ -126,8 +159,8 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
         };
     }
 
-    private void createDropdownControl(int controlX, int y, JsonElement currentValue) {
-        List<String> options = hint.options() != null ? hint.options() : List.of();
+    private void createDropdownControl(int controlX, int y, JsonElement currentValue, ConfigUiHint.Dropdown dropdownHint) {
+        List<String> options = dropdownHint.options();
         String cur = ConfigGuiUtil.jsonToString(currentValue);
 
         if (options.isEmpty()) {
@@ -147,6 +180,37 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
                             if (screen instanceof ConfigScreen cs) cs.markDirty();
                         });
         screen.addRenderableWidget(dropdown);
+    }
+
+    private void createCustomControl(int controlX, int y, JsonElement currentValue, ConfigUiHint.Custom customHint) {
+        var factoryOpt = ConfigWidgetRegistry.custom(customHint.widgetId());
+        if (factoryOpt.isEmpty()) {
+            createTextBoxControl(controlX, y, currentValue);
+            return;
+        }
+        var context = new ConfigWidgetRegistry.CustomWidgetContext(
+                screen,
+                meta,
+                working,
+                currentValue,
+                controlX,
+                y,
+                controlWidth,
+                20,
+                () -> {
+                    updateResetButtonState();
+                    if (screen instanceof ConfigScreen cs) {
+                        cs.markDirty();
+                    }
+                }
+        );
+        customHandle = factoryOpt.get().create(context);
+        if (customHandle == null || customHandle.widget() == null) {
+            createTextBoxControl(controlX, y, currentValue);
+            return;
+        }
+        customWidget = customHandle.widget();
+        screen.addRenderableWidget(customWidget);
     }
 
     private void createTextBoxControl(int controlX, int y, JsonElement currentValue) {
@@ -185,35 +249,34 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
     }
 
     private void updateControlValue(String defaultValueStr, JsonElement defaultValueElement) {
-        switch (hint.type()) {
-            case TOGGLE -> {
-                if (toggle != null && defaultValueElement.isJsonPrimitive()
-                        && defaultValueElement.getAsJsonPrimitive().isBoolean()) {
-                    toggle.selected = defaultValueElement.getAsBoolean();
-                }
+        if (hint instanceof ConfigUiHint.Toggle) {
+            if (toggle != null && defaultValueElement.isJsonPrimitive()
+                    && defaultValueElement.getAsJsonPrimitive().isBoolean()) {
+                toggle.selected = defaultValueElement.getAsBoolean();
             }
-            case SLIDER -> {
-                if (slider != null) {
-                    recreateSliderWithDefaultValue(defaultValueElement);
-                }
+        } else if (hint instanceof ConfigUiHint.Slider sliderHint) {
+            if (slider != null) {
+                recreateSliderWithDefaultValue(defaultValueElement, sliderHint);
             }
-            case DROPDOWN -> {
-                if (dropdown != null) {
-                    dropdown.setValue(defaultValueStr);
-                }
+        } else if (hint instanceof ConfigUiHint.Dropdown) {
+            if (dropdown != null) {
+                dropdown.setValue(defaultValueStr);
             }
-            default -> {
-                if (textBox != null) {
-                    textBox.setValue(defaultValueStr);
-                }
+        } else if (hint instanceof ConfigUiHint.Custom) {
+            if (customHandle != null) {
+                customHandle.reset(defaultValueElement);
+            }
+        } else {
+            if (textBox != null) {
+                textBox.setValue(defaultValueStr);
             }
         }
     }
 
-    private void recreateSliderWithDefaultValue(JsonElement defaultValueElement) {
-        double min = hint.min() != null ? hint.min() : 0.0;
-        double max = hint.max() != null ? hint.max() : 1.0;
-        double step = hint.step() != null ? hint.step() : 0.01;
+    private void recreateSliderWithDefaultValue(JsonElement defaultValueElement, ConfigUiHint.Slider sliderHint) {
+        double min = sliderHint.min();
+        double max = sliderHint.max();
+        double step = sliderHint.step();
         double defaultValue = getDoubleValue(defaultValueElement, min);
 
         int sx = slider.getX();
@@ -245,34 +308,47 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
             cs.setHoverTooltip(tooltip, mouseX, mouseY);
         }
     }
-
     private void updateControlPositions(int controlX, int y, int controlWidth, int resetX) {
-        // 更新控件位置
+        boolean rowVisible = true;
+        if (screen instanceof ConfigScreen cs) {
+            rowVisible = y + rowHeight > cs.getContentTop() && y < cs.getContentBottom() - 20;
+        }
+
         if (toggle != null) {
-            toggle.setPosition(controlX - 8, y); // 保持与创建时相同的偏移
+            toggle.visible = rowVisible;
+            toggle.setPosition(controlX - 8, y);
             toggle.setWidth(20);
         }
         if (textBox != null) {
+            textBox.visible = rowVisible;
             textBox.setX(controlX);
             textBox.setY(y);
             textBox.setWidth(controlWidth);
         }
         if (slider != null) {
+            slider.visible = rowVisible;
             slider.setX(controlX);
             slider.setY(y);
             slider.setWidth(controlWidth);
         }
         if (dropdown != null) {
+            dropdown.visible = rowVisible;
             dropdown.setX(controlX);
             dropdown.setY(y);
             dropdown.setWidth(controlWidth);
         }
+        if (customWidget != null) {
+            customWidget.visible = rowVisible;
+            customWidget.setX(controlX);
+            customWidget.setY(y);
+            customWidget.setWidth(controlWidth);
+        }
         if (resetButton != null) {
+            resetButton.visible = rowVisible;
             resetButton.setX(resetX);
             resetButton.setY(y);
         }
     }
-
     @Override
     public Component getFieldName() {
         return label;
@@ -286,38 +362,6 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
     @Override
     public Optional<Object> getDefaultValue() {
         return Optional.empty();
-    }
-
-    @Override
-    public void dispose() {
-        if (screen != null) {
-            if (toggle != null) {
-                toggle.visible = false;
-                screen.children().remove(toggle);
-            }
-            if (textBox != null) {
-                textBox.setVisible(false);
-                screen.children().remove(textBox);
-            }
-            if (slider != null) {
-                slider.visible = false;
-                screen.children().remove(slider);
-            }
-            if (dropdown != null) {
-                dropdown.visible = false;
-                screen.children().remove(dropdown);
-            }
-            if (resetButton != null) {
-                resetButton.visible = false;
-                screen.children().remove(resetButton);
-            }
-        }
-        toggle = null;
-        textBox = null;
-        slider = null;
-        dropdown = null;
-        resetButton = null;
-        created = false;
     }
 
     private void updateResetButtonState() {

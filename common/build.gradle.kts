@@ -30,6 +30,7 @@ dependencies {
     implementation("de.marhali:json5-java:3.0.0")
     implementation("com.electronwill.night-config:toml:3.8.3")
     implementation("org.mvel:mvel2:2.5.0.Final")
+    implementation("io.smallrye.classfile:jdk-classfile-backport:26")
 
     jmh("org.openjdk.jmh:jmh-core:1.37")
     jmhAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:1.37")

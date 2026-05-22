@@ -8,6 +8,8 @@
   "config.oelib.reset": "Reset",
   "config.oelib.search": "Search...",
   "config.oelib.done": "Save and exit",
+  "config.oelib.unsaved.title": "Unsaved Changes",
+  "config.oelib.unsaved.message": "You have unsaved config changes. Save before closing?",
 
   "config.oelib.festival_toast.title": "Festival Blessings Settings",
   "config.oelib.dev_features.title": "Developer Features Settings",
@@ -25,6 +27,9 @@
   "config.oelib.dev_features.testEnum.TEST2": "Enum Test 2",
   "config.oelib.dev_features.enableExampleContent": "Enable Example Content",
   "config.oelib.dev_features.enableExampleContent.tooltip": "For internal testing purposes",
+  "config.oelib.dev_features.nestedDemo": "Nested Demo",
+  "config.oelib.dev_features.nestedDemo.enabled": "Enable Nested Demo",
+  "config.oelib.dev_features.nestedDemo.level": "Nested Level",
 
   "overlay.exampletoast.chongyang.title": "Cloud-Ascent · Double Ninth",
   "overlay.exampletoast.chongyang.line1": "May your spirit rise with the sky.",

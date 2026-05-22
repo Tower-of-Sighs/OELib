@@ -6,7 +6,6 @@ import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigValueMeta;
 import cc.sighs.oelib.config.net.ConfigUpdateRequestPacket;
 import cc.sighs.oelib.config.ui.entries.*;
-import cc.sighs.oelib.config.ui.scissor.Rectangle;
 import cc.sighs.oelib.config.ui.scissor.ScissorsHandler;
 import cc.sighs.oelib.config.ui.widget.DynamicEntryListWidget;
 import cc.sighs.oelib.config.util.ConfigGuiUtil;
@@ -27,13 +26,36 @@ import net.minecraft.resources.ResourceLocation;
 
 import java.util.*;
 
+/**
+ * An auto-generated screen for viewing and editing configuration values
+ * at runtime.
+ *
+ * <p>The screen renders a scrollable list of {@link AbstractConfigEntry}
+ * instances, one per visible field, with a sidebar showing available
+ * configurations for the current mod. Changes are validated on save and,
+ * for server-side configs, sent to the server via
+ * {@link ConfigUpdateRequestPacket}.
+ *
+ * <p>The screen is opened via the mod's configuration key binding or
+ * through the Mod Menu integration.
+ */
 public class ConfigScreen extends Screen {
+    private static final int DIVIDER_HEIGHT = 8;
+    private static final int DIVIDER_COLOR = 0x50FFFFFF;
+    private static final int DIVIDER_BASE_INSET = 10;
+    private static final int DIVIDER_NESTED_STEP = 14;
+    private static final int NESTED_INNER_GAP = 4;
+    private static final int NESTED_OUTER_GAP = 4;
+
+    /** The id of the configuration being edited. */
     public final ResourceLocation configId;
-    public final ConfigCodec<Object> codec;
     private final ConfigUnit<Object> unit;
+    /** The codec for this configuration. */
+    public final ConfigCodec<Object> codec;
     private final List<ConfigValueMeta> fields;
     private final List<Runnable> applyActions = new ArrayList<>();
     private final Map<String, Component> errors = new HashMap<>();
+    private final Map<String, Boolean> groupExpanded = new HashMap<>();
     private final int contentTop = 36;
     private final int rowHeight = 24;
     private final Scroller refScroller = new Scroller();
@@ -55,6 +77,12 @@ public class ConfigScreen extends Screen {
     private int sideExpandLimit = 120;
     private List<ResourceLocation> modConfigs = new ArrayList<>();
 
+    /**
+     * Constructs a config screen for the given mod.
+     *
+     * @param parent the parent screen
+     * @param modid  the mod id whose configs to display
+     */
     public ConfigScreen(Screen parent, String modid) {
         super(Component.translatable("config." + modid + ".title"));
         Set<ResourceLocation> ids = new HashSet<>();
@@ -100,6 +128,36 @@ public class ConfigScreen extends Screen {
         return sidebarWidth() - 14;
     }
 
+    private static String idToGroupStateKey(ResourceLocation configId, String groupPath) {
+        return configId.toString() + "|" + groupPath;
+    }
+
+    private static String parentPathOf(String key) {
+        int idx = key.lastIndexOf('.');
+        if (idx <= 0) {
+            return null;
+        }
+        return key.substring(0, idx);
+    }
+
+    private void applyEdits() {
+        applyActions.forEach(Runnable::run);
+        applyActions.clear();
+    }
+
+    private static int depthOfPath(String path) {
+        if (path == null || path.isBlank()) {
+            return 0;
+        }
+        int depth = 0;
+        for (int i = 0; i < path.length(); i++) {
+            if (path.charAt(i) == '.') {
+                depth++;
+            }
+        }
+        return depth;
+    }
+
     @Override
     protected void init() {
         super.init();
@@ -110,120 +168,11 @@ public class ConfigScreen extends Screen {
         if (unit == null || codec == null) {
             return;
         }
-        int initialScroll = listWidget != null ? listWidget.getScrollOffset() : 0;
-        int sidebar = sidebarWidth();
-        int left = sidebar + 16;
-        int y = contentTop;
-        if (searchBox == null) {
-            searchBox = new EditBox(Minecraft.getInstance().font, left, y, this.width - left - 20, 20, Component.empty());
-            searchBox.setValue(searchText);
-            searchBox.setSuggestion(searchText.isEmpty() ? Component.translatable("config.oelib.search").getString() : "");
-            searchBox.setResponder(this::onSearchChanged);
-            searchBox.setFocused(true);
-            this.setInitialFocus(searchBox);
-        } else {
-            searchBox.setX(left);
-            searchBox.setY(y);
-            searchBox.setWidth(this.width - left - 20);
-            searchBox.setValue(searchText);
-            searchBox.setSuggestion(searchText.isEmpty() ? Component.translatable("config.oelib.search").getString() : "");
+        int initialScroll = 0;
+        if (listWidget != null) {
+            initialScroll = Math.max(listWidget.getScrollOffset(), listWidget.getScrollTargetOffset());
         }
-        super.addRenderableWidget(searchBox);
-        y += 24;
-        rebuildEntries(initialScroll, y);
-        int btnY = this.height - 28;
-        saveButton = super.addRenderableWidget(Button.builder(Component.translatable("config.oelib.done"), b -> onSave()).bounds(this.width / 2 + 4, btnY, 120, 20).build());
-        cancelButton = super.addRenderableWidget(Button.builder(CommonComponents.GUI_CANCEL, b -> onClose()).bounds(this.width / 2 - 124, btnY, 120, 20).build());
-    }
-
-    private void onSave() {
-        applyEdits();
-        syncAndSaveConfigs();
-        dirty = false;
-        Minecraft.getInstance().setScreen(null);
-    }
-
-    private void applyEdits() {
-        applyActions.forEach(Runnable::run);
-        applyActions.clear();
-    }
-
-    public void markDirty() {
-        this.dirty = true;
-    }
-
-    @Override
-    public void onClose() {
-        if (!dirty) {
-            super.onClose();
-            return;
-        }
-        Minecraft.getInstance().setScreen(new ConfirmScreen(confirm -> {
-            if (confirm) {
-                applyEdits();
-                syncAndSaveConfigs();
-            }
-            Minecraft.getInstance().setScreen(null);
-        }, Component.translatable("config.oelib.unsaved.title"), Component.translatable("config.oelib.unsaved.message")));
-    }
-
-    private void syncAndSaveConfigs() {
-        for (ConfigCtx ctx : contexts) {
-            for (var rootEntry : ctx.working.entrySet()) {
-                var v = rootEntry.getValue();
-                if (v.isJsonObject()) {
-                    GsonUtil.removeBlankStringValues(v.getAsJsonObject());
-                } else if (v.isJsonArray()) {
-                    GsonUtil.removeBlankStringElements(v.getAsJsonArray());
-                }
-            }
-
-            var parseResult = ctx.codec.codec().parse(JsonOps.INSTANCE, ctx.working);
-            if (parseResult.error().isPresent()) {
-                OELib.LOGGER.error("Failed to parse edited config {}: {}", ctx.id, parseResult.error().get().message());
-                continue;
-            }
-
-            parseResult.result().ifPresent(value -> {
-                var side = ctx.codec.meta().side();
-                if (side == ConfigSide.CLIENT) {
-                    ctx.unit.setValue(value);
-                    try {
-                        ctx.unit.save();
-                    } catch (Throwable t) {
-                        OELib.LOGGER.error("Save failed for client config {}: {}", ctx.id, t.getMessage(), t);
-                    }
-                } else if (side == ConfigSide.SERVER) {
-                    ctx.unit.setValue(value);
-                    try {
-                        ctx.unit.save();
-                    } catch (Throwable t) {
-                        OELib.LOGGER.error("Save failed for server config {}: {}", ctx.id, t.getMessage(), t);
-                    }
-                    if (Minecraft.getInstance().getConnection() != null) {
-                        var format = ctx.codec.meta().format();
-                        var encoded = ConfigSerializationUtil.encodeToString(value, format, ctx.codec.codec(), ctx.codec.fields());
-                        if (encoded.isEmpty()) {
-                            OELib.LOGGER.error("Failed to encode server config {} for update request", ctx.id);
-                            return;
-                        }
-                        NetworkManager.sendToServer(new ConfigUpdateRequestPacket(ctx.id, encoded.get(), format, true));
-                    }
-                }
-            });
-        }
-    }
-
-    private void onSearchChanged(String s) {
-        searchText = s;
-        if (searchBox != null) {
-            searchBox.setSuggestion(s.isEmpty() ? Component.translatable("config.oelib.search").getString() : "");
-        }
-        int initialScroll = listWidget != null ? listWidget.getScrollOffset() : 0;
-        rebuildEntries(initialScroll, contentTop + 24);
-    }
-
-    private void rebuildEntries(int initialScroll, int listTop) {
+        Map<ResourceLocation, JsonObject> preservedWorking = snapshotWorkingByConfig();
         contexts.clear();
         int sidebar = sidebarWidth();
         int labelWidth = 160;
@@ -231,19 +180,21 @@ public class ConfigScreen extends Screen {
         int controlWidth = Math.min(220, this.width - left - 40 - labelWidth);
         int listControlWidth = controlWidth;
         int fieldControlWidth = Math.min(200, this.width - left - 60 - labelWidth);
-        int y = listTop;
-        if (listWidget == null) {
-            listWidget = new DynamicEntryListWidget(Minecraft.getInstance(), this.width - left - 12, this.height, y, this.height - 32);
-        }
+        int y = contentTop;
+        searchBox = new EditBox(Minecraft.getInstance().font, left, y, this.width - left - 20, 20, Component.empty());
+        searchBox.setSuggestion(Component.translatable("config.oelib.search").getString());
+        searchBox.setValue(searchText);
+        searchBox.setResponder(s -> {
+            searchText = s;
+            searchBox.setSuggestion(s.isEmpty() ? Component.translatable("config.oelib.search").getString() : "");
+            init();
+        });
+        searchBox.setFocused(true);
+        this.setInitialFocus(searchBox);
+        addRenderableWidget(searchBox);
+        y += 24;
+        listWidget = new DynamicEntryListWidget(Minecraft.getInstance(), this.width - left - 12, this.height, y, this.height - 32);
         listWidget.setLeftPos(left);
-        listWidget.width = this.width - left - 12;
-        listWidget.top = y;
-        listWidget.bottom = this.height - 32;
-        var items = listWidget.children();
-        for (AbstractConfigEntry<?> entry : items) {
-            entry.dispose();
-        }
-        items.clear();
         Set<ResourceLocation> modsConfigsSet = new HashSet<>();
         modsConfigsSet.addAll(ClientConfigManager.all().keySet());
         modsConfigsSet.addAll(ServerConfigManager.all().keySet());
@@ -256,6 +207,8 @@ public class ConfigScreen extends Screen {
             refs.add(new FieldRef(null, Component.translatable("config." + id.getNamespace() + "." + id.getPath() + ".title"), 0));
         }
         entryDefaults.clear();
+        var items = listWidget.children();
+        items.clear();
         items.add(new EmptyEntry(5));
         var searchLower = searchText.toLowerCase(Locale.ROOT);
         for (ResourceLocation id : modConfigs) {
@@ -264,39 +217,18 @@ public class ConfigScreen extends Screen {
             var u = ConfigGuiUtil.castUnit(optUnit.get());
             u.reload();
             var c = u.codec();
-            var workingJson = ConfigGuiUtil.encodeToJsonObject(c.codec(), u.get());
+            var preserved = preservedWorking.get(id);
+            var workingJson = preserved != null
+                    ? preserved.deepCopy()
+                    : ConfigGuiUtil.encodeToJsonObject(c.codec(), u.get());
             var defaultObj = c.codec().parse(JsonOps.INSTANCE, new JsonObject()).result().orElse(null);
             var defaultsJson = defaultObj != null ? ConfigGuiUtil.encodeToJsonObject(c.codec(), defaultObj) : new JsonObject();
             var flds = c.fields();
             contexts.add(new ConfigCtx(id, u, c, flds, workingJson, defaultsJson));
             items.add(new CategoryTextEntry(Component.translatable("config." + id.getNamespace() + "." + id.getPath() + ".title"), Component.empty()));
+            items.add(new DividerEntry());
             items.add(new EmptyEntry(5));
-            for (ConfigValueMeta meta : flds) {
-                if (meta.hidden()) continue;
-                if (!searchText.isEmpty()) {
-                    var display = meta.translationKey()
-                            .map(k -> Component.translatable(k).getString())
-                            .orElse(meta.key());
-                    if (!display.toLowerCase(Locale.ROOT).contains(searchLower)) continue;
-                }
-                var label = meta.translationKey().map(Component::translatable).orElse(Component.literal(meta.key()));
-                var v = ConfigGuiUtil.getPath(workingJson, meta.key());
-                if (v != null && v.isJsonArray()) {
-                    ListEntry le = new ListEntry(meta.key(), label, workingJson, listControlWidth, rowHeight,
-                            meta.tooltip().map(Component::translatable).orElse(null));
-                    items.add(le);
-                    entryDefaults.put(le, defaultsJson);
-                } else if (v != null && v.isJsonObject()) {
-                    MapEntry me = new MapEntry(meta.key(), label, workingJson, listControlWidth, rowHeight,
-                            meta.tooltip().map(Component::translatable).orElse(null));
-                    items.add(me);
-                    entryDefaults.put(me, defaultsJson);
-                } else {
-                    FieldEntry fe = new FieldEntry(meta, workingJson, labelWidth, fieldControlWidth, rowHeight);
-                    items.add(fe);
-                    entryDefaults.put(fe, defaultsJson);
-                }
-            }
+            appendNestedFieldEntries(id, items, entryDefaults, flds, workingJson, defaultsJson, searchLower, labelWidth, fieldControlWidth, listControlWidth);
         }
         references = refs;
         int longest = 0;
@@ -320,6 +252,7 @@ public class ConfigScreen extends Screen {
             attachY += entry.getItemHeight();
         }
         if (initialScroll > 0 && listWidget != null) {
+            listWidget.refreshScrollBounds();
             listWidget.scrollTo(initialScroll, false);
         }
         if (!references.isEmpty()) {
@@ -329,6 +262,17 @@ public class ConfigScreen extends Screen {
             refScroller.setMaxScroll(Math.max(0, total - available));
         } else {
             refScroller.setMaxScroll(0);
+        }
+        int btnY = this.height - 28;
+        saveButton = addRenderableWidget(Button.builder(Component.translatable("config.oelib.done"), b -> onSave()).bounds(this.width / 2 + 4, btnY, 120, 20).build());
+        cancelButton = addRenderableWidget(Button.builder(CommonComponents.GUI_CANCEL, b -> onClose()).bounds(this.width / 2 - 124, btnY, 120, 20).build());
+    }
+
+    private void onSave() {
+        applyEdits();
+        if (syncAndSaveConfigs()) {
+            dirty = false;
+            Minecraft.getInstance().setScreen(null);
         }
     }
 
@@ -363,8 +307,7 @@ public class ConfigScreen extends Screen {
         var arrow = sidebarExpanded ? "<" : ">";
         gui.drawString(this.font, arrow, sliderX + 7 - this.font.width(arrow) / 2, arrowY, 0xFFFFFFFF);
         if (sidebarExpanded) {
-            Rectangle sideRect = new Rectangle(0, 0, sidebarContentWidth(), this.height);
-            ScissorsHandler.INSTANCE.scissor(sideRect);
+            gui.enableScissor(0, 0, sidebarContentWidth(), this.height);
             int refX = 4;
             int refAreaTop = 8;
             int refAreaBottom = this.height - 32;
@@ -395,18 +338,35 @@ public class ConfigScreen extends Screen {
                     gui.fill(barX1, barY, barX2, barY + barHeight, 0xCCFFFFFF);
                 }
             }
-            ScissorsHandler.INSTANCE.removeLastScissor();
+            gui.disableScissor();
         }
         int headerBottom = this.contentTop;
         int bottomBarTop = this.height - 32;
-        Rectangle contentRect = new Rectangle(0, headerBottom, this.width, bottomBarTop - headerBottom);
-        ScissorsHandler.INSTANCE.scissor(contentRect);
-        super.render(gui, mouseX, mouseY, partialTick);
+
+        boolean saveVisible = saveButton != null && saveButton.visible;
+        boolean cancelVisible = cancelButton != null && cancelButton.visible;
+        if (saveButton != null) {
+            saveButton.visible = false;
+        }
+        if (cancelButton != null) {
+            cancelButton.visible = false;
+        }
+
+        gui.enableScissor(0, headerBottom, this.width, bottomBarTop);
         if (listWidget != null) {
             listWidget.render(gui, mouseX, mouseY, partialTick);
         }
-        ScissorsHandler.INSTANCE.removeLastScissor();
-        gui.blit(DynamicEntryListWidget.VERTICAL_HEADER_SEPARATOR, sliderX - 1, 0, 0.0F, 0.0F, 1, this.height, 2, 32);
+        super.render(gui, mouseX, mouseY, partialTick);
+        gui.disableScissor();
+
+        if (saveButton != null) {
+            saveButton.visible = saveVisible;
+        }
+        if (cancelButton != null) {
+            cancelButton.visible = cancelVisible;
+        }
+
+        gui.blit(DynamicEntryListWidget.VERTICAL_HEADER_SEPARATOR, sliderX - 1, 0, 0, 0, 1, this.height, 2, 32);
         gui.fill(sliderX, headerBottom - 1, this.width, headerBottom, 0x80FFFFFF);
         gui.fill(sliderX, bottomBarTop - 1, this.width, bottomBarTop, 0x80FFFFFF);
         if (saveButton != null) {
@@ -415,6 +375,7 @@ public class ConfigScreen extends Screen {
         if (cancelButton != null) {
             cancelButton.render(gui, mouseX, mouseY, partialTick);
         }
+
         if (!errors.isEmpty()) {
             for (Map.Entry<String, Component> entry : errors.entrySet()) {
                 gui.drawString(this.font, entry.getValue(), contentLeft + 16, this.height - 40, 0xFFFF4040);
@@ -425,18 +386,94 @@ public class ConfigScreen extends Screen {
         }
     }
 
-    @Override
-    public void tick() {
-        super.tick();
-        if (searchBox != null) {
-            searchBox.tick();
-        }
+    /**
+     * Marks this screen as having unsaved changes.
+     */
+    public void markDirty() {
+        this.dirty = true;
     }
 
-    public void setHoverTooltip(Component tooltip, int mouseX, int mouseY) {
-        this.lastTooltip = tooltip;
-        this.mouseXLast = mouseX;
-        this.mouseYLast = mouseY;
+    @Override
+    public void onClose() {
+        if (!dirty) {
+            super.onClose();
+            return;
+        }
+        Minecraft.getInstance().setScreen(new ConfirmScreen(confirm -> {
+            if (confirm) {
+                applyEdits();
+                if (syncAndSaveConfigs()) {
+                    dirty = false;
+                    Minecraft.getInstance().setScreen(null);
+                    return;
+                }
+                Minecraft.getInstance().setScreen(this);
+                return;
+            }
+            Minecraft.getInstance().setScreen(this);
+        }, Component.translatable("config.oelib.unsaved.title"), Component.translatable("config.oelib.unsaved.message")));
+    }
+
+    private boolean syncAndSaveConfigs() {
+        errors.clear();
+        boolean allOk = true;
+        for (ConfigCtx ctx : contexts) {
+            for (var rootEntry : ctx.working.entrySet()) {
+                var v = rootEntry.getValue();
+                if (v.isJsonObject()) {
+                    GsonUtil.removeBlankStringValues(v.getAsJsonObject());
+                } else if (v.isJsonArray()) {
+                    GsonUtil.removeBlankStringElements(v.getAsJsonArray());
+                }
+            }
+
+            var parseResult = ctx.codec.codec().parse(JsonOps.INSTANCE, ctx.working);
+            if (parseResult.error().isPresent()) {
+                String message = parseResult.error().get().message();
+                OELib.LOGGER.error("Failed to parse edited config {}: {}", ctx.id, message);
+                errors.put(ctx.id.toString(), Component.literal("[" + ctx.id + "] " + message));
+                allOk = false;
+                continue;
+            }
+
+            var valueOpt = parseResult.result();
+            if (valueOpt.isEmpty()) {
+                String message = "Parse returned empty result";
+                OELib.LOGGER.error("Failed to parse edited config {}: {}", ctx.id, message);
+                errors.put(ctx.id.toString(), Component.literal("[" + ctx.id + "] " + message));
+                allOk = false;
+                continue;
+            }
+
+            var value = valueOpt.get();
+            try {
+                var side = ctx.codec.meta().side();
+                if (side == ConfigSide.CLIENT) {
+                    ctx.unit.setValue(value);
+                    ctx.unit.save();
+                } else if (side == ConfigSide.SERVER) {
+                    ctx.unit.setValue(value);
+                    ctx.unit.save();
+                    if (Minecraft.getInstance().getConnection() != null) {
+                        var format = ctx.codec.meta().format();
+                        var encoded = ConfigSerializationUtil.encodeToString(value, format, ctx.codec.codec(), ctx.codec.fields());
+                        if (encoded.isEmpty()) {
+                            String message = "Failed to encode payload for server update";
+                            OELib.LOGGER.error("{} {}", message, ctx.id);
+                            errors.put(ctx.id.toString(), Component.literal("[" + ctx.id + "] " + message));
+                            allOk = false;
+                            continue;
+                        }
+                        NetworkManager.sendToServer(new ConfigUpdateRequestPacket(ctx.id, encoded.get(), format, true));
+                    }
+                }
+            } catch (Throwable t) {
+                OELib.LOGGER.error("Exception while saving config {}: {}", ctx.id, t.getMessage(), t);
+                errors.put(ctx.id.toString(), Component.literal("[" + ctx.id + "] " + t.getMessage()));
+                allOk = false;
+            }
+        }
+        return allOk;
     }
 
     @Override
@@ -444,6 +481,141 @@ public class ConfigScreen extends Screen {
         this.mouseXLast = (int) mouseX;
         this.mouseYLast = (int) mouseY;
         super.mouseMoved(mouseX, mouseY);
+    }
+
+    /**
+     * Returns the top y coordinate of the scrollable content area.
+     *
+     * @return the content top
+     */
+    public int getContentTop() {
+        return contentTop;
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        int sidebar = sidebarWidth();
+        int sliderX = sidebar - 14;
+        if (mouseX >= 0 && mouseX <= sliderX && mouseY >= 0 && mouseY <= this.height && delta != 0.0) {
+            int itemHeight = this.font.lineHeight + 3;
+            refScroller.offset(-delta * itemHeight);
+            return true;
+        }
+        if (listWidget != null && mouseX >= sliderX && mouseX <= this.width && mouseY >= contentTop && mouseY <= this.height - 32 && delta != 0.0) {
+            listWidget.offset(-delta * 28.0);
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, delta);
+    }
+
+    private boolean needsRefreshFromUnits() {
+        if (dirty) return false;
+        try {
+            for (ConfigCtx ctx : contexts) {
+                var fresh = ConfigGuiUtil.encodeToJsonObject(ctx.codec.codec(), ctx.unit.get());
+                if (!Objects.equals(fresh.toString(), ctx.working.toString())) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    private record FieldRef(ConfigValueMeta meta, Component label, int topY) {
+    }
+
+    private static final class Scroller {
+        private static final double SMOOTH_SPEED = 16.0;
+        private static final double SNAP_EPSILON = 0.35;
+
+        private double value;
+        private double target;
+        private int max;
+        private long lastUpdateNanos = System.nanoTime();
+
+        void setMaxScroll(int max) {
+            this.max = Math.max(0, max);
+            if (this.target > this.max) {
+                this.target = this.max;
+            }
+            if (this.value > this.max) {
+                this.value = this.max;
+            }
+            if (this.target < 0) {
+                this.target = 0;
+            }
+            if (this.value < 0) {
+                this.value = 0;
+            }
+        }
+
+        void offset(double delta) {
+            target = clamp(target + delta);
+        }
+
+        void update(float delta) {
+            long now = System.nanoTime();
+            double dt = (now - this.lastUpdateNanos) / 1_000_000_000.0;
+            this.lastUpdateNanos = now;
+            if (dt <= 0.0) {
+                return;
+            }
+
+            double diff = target - value;
+            if (Math.abs(diff) < SNAP_EPSILON) {
+                value = target;
+                return;
+            }
+
+            double alpha = 1.0 - Math.exp(-SMOOTH_SPEED * Math.min(dt, 0.05));
+            value += diff * alpha;
+            value = clamp(value);
+        }
+
+        int currentInt() {
+            return (int) Math.round(value);
+        }
+
+        boolean hasScroll() {
+            return max > 0;
+        }
+
+        private double clamp(double v) {
+            if (v < 0) {
+                return 0;
+            }
+            if (v > max) {
+                return max;
+            }
+            return v;
+        }
+    }
+
+    private record ConfigCtx(ResourceLocation id, ConfigUnit<Object> unit, ConfigCodec<Object> codec,
+                             List<ConfigValueMeta> fields, JsonObject working, JsonObject defaults) {
+    }
+
+    /**
+     * Returns the bottom y coordinate of the scrollable content area.
+     *
+     * @return the content bottom
+     */
+    public int getContentBottom() {
+        return this.height - 32;
+    }
+
+    /**
+     * Sets the tooltip to be rendered at the given position in the next frame.
+     *
+     * @param tooltip the tooltip component
+     * @param mouseX  the mouse x position
+     * @param mouseY  the mouse y position
+     */
+    public void setHoverTooltip(Component tooltip, int mouseX, int mouseY) {
+        this.lastTooltip = tooltip;
+        this.mouseXLast = mouseX;
+        this.mouseYLast = mouseY;
     }
 
     @Override
@@ -508,6 +680,15 @@ public class ConfigScreen extends Screen {
                             }
                         }
                         yIt += le.getItemHeight();
+                    } else if (entry instanceof PathGroupEntry ge) {
+                        if (mouseY >= yIt && mouseY <= yIt + headerH) {
+                            if (ge.toggleIfHit(mouseX, mouseY)) {
+                                setGroupExpanded(ge.stateKey(), ge.expanded());
+                                init();
+                                return true;
+                            }
+                        }
+                        yIt += ge.getItemHeight();
                     } else {
                         yIt += entry.getItemHeight();
                     }
@@ -517,99 +698,133 @@ public class ConfigScreen extends Screen {
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
-    @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        int sidebar = sidebarWidth();
-        int sliderX = sidebar - 14;
-
-        if (mouseX >= 0 && mouseX <= sliderX && mouseY >= 0 && mouseY <= this.height && delta != 0.0) {
-            int itemHeight = this.font.lineHeight + 3;
-            refScroller.offset(-delta * itemHeight);
-            return true;
+    private Map<ResourceLocation, JsonObject> snapshotWorkingByConfig() {
+        Map<ResourceLocation, JsonObject> snapshot = new HashMap<>();
+        for (ConfigCtx ctx : contexts) {
+            snapshot.put(ctx.id(), ctx.working().deepCopy());
         }
-
-        if (listWidget != null && mouseX >= sliderX && mouseX <= this.width &&
-                mouseY >= contentTop && mouseY <= this.height - 32 && delta != 0.0) {
-
-            listWidget.offset(-delta * 12);
-            return true;
-        }
-
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return snapshot;
     }
 
-    private boolean needsRefreshFromUnits() {
-        if (dirty) return false;
-        try {
-            for (ConfigCtx ctx : contexts) {
-                var fresh = ConfigGuiUtil.encodeToJsonObject(ctx.codec.codec(), ctx.unit.get());
-                if (!Objects.equals(fresh.toString(), ctx.working.toString())) {
-                    return true;
+    private void appendNestedFieldEntries(
+            ResourceLocation configId,
+            List<AbstractConfigEntry<?>> items,
+            Map<AbstractConfigEntry<?>, JsonObject> defaultsMap,
+            List<ConfigValueMeta> fields,
+            JsonObject workingJson,
+            JsonObject defaultsJson,
+            String searchLower,
+            int labelWidth,
+            int fieldControlWidth,
+            int listControlWidth
+    ) {
+        List<ConfigValueMeta> visible = fields.stream()
+                .filter(meta -> !meta.hidden())
+                .filter(meta -> {
+                    if (searchLower.isEmpty()) {
+                        return true;
+                    }
+                    String display = meta.translationKey()
+                            .map(k -> Component.translatable(k).getString())
+                            .orElse(meta.key());
+                    return display.toLowerCase(Locale.ROOT).contains(searchLower);
+                })
+                .sorted(Comparator.comparing(ConfigValueMeta::key))
+                .toList();
+
+        Set<String> emittedGroups = new HashSet<>();
+        Set<String> startedGroups = new HashSet<>();
+        for (int idx = 0; idx < visible.size(); idx++) {
+            ConfigValueMeta meta = visible.get(idx);
+            String[] parts = meta.key().split("\\.");
+            boolean ancestorsExpanded = true;
+            StringBuilder pathBuilder = new StringBuilder();
+            for (int depth = 0; depth < parts.length - 1; depth++) {
+                if (depth > 0) {
+                    pathBuilder.append('.');
+                }
+                pathBuilder.append(parts[depth]);
+                String groupPath = pathBuilder.toString();
+                if (emittedGroups.add(groupPath)) {
+                    String stateKey = idToGroupStateKey(configId, groupPath);
+                    boolean expanded = isGroupExpanded(stateKey);
+                    String translationKey = "config." + configId.getNamespace() + "." + configId.getPath() + "." + groupPath;
+                    items.add(new PathGroupEntry(stateKey, groupPath, Component.translatable(translationKey), depth, expanded));
+                }
+                ancestorsExpanded = ancestorsExpanded && isGroupExpanded(idToGroupStateKey(configId, groupPath));
+                if (!ancestorsExpanded) {
+                    break;
                 }
             }
-        } catch (Throwable ignored) {
-        }
-        return false;
-    }
-
-    private record FieldRef(ConfigValueMeta meta, Component label, int topY) {
-    }
-
-    private static final class Scroller {
-        private double value;
-        private double target;
-        private int max;
-
-        void setMaxScroll(int max) {
-            this.max = Math.max(0, max);
-            if (this.target > this.max) {
-                this.target = this.max;
+            if (!ancestorsExpanded) {
+                continue;
             }
-            if (this.value > this.max) {
-                this.value = this.max;
-            }
-            if (this.target < 0) {
-                this.target = 0;
-            }
-            if (this.value < 0) {
-                this.value = 0;
-            }
-        }
 
-        void offset(double delta) {
-            target = clamp(target + delta);
-        }
-
-        void update(float delta) {
-            double diff = target - value;
-            if (Math.abs(diff) < 0.5) {
-                value = target;
-                return;
+            if (parts.length > 1) {
+                String parentPath = parentPathOf(meta.key());
+                int parentDepth = depthOfPath(parentPath);
+                if (parentPath != null && startedGroups.add(parentPath)) {
+                    addDivider(items, parentDepth);
+                    items.add(new EmptyEntry(NESTED_INNER_GAP));
+                }
             }
-            double speed = Math.min(1.0, delta * 15.0);
-            value += diff * speed;
-        }
 
-        int currentInt() {
-            return (int) Math.round(value);
-        }
+            addFieldEntry(meta, items, defaultsMap, workingJson, defaultsJson, labelWidth, fieldControlWidth, listControlWidth);
 
-        boolean hasScroll() {
-            return max > 0;
-        }
-
-        private double clamp(double v) {
-            if (v < 0) {
-                return 0;
+            if (parts.length > 1) {
+                String parentPath = parentPathOf(meta.key());
+                String nextParentPath = idx + 1 < visible.size() ? parentPathOf(visible.get(idx + 1).key()) : null;
+                if (!Objects.equals(parentPath, nextParentPath)) {
+                    int parentDepth = depthOfPath(parentPath);
+                    items.add(new EmptyEntry(NESTED_INNER_GAP));
+                    addDivider(items, parentDepth);
+                    items.add(new EmptyEntry(NESTED_OUTER_GAP));
+                }
             }
-            if (v > max) {
-                return max;
-            }
-            return v;
         }
     }
 
-    private record ConfigCtx(ResourceLocation id, ConfigUnit<Object> unit, ConfigCodec<Object> codec,
-                             List<ConfigValueMeta> fields, JsonObject working, JsonObject defaults) {
+    private void addFieldEntry(
+            ConfigValueMeta meta,
+            List<AbstractConfigEntry<?>> items,
+            Map<AbstractConfigEntry<?>, JsonObject> defaultsMap,
+            JsonObject workingJson,
+            JsonObject defaultsJson,
+            int labelWidth,
+            int fieldControlWidth,
+            int listControlWidth
+    ) {
+        var label = meta.translationKey().map(Component::translatable).orElse(Component.literal(meta.key()));
+        var value = ConfigGuiUtil.getPath(workingJson, meta.key());
+        if (value != null && value.isJsonArray()) {
+            ListEntry listEntry = new ListEntry(meta.key(), label, workingJson, listControlWidth, rowHeight,
+                    meta.tooltip().map(Component::translatable).orElse(null));
+            items.add(listEntry);
+            defaultsMap.put(listEntry, defaultsJson);
+            return;
+        }
+        if (value != null && value.isJsonObject()) {
+            MapEntry mapEntry = new MapEntry(meta.key(), label, workingJson, listControlWidth, rowHeight,
+                    meta.tooltip().map(Component::translatable).orElse(null));
+            items.add(mapEntry);
+            defaultsMap.put(mapEntry, defaultsJson);
+            return;
+        }
+        FieldEntry fieldEntry = new FieldEntry(meta, workingJson, labelWidth, fieldControlWidth, rowHeight);
+        items.add(fieldEntry);
+        defaultsMap.put(fieldEntry, defaultsJson);
+    }
+
+    private boolean isGroupExpanded(String stateKey) {
+        return groupExpanded.getOrDefault(stateKey, true);
+    }
+
+    private void setGroupExpanded(String key, boolean expanded) {
+        groupExpanded.put(key, expanded);
+    }
+
+    private void addDivider(List<AbstractConfigEntry<?>> items, int depth) {
+        int inset = DIVIDER_BASE_INSET + Math.max(0, depth) * DIVIDER_NESTED_STEP;
+        items.add(new DividerEntry(DIVIDER_HEIGHT, DIVIDER_COLOR, inset));
     }
 }

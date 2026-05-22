@@ -2,6 +2,12 @@ package cc.sighs.oelib.config.ui.scissor;
 
 import org.apache.commons.lang3.builder.ReflectionToStringBuilder;
 
+/**
+ * A double-precision dimension (width, height) used for sub-pixel-accurate
+ * UI layout calculations.
+ *
+ * <p>Adapted from Cloth Config's geometry primitives.
+ */
 public class FloatingDimension implements Cloneable {
     public double width;
     public double height;

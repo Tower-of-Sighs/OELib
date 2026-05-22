@@ -8,10 +8,7 @@ import cc.sighs.oelib.config.serialization.TomlTreeAdapter;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import com.electronwill.nightconfig.toml.TomlFormat;
 import com.google.gson.*;
-import com.mojang.serialization.Codec;
-import com.mojang.serialization.DataResult;
-import com.mojang.serialization.Dynamic;
-import com.mojang.serialization.JsonOps;
+import com.mojang.serialization.*;
 import de.marhali.json5.Json5;
 
 import java.io.StringReader;
@@ -22,6 +19,14 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Central serialization pipeline for encoding and decoding configuration
+ * values across JSON, JSON5, and TOML formats.
+ *
+ * <p>Each format has a dedicated {@link ConfigEncoder} that handles the
+ * specifics of encoding and comment injection. The parsing path uses
+ * Mojang's {@link Codec} and {@link DynamicOps} abstractions.
+ */
 public final class ConfigSerializationUtil {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -105,6 +110,12 @@ public final class ConfigSerializationUtil {
     private ConfigSerializationUtil() {
     }
 
+    /**
+     * Returns the encoder for the given storage format.
+     *
+     * @param format the format
+     * @return the encoder
+     */
     public static ConfigEncoder getEncoder(ConfigStorageFormat format) {
         return switch (format) {
             case JSON -> JSON_ENCODER;
@@ -113,6 +124,15 @@ public final class ConfigSerializationUtil {
         };
     }
 
+    /**
+     * Parses a payload string into a value using the given codec.
+     *
+     * @param payload the encoded string
+     * @param format  the format of the payload
+     * @param codec   the codec to parse into
+     * @param <T>     the target type
+     * @return a {@link DataResult} containing the parsed value or an error
+     */
     public static <T> DataResult<T> parse(String payload, ConfigStorageFormat format, Codec<T> codec) {
         try {
             return switch (format) {
@@ -140,6 +160,13 @@ public final class ConfigSerializationUtil {
         }
     }
 
+    /**
+     * Parses a payload string into a {@link Dynamic} without applying a codec.
+     *
+     * @param payload the encoded string
+     * @param format  the format of the payload
+     * @return a dynamic representing the parsed content
+     */
     public static Dynamic<?> parseToDynamic(String payload, ConfigStorageFormat format) {
         try {
             return switch (format) {
@@ -167,10 +194,31 @@ public final class ConfigSerializationUtil {
         }
     }
 
+    /**
+     * Encodes a value to a string in the given format, without a version stamp.
+     *
+     * @param value  the value to encode
+     * @param format the target format
+     * @param codec  the codec for the value type
+     * @param fields field metadata for comment injection
+     * @param <T>    the value type
+     * @return the encoded string, or {@link Optional#empty()} on failure
+     */
     public static <T> Optional<String> encodeToString(T value, ConfigStorageFormat format, Codec<T> codec, List<ConfigValueMeta> fields) {
         return getEncoder(format).encode(value, codec, fields, -1);
     }
 
+    /**
+     * Encodes a value to a string with a {@code __cfg_version} stamp.
+     *
+     * @param value   the value to encode
+     * @param version the version to stamp, or negative to omit
+     * @param format  the target format
+     * @param codec   the codec for the value type
+     * @param fields  field metadata for comment injection
+     * @param <T>     the value type
+     * @return the encoded string, or {@link Optional#empty()} on failure
+     */
     public static <T> Optional<String> encodeToStringWithVersion(T value, int version, ConfigStorageFormat format, Codec<T> codec, List<ConfigValueMeta> fields) {
         return getEncoder(format).encode(value, codec, fields, version);
     }
@@ -186,6 +234,17 @@ public final class ConfigSerializationUtil {
         return obj;
     }
 
+    /**
+     * Loads a value from a file, returning the default value if the file
+     * does not exist or fails to parse.
+     *
+     * @param path         the file path
+     * @param format       the storage format
+     * @param codec        the codec for the value type
+     * @param defaultValue the fallback value
+     * @param <T>          the value type
+     * @return the parsed value, or the default
+     */
     public static <T> Optional<T> loadFromFile(Path path, ConfigStorageFormat format, Codec<T> codec, T defaultValue) {
         try {
             if (!Files.exists(path)) {
@@ -204,6 +263,17 @@ public final class ConfigSerializationUtil {
         }
     }
 
+    /**
+     * Saves a value to a file, creating parent directories as needed.
+     *
+     * @param path   the file path
+     * @param value  the value to save
+     * @param format the storage format
+     * @param codec  the codec for the value type
+     * @param fields field metadata for comment injection
+     * @param <T>    the value type
+     * @return {@code true} if the save succeeded
+     */
     public static <T> boolean saveToFile(Path path, T value, ConfigStorageFormat format, Codec<T> codec, List<ConfigValueMeta> fields) {
         try {
             var parent = path.getParent();
@@ -314,7 +384,20 @@ public final class ConfigSerializationUtil {
         OELib.LOGGER.error("Failed to encode config to {}: {}", format, message);
     }
 
+    /**
+     * Strategy interface for encoding a configuration value to a string.
+     */
     public interface ConfigEncoder {
+        /**
+         * Encodes a configuration value to a string.
+         *
+         * @param value   the value to encode
+         * @param codec   the codec for the value type
+         * @param fields  field metadata for comment injection
+         * @param version the datafix version to stamp, or negative to omit
+         * @param <T>     the value type
+         * @return the encoded string, or {@link Optional#empty()} on failure
+         */
         <T> Optional<String> encode(T value, Codec<T> codec, List<ConfigValueMeta> fields, int version);
     }
 

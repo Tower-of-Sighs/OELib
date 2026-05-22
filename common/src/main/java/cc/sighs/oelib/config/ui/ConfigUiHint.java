@@ -1,73 +1,138 @@
 package cc.sighs.oelib.config.ui;
 
+import com.google.gson.JsonObject;
+import net.minecraft.resources.ResourceLocation;
+
 import java.util.List;
 import java.util.Objects;
 
 /**
- * UI hint attached to a field for auto-generated configuration screens.
- * <p>
- * Encodes control type and parameters such as slider ranges or text inputs.
- * </p>
+ * A sealed interface describing how a configuration field is rendered in
+ * the auto-generated config screen.
+ *
+ * <p>Each variant maps to a widget type:
+ * <ul>
+ *   <li>{@link Slider} — a numeric slider with configurable range and step</li>
+ *   <li>{@link Text} — a text input field</li>
+ *   <li>{@link Toggle} — a checkbox for boolean values</li>
+ *   <li>{@link Dropdown} — a cycle button with predefined options</li>
+ *   <li>{@link Group} — a visual grouping element</li>
+ *   <li>{@link Custom} — a custom widget registered via
+ *       {@link ConfigWidgetRegistry}</li>
+ * </ul>
+ *
+ * <p>Hints are created through the static factory methods and attached to
+ * fields via {@link cc.sighs.oelib.config.model.ConfigValueMeta.Builder#uiHint(ConfigUiHint)
+ * ConfigValueMeta.Builder.uiHint}.
  */
-public class ConfigUiHint {
-    private final ConfigUiType type;
-    private final Double min;
-    private final Double max;
-    private final Double step;
-    private final List<String> options;
-    private final String tooltip;
+public sealed interface ConfigUiHint permits ConfigUiHint.Slider, ConfigUiHint.Text, ConfigUiHint.Toggle,
+        ConfigUiHint.Dropdown, ConfigUiHint.Group, ConfigUiHint.Custom {
 
-    private ConfigUiHint(ConfigUiType type, Double min, Double max, Double step, List<String> options, String tooltip) {
-        this.type = type;
-        this.min = min;
-        this.max = max;
-        this.step = step;
-        this.options = options;
-        this.tooltip = tooltip;
+    /**
+     * Creates a slider hint for a numeric range.
+     *
+     * @param min  the minimum value (inclusive)
+     * @param max  the maximum value (inclusive)
+     * @param step the step increment
+     * @return a slider hint
+     */
+    static Slider slider(double min, double max, double step) {
+        return new Slider(min, max, step);
     }
 
-    public static ConfigUiHint slider(double min, double max, double step) {
-        return new ConfigUiHint(ConfigUiType.SLIDER, min, max, step, null, null);
+    /**
+     * Creates a text input hint.
+     *
+     * @return a text hint
+     */
+    static Text text() {
+        return new Text();
     }
 
-    public static ConfigUiHint text() {
-        return new ConfigUiHint(ConfigUiType.TEXT, null, null, null, null, null);
+    /**
+     * Creates a toggle (checkbox) hint for boolean fields.
+     *
+     * @return a toggle hint
+     */
+    static Toggle toggle() {
+        return new Toggle();
     }
 
-    public static ConfigUiHint toggle() {
-        return new ConfigUiHint(ConfigUiType.TOGGLE, null, null, null, null, null);
-    }
-
-    public static ConfigUiHint dropdown(List<String> options) {
+    /**
+     * Creates a dropdown hint with the given options.
+     *
+     * @param options the list of option strings
+     * @return a dropdown hint
+     * @throws NullPointerException if {@code options} is {@code null}
+     */
+    static Dropdown dropdown(List<String> options) {
         Objects.requireNonNull(options);
-        return new ConfigUiHint(ConfigUiType.DROPDOWN, null, null, null, options, null);
+        return new Dropdown(List.copyOf(options));
     }
 
-    public ConfigUiHint withTooltip(String tooltip) {
-        return new ConfigUiHint(this.type, this.min, this.max, this.step, this.options, tooltip);
+    /**
+     * Creates a visual group hint.
+     *
+     * @return a group hint
+     */
+    static Group group() {
+        return new Group();
     }
 
-    public ConfigUiType type() {
-        return type;
+    /**
+     * Creates a custom widget hint referencing a registered widget factory.
+     *
+     * @param widgetId the id of the widget registered in
+     *                 {@link ConfigWidgetRegistry}
+     * @param args     optional arguments for the widget, or {@code null}
+     * @return a custom hint
+     * @throws NullPointerException if {@code widgetId} is {@code null}
+     */
+    static Custom custom(ResourceLocation widgetId, JsonObject args) {
+        Objects.requireNonNull(widgetId);
+        return new Custom(widgetId, args == null ? new JsonObject() : args.deepCopy());
     }
 
-    public Double min() {
-        return min;
+    /**
+     * A slider with a defined range and step.
+     */
+    record Slider(double min, double max, double step) implements ConfigUiHint {
     }
 
-    public Double max() {
-        return max;
+    /**
+     * A plain text input field.
+     */
+    record Text() implements ConfigUiHint {
     }
 
-    public Double step() {
-        return step;
+    /**
+     * A toggle checkbox for boolean values.
+     */
+    record Toggle() implements ConfigUiHint {
     }
 
-    public List<String> options() {
-        return options;
+    /**
+     * A dropdown selector with a fixed set of options.
+     */
+    record Dropdown(List<String> options) implements ConfigUiHint {
+        public Dropdown {
+            options = List.copyOf(options);
+        }
     }
 
-    public String tooltip() {
-        return tooltip;
+    /**
+     * A visual grouping marker.
+     */
+    record Group() implements ConfigUiHint {
+    }
+
+    /**
+     * A reference to a custom widget registered via
+     * {@link ConfigWidgetRegistry#register(ResourceLocation, ConfigWidgetRegistry.CustomWidgetFactory)}.
+     */
+    record Custom(ResourceLocation widgetId, JsonObject args) implements ConfigUiHint {
+        public Custom {
+            args = args == null ? new JsonObject() : args.deepCopy();
+        }
     }
 }

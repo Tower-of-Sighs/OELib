@@ -34,11 +34,15 @@ dependencies {
     implementation("com.electronwill.night-config:toml:3.8.3")
     implementation("de.marhali:json5-java:3.0.0")
     implementation("org.mvel:mvel2:2.5.0.Final")
+    implementation("io.smallrye.classfile:jdk-classfile-backport:26")
+
     annotationProcessor(project(":common"))
+
     include("cn.6tail:lunar:1.7.3")
     include("com.electronwill.night-config:core:3.8.3")
     include("com.electronwill.night-config:toml:3.8.3")
     include("de.marhali:json5-java:3.0.0")
+    include("io.smallrye.classfile:jdk-classfile-backport:26")
 }
 
 loom {

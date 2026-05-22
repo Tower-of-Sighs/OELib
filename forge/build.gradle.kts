@@ -68,13 +68,19 @@ dependencies {
 //    modImplementation("mezz.jei:jei-${mcVersion}-forge:${jeiVer}")
 
     implementation("cn.6tail:lunar:1.7.3")
-    jarJar("cn.6tail:lunar:1.7.3")
     implementation("de.marhali:json5-java:3.0.0")
-    jarJar("de.marhali:json5-java:3.0.0")
     implementation("org.mvel:mvel2:2.5.0.Final")
+    implementation("io.smallrye.classfile:jdk-classfile-backport:26")
+
+    jarJar("cn.6tail:lunar:1.7.3")
+    jarJar("de.marhali:json5-java:3.0.0")
+    jarJar("io.smallrye.classfile:jdk-classfile-backport:26")
+
     compileOnly("org.jetbrains:annotations:24.1.0")
+
     "additionalRuntimeClasspath"("cn.6tail:lunar:1.7.3")
     "additionalRuntimeClasspath"("de.marhali:json5-java:3.0.0")
+    "additionalRuntimeClasspath"("io.smallrye.classfile:jdk-classfile-backport:26")
 }
 
 tasks.named<Jar>("jar") {

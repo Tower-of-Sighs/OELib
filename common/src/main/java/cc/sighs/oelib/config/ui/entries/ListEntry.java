@@ -18,6 +18,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * A collapsible entry for editing a JSON array field.
+ *
+ * <p>When collapsed, only the field label and an expand arrow are visible.
+ * When expanded, each element is rendered as an editable text box (or
+ * checkbox for booleans), with up/down/delete buttons for reordering and
+ * removal, and an add button to append new elements.
+ */
 public class ListEntry extends AbstractConfigEntry<JsonArray> {
     private final String keyPath;
     private final JsonObject working;
@@ -39,6 +47,16 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
     private boolean expanded = false;
     private int expX, expY, expW, expH;
 
+    /**
+     * Constructs a list entry.
+     *
+     * @param keyPath      the dotted path to the array field in the working JSON
+     * @param label        the display label
+     * @param working      the working JSON object
+     * @param controlWidth the width of the edit controls
+     * @param rowHeight    the row height
+     * @param tooltip      the tooltip component, or {@code null}
+     */
     public ListEntry(String keyPath, Component label, JsonObject working, int controlWidth, int rowHeight, Component tooltip) {
         this.keyPath = keyPath;
         this.label = label;
@@ -55,6 +73,14 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
         return expanded ? rowHeight * Math.max(1, array.size() + 1) : rowHeight;
     }
 
+    /**
+     * Attaches this entry to a screen, creating widgets.
+     *
+     * @param screen   the parent screen
+     * @param x        the x position
+     * @param y        the y position
+     * @param defaults the default values JSON object
+     */
     public void attach(Screen screen, int x, int y, JsonObject defaults) {
         if (created) return;
         this.screen = screen;
@@ -219,6 +245,13 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
         resetButton.active = defaultArray != null && !array.equals(defaultArray);
     }
 
+    /**
+     * Toggles the expanded state if the given coordinates hit the arrow icon.
+     *
+     * @param mx the mouse x
+     * @param my the mouse y
+     * @return {@code true} if toggled
+     */
     public boolean toggleIfHit(double mx, double my) {
         if (mx >= expX && mx <= expX + expW && my >= expY && my <= expY + expH) {
             expanded = !expanded;
@@ -255,14 +288,19 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
 
         int rowY = y + rowHeight;
         int vx = x + 40;
+        int topBound = 0;
+        int bottomBound = Minecraft.getInstance().screen.height - 32;
+        if (screen instanceof ConfigScreen cs) {
+            topBound = cs.getContentTop();
+            bottomBound = cs.getContentBottom();
+        }
         for (int i = 0; i < valueBoxes.size(); i++) {
             var vb = valueBoxes.get(i);
             var cb = toggleBoxes.get(i);
             var del = delButtons.get(i);
             var up = upButtons.get(i);
             var down = downButtons.get(i);
-            int bottomBarTop = Minecraft.getInstance().screen.height - 32;
-            boolean visible = expanded && rowY <= bottomBarTop - 20;
+            boolean visible = expanded && rowY + rowHeight > topBound && rowY <= bottomBound - 20;
             vb.visible = visible && cb == null;
             if (cb != null) cb.visible = visible;
             del.visible = visible;
@@ -306,28 +344,5 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
     @Override
     public Optional<JsonArray> getDefaultValue() {
         return Optional.of(array);
-    }
-
-    @Override
-    public void dispose() {
-        if (screen != null) {
-            clearWidgets();
-            if (addBtn != null) {
-                addBtn.visible = false;
-                screen.children().remove(addBtn);
-            }
-            if (resetButton != null) {
-                resetButton.visible = false;
-                screen.children().remove(resetButton);
-            }
-        }
-        valueBoxes.clear();
-        toggleBoxes.clear();
-        delButtons.clear();
-        upButtons.clear();
-        downButtons.clear();
-        addBtn = null;
-        resetButton = null;
-        created = false;
     }
 }

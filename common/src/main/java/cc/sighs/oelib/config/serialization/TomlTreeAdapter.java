@@ -7,10 +7,24 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Converts between the NightConfig {@link CommentedConfig} tree and the
+ * generic {@code Map<String, Object>} object tree used by {@link TomlOps}.
+ *
+ * <p>This adapter also injects TOML comments from {@link ConfigValueMeta}
+ * entries during serialization, using the fully-qualified dotted key to
+ * match metadata to tree nodes.
+ */
 public final class TomlTreeAdapter {
     private TomlTreeAdapter() {
     }
 
+    /**
+     * Reads a NightConfig tree into a generic map-based object tree.
+     *
+     * @param config the NightConfig root
+     * @return a generic map tree suitable for {@link TomlOps}
+     */
     public static Object readTree(CommentedConfig config) {
         Map<String, Object> result = new LinkedHashMap<>();
         for (CommentedConfig.Entry entry : config.entrySet()) {
@@ -25,6 +39,14 @@ public final class TomlTreeAdapter {
         return result;
     }
 
+    /**
+     * Writes a generic object tree into a NightConfig tree, attaching
+     * comments from the given field metadata.
+     *
+     * @param config the NightConfig root to populate
+     * @param tree   the generic object tree
+     * @param fields field metadata used to inject comments
+     */
     public static void writeTree(CommentedConfig config, Object tree, Iterable<ConfigValueMeta> fields) {
         if (tree instanceof Map<?, ?> map) {
             writeMap(config, map, "", fields);

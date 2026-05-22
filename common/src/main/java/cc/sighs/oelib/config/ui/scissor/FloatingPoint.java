@@ -2,6 +2,11 @@ package cc.sighs.oelib.config.ui.scissor;
 
 import org.apache.commons.lang3.builder.ReflectionToStringBuilder;
 
+/**
+ * A double-precision 2D point used for sub-pixel-accurate UI positioning.
+ *
+ * <p>Adapted from Cloth Config's geometry primitives.
+ */
 public class FloatingPoint implements Cloneable {
     public double x;
     public double y;

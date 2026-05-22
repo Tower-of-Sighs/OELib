@@ -4,12 +4,12 @@ import cc.sighs.oelib.OELib;
 import cc.sighs.oelib.bless.render.ChongYangOverlay;
 import cc.sighs.oelib.bless.render.NewYearOverlay;
 import cc.sighs.oelib.bless.render.ValentineOverlay;
-import cc.sighs.oelib.config.ConfigAccess;
 import cc.sighs.oelib.config.ConfigManager;
-import cc.sighs.oelib.config.ConfigRecordCodecBuilder;
+import cc.sighs.oelib.config.ConfigSchema;
 import cc.sighs.oelib.config.ConfigUnit;
 import cc.sighs.oelib.config.field.ConfigField;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
+import cc.sighs.oelib.config.optics.ConfigLens;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.ResourceLocation;
@@ -24,9 +24,14 @@ public record FestivalToastConfig(
 ) {
     private static final String FILE_NAME = "oelib_festivals";
 
-    public static final ConfigUnit<FestivalToastConfig> UNIT = ConfigRecordCodecBuilder.createClient(
+    public static final ConfigSchema.Definition<FestivalToastConfig> DEFINITION = ConfigSchema.defineClient(
             new ResourceLocation(OELib.MODID, "festival_toast"),
-            instance -> instance.group(
+            FestivalToastConfig.class,
+            meta -> meta
+                    .directory(OELib.MODID)
+                    .fileName(FILE_NAME)
+                    .format(ConfigStorageFormat.TOML),
+            schema -> schema.group(
                     ConfigField.bool("enabled")
                             .defaultValue(true)
                             .tooltip()
@@ -40,14 +45,11 @@ public record FestivalToastConfig(
                     ConfigField.map("festivals", Codec.STRING, FestivalEntry.CODEC)
                             .defaultValue(defaultFestivals())
                             .forGetter(FestivalToastConfig::festivals)
-            ).apply(instance, FestivalToastConfig::new),
-            meta -> meta
-                    .directory(OELib.MODID)
-                    .fileName(FILE_NAME)
-                    .format(ConfigStorageFormat.TOML)
+            ).apply(schema, FestivalToastConfig::new)
     );
-
-    public static final ConfigAccess<FestivalToastConfig> ACCESS = new ConfigAccess<>(UNIT);
+    public static final ConfigUnit<FestivalToastConfig> UNIT = DEFINITION.unit();
+    public static final ConfigLens<FestivalToastConfig, Map<String, FestivalEntry>> FESTIVALS_LENS =
+            DEFINITION.lens(FestivalToastConfig::festivals);
 
     public static FestivalToastConfig get() {
         return UNIT.get();

@@ -18,6 +18,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * A collapsible entry for editing a JSON object (map) field.
+ *
+ * <p>When collapsed, only the field label and an expand arrow are visible.
+ * When expanded, each key-value pair is rendered as two text boxes (or a
+ * key box and a checkbox for boolean values), with delete buttons for
+ * removal and an add button to insert new pairs.
+ */
 public class MapEntry extends AbstractConfigEntry<JsonObject> {
     private final String keyPath;
     private final JsonObject working;
@@ -39,6 +47,16 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
     private JsonObject defaultMap;
     private int headerY;
 
+    /**
+     * Constructs a map entry.
+     *
+     * @param keyPath      the dotted path to the object field in the working JSON
+     * @param label        the display label
+     * @param working      the working JSON object
+     * @param controlWidth the width of the edit controls
+     * @param rowHeight    the row height
+     * @param tooltip      the tooltip component, or {@code null}
+     */
     public MapEntry(String keyPath, Component label, JsonObject working, int controlWidth, int rowHeight, Component tooltip) {
         this.keyPath = keyPath;
         this.label = label;
@@ -55,6 +73,14 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
         return expanded ? rowHeight * Math.max(1, mapObj.size() + 1) : rowHeight;
     }
 
+    /**
+     * Attaches this entry to a screen, creating widgets.
+     *
+     * @param screen   the parent screen
+     * @param x        the x position
+     * @param y        the y position
+     * @param defaults the default values JSON object
+     */
     public void attach(Screen screen, int x, int y, JsonObject defaults) {
         if (created) return;
         this.screen = screen;
@@ -200,6 +226,13 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
         resetButton.active = defaultMap != null && !mapObj.equals(defaultMap);
     }
 
+    /**
+     * Toggles the expanded state if the given coordinates hit the arrow icon.
+     *
+     * @param mx the mouse x
+     * @param my the mouse y
+     * @return {@code true} if toggled
+     */
     public boolean toggleIfHit(double mx, double my) {
         if (mx >= expX && mx <= expX + expW && my >= expY && my <= expY + expH) {
             expanded = !expanded;
@@ -242,13 +275,18 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
         int margin = 40;
         int contentLeft = x + margin;
         int contentRight = resetX - margin;
+        int topBound = 0;
+        int bottomBound = Minecraft.getInstance().screen.height - 32;
+        if (screen instanceof ConfigScreen cs) {
+            topBound = cs.getContentTop();
+            bottomBound = cs.getContentBottom();
+        }
         for (int i = 0; i < keyBoxes.size(); i++) {
             EditBox kb = keyBoxes.get(i);
             EditBox vb = valBoxes.get(i);
             Checkbox cb = valToggles.get(i);
             Button del = delButtons.get(i);
-            int bottomBarTop = Minecraft.getInstance().screen.height - 32;
-            boolean visible = expanded && rowY <= bottomBarTop - 20;
+            boolean visible = expanded && rowY + rowHeight > topBound && rowY <= bottomBound - 20;
             kb.visible = visible;
             if (vb != null) vb.visible = visible && cb == null;
             if (cb != null) cb.visible = visible;
@@ -289,27 +327,5 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
     @Override
     public Optional<JsonObject> getDefaultValue() {
         return Optional.of(mapObj);
-    }
-
-    @Override
-    public void dispose() {
-        if (screen != null) {
-            clearWidgets();
-            if (addBtn != null) {
-                addBtn.visible = false;
-                screen.children().remove(addBtn);
-            }
-            if (resetButton != null) {
-                resetButton.visible = false;
-                screen.children().remove(resetButton);
-            }
-        }
-        keyBoxes.clear();
-        valBoxes.clear();
-        valToggles.clear();
-        delButtons.clear();
-        addBtn = null;
-        resetButton = null;
-        created = false;
     }
 }

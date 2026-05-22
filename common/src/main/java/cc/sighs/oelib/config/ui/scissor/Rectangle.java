@@ -2,6 +2,15 @@ package cc.sighs.oelib.config.ui.scissor;
 
 import org.apache.commons.lang3.builder.ReflectionToStringBuilder;
 
+/**
+ * An integer-based rectangle used as a scissor region in OpenGL rendering.
+ *
+ * <p>Provides standard geometric operations such as intersection, union,
+ * containment testing, and bounds manipulation. The scissor system uses
+ * rectangles to define visible clipping areas on screen.
+ *
+ * <p>Adapted from Cloth Config's geometry primitives.
+ */
 public class Rectangle implements Cloneable {
     public int x;
     public int y;
