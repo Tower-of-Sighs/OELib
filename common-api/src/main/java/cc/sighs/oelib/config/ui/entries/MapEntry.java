@@ -2,6 +2,7 @@ package cc.sighs.oelib.config.ui.entries;
 
 import cc.sighs.oelib.config.ui.screen.ConfigScreen;
 import cc.sighs.oelib.config.util.ConfigGuiUtil;
+import cc.sighs.oelib.mixin.access.ScreenInvoker;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
@@ -73,7 +74,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
             updateResetButtonState();
             if (screen instanceof ConfigScreen cs) cs.markDirty();
         }).bounds(addX, y, 22, 20).build();
-        screen.addRenderableWidget(addBtn);
+        ((ScreenInvoker) screen).invokeAddRenderableWidget(addBtn);
 
         resetButton = Button.builder(Component.translatable("config.oelib.reset"), b -> {
             mapObj.entrySet().clear();
@@ -85,7 +86,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
             updateResetButtonState();
             if (screen instanceof ConfigScreen cs) cs.markDirty();
         }).bounds(resetX, y, 72, 20).build();
-        screen.addRenderableWidget(resetButton);
+        ((ScreenInvoker) screen).invokeAddRenderableWidget(resetButton);
 
         rebuildRows(x, y, resetX, deleteX);
         updateResetButtonState();
@@ -113,10 +114,10 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
             int half = width / 2 - 6;
 
             var keyBox = ConfigGuiUtil.createEditBox(e.getKey(), contentLeft, rowY, half);
-            screen.addRenderableWidget(keyBox);
+            ((ScreenInvoker) screen).invokeAddRenderableWidget(keyBox);
 
             EditBox valBox = ConfigGuiUtil.createEditBox(ConfigGuiUtil.jsonToString(v), contentLeft + half + 12, rowY, half);
-            screen.addRenderableWidget(valBox);
+            ((ScreenInvoker) screen).invokeAddRenderableWidget(valBox);
 
             Checkbox valToggle = null;
             if (v != null && v.isJsonPrimitive() && v.getAsJsonPrimitive().isBoolean()) {
@@ -131,7 +132,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
                         if (screen instanceof ConfigScreen cs) cs.markDirty();
                     }
                 };
-                screen.addRenderableWidget(valToggle);
+                ((ScreenInvoker) screen).invokeAddRenderableWidget(valToggle);
             }
 
             var del = Button.builder(Component.literal("x"), b -> {
@@ -141,7 +142,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
                 updateResetButtonState();
                 if (screen instanceof ConfigScreen cs) cs.markDirty();
             }).bounds(deleteX, rowY, 20, 20).build();
-            screen.addRenderableWidget(del);
+            ((ScreenInvoker) screen).invokeAddRenderableWidget(del);
 
             keyBox.setResponder(newKey -> {
                 if (newKey.equals(e.getKey())) return;

@@ -3,15 +3,12 @@ package cc.sighs.oelib.registry.extra;
 import cc.sighs.oelib.registry.RegistrationDispatcher;
 import cc.sighs.oelib.registry.action.RenderTypeBlocksAction;
 import cc.sighs.oelib.registry.action.RenderTypeFluidsAction;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.material.Fluid;
 
 import java.util.function.Supplier;
 
-@Environment(EnvType.CLIENT)
 public final class RenderTypeRegister {
     private RenderTypeRegister() {
     }

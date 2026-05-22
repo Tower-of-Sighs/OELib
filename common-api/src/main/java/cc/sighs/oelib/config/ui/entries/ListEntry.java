@@ -2,6 +2,7 @@ package cc.sighs.oelib.config.ui.entries;
 
 import cc.sighs.oelib.config.ui.screen.ConfigScreen;
 import cc.sighs.oelib.config.util.ConfigGuiUtil;
+import cc.sighs.oelib.mixin.access.ScreenInvoker;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -70,7 +71,7 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
             updateResetButtonState();
             if (screen instanceof ConfigScreen cs) cs.markDirty();
         }).bounds(resetX - 24, y, 22, 20).build();
-        screen.addRenderableWidget(addBtn);
+        ((ScreenInvoker) screen).invokeAddRenderableWidget(addBtn);
 
         resetButton = Button.builder(Component.translatable("config.oelib.reset"), b -> {
             while (!array.isEmpty()) {
@@ -82,7 +83,7 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
             updateResetButtonState();
             if (screen instanceof ConfigScreen cs) cs.markDirty();
         }).bounds(resetX, y, 72, 20).build();
-        screen.addRenderableWidget(resetButton);
+        ((ScreenInvoker) screen).invokeAddRenderableWidget(resetButton);
 
         rebuildRows(x, y, resetX);
         updateResetButtonState();
@@ -106,7 +107,7 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
         for (int i = 0; i < array.size(); i++) {
             var el = array.get(i);
             var vb = ConfigGuiUtil.createEditBox(ConfigGuiUtil.jsonToString(el), vx, rowY, vw);
-            screen.addRenderableWidget(vb);
+            ((ScreenInvoker) screen).invokeAddRenderableWidget(vb);
 
             Checkbox cb = null;
             if (el != null && el.isJsonPrimitive() && el.getAsJsonPrimitive().isBoolean()) {
@@ -124,7 +125,7 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
                         }
                     }
                 };
-                screen.addRenderableWidget(cb);
+                ((ScreenInvoker) screen).invokeAddRenderableWidget(cb);
             }
 
             int deleteX = resetX - 21;
@@ -135,9 +136,9 @@ public class ListEntry extends AbstractConfigEntry<JsonArray> {
             var down = Button.builder(Component.literal("▼"), b -> moveDown(vb)).bounds(downX, rowY, 20, 20).build();
             var del = Button.builder(Component.literal("x"), b -> removeItem(vb)).bounds(deleteX, rowY, 20, 20).build();
 
-            screen.addRenderableWidget(up);
-            screen.addRenderableWidget(down);
-            screen.addRenderableWidget(del);
+            ((ScreenInvoker) screen).invokeAddRenderableWidget(up);
+            ((ScreenInvoker) screen).invokeAddRenderableWidget(down);
+            ((ScreenInvoker) screen).invokeAddRenderableWidget(del);
 
             vb.setResponder(str -> {
                 int idx = valueBoxes.indexOf(vb);

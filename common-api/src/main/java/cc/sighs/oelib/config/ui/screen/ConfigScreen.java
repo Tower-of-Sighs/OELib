@@ -128,12 +128,12 @@ public class ConfigScreen extends Screen {
             searchBox.setValue(searchText);
             searchBox.setSuggestion(searchText.isEmpty() ? Component.translatable("config.oelib.search").getString() : "");
         }
-        addRenderableWidget(searchBox);
+        super.addRenderableWidget(searchBox);
         y += 24;
         rebuildEntries(initialScroll, y);
         int btnY = this.height - 28;
-        saveButton = addRenderableWidget(Button.builder(Component.translatable("config.oelib.done"), b -> onSave()).bounds(this.width / 2 + 4, btnY, 120, 20).build());
-        cancelButton = addRenderableWidget(Button.builder(CommonComponents.GUI_CANCEL, b -> onClose()).bounds(this.width / 2 - 124, btnY, 120, 20).build());
+        saveButton = super.addRenderableWidget(Button.builder(Component.translatable("config.oelib.done"), b -> onSave()).bounds(this.width / 2 + 4, btnY, 120, 20).build());
+        cancelButton = super.addRenderableWidget(Button.builder(CommonComponents.GUI_CANCEL, b -> onClose()).bounds(this.width / 2 - 124, btnY, 120, 20).build());
     }
 
     private void onSave() {

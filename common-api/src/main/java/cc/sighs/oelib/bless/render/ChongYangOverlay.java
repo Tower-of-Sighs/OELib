@@ -1,15 +1,12 @@
 package cc.sighs.oelib.bless.render;
 
 import cc.sighs.oelib.bless.ShaderToastResources;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 
-@Environment(EnvType.CLIENT)
 public class ChongYangOverlay extends AbstractShaderOverlay {
     public static final ChongYangOverlay INSTANCE = new ChongYangOverlay();
     public static final String FESTIVAL_ID = "chongyang";

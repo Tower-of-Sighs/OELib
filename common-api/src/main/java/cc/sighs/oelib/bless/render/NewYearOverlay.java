@@ -1,15 +1,12 @@
 package cc.sighs.oelib.bless.render;
 
 import cc.sighs.oelib.bless.ShaderToastResources;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 
-@Environment(EnvType.CLIENT)
 public class NewYearOverlay extends AbstractShaderOverlay {
     public static final NewYearOverlay INSTANCE = new NewYearOverlay();
     public static final String FESTIVAL_ID = "new_year";

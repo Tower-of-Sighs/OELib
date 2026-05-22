@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 
 import java.util.Optional;
 
-@Mixin(value = ModListScreen.class)
+@Mixin(value = ModListScreen.class, remap = false)
 public abstract class ForgeIconHandlerMixin {
 
     @Redirect(

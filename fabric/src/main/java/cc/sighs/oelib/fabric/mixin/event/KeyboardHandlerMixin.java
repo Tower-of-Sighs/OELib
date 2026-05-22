@@ -15,9 +15,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(KeyboardHandler.class)
 public class KeyboardHandlerMixin {
 
-    @SuppressWarnings("UnresolvedMixinReference")
     @WrapOperation(
-            method = {"lambda$keyPress$3", "method_1454"},
+            method = "method_1454",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/Screen;keyPressed(III)Z")
     )
     private static boolean wrapKeyPressed(Screen instance, int keyCode, int scanCode, int modifiers, Operation<Boolean> original) {
@@ -34,9 +33,8 @@ public class KeyboardHandlerMixin {
         return handled;
     }
 
-    @SuppressWarnings("UnresolvedMixinReference")
     @WrapOperation(
-            method = {"lambda$keyPress$3", "method_1454"},
+            method = "method_1454",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/Screen;keyReleased(III)Z")
     )
     private static boolean wrapKeyReleased(Screen instance, int keyCode, int scanCode, int modifiers, Operation<Boolean> original) {
@@ -53,18 +51,16 @@ public class KeyboardHandlerMixin {
         return handled;
     }
 
-    @SuppressWarnings("UnresolvedMixinReference")
     @WrapOperation(
-            method = {"method_1458", "lambda$charTyped$5"},
+            method = "method_1458",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/components/events/GuiEventListener;charTyped(CI)Z")
     )
     private static boolean wrapCharTypedSingle(GuiEventListener listener, char codePoint, int modifiers, Operation<Boolean> original) {
         return wrapCharTyped(listener, codePoint, modifiers, original);
     }
 
-    @SuppressWarnings("UnresolvedMixinReference")
     @WrapOperation(
-            method = {"method_1473", "lambda$charTyped$6"},
+            method = "method_1473",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/components/events/GuiEventListener;charTyped(CI)Z")
     )
     private static boolean wrapCharTypedLoop(GuiEventListener listener, char codePoint, int modifiers, Operation<Boolean> original) {

@@ -1,13 +1,10 @@
 package cc.sighs.oelib.dev.example;
 
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
 import net.minecraft.util.Mth;
 
-@Environment(EnvType.CLIENT)
 public class ClientRainbowBarComponent implements ClientTooltipComponent {
     private static final int BAR_WIDTH = 100;
     private static final int BAR_HEIGHT = 2;

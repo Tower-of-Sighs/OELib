@@ -3,14 +3,11 @@ package cc.sighs.oelib.registry.extra;
 import cc.sighs.oelib.registry.RegistrationDispatcher;
 import cc.sighs.oelib.registry.action.ShaderRegisterAction;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.function.Consumer;
 
-@Environment(EnvType.CLIENT)
 public final class ShaderRegister {
     private ShaderRegister() {
     }

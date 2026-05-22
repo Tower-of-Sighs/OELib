@@ -2,15 +2,12 @@ package cc.sighs.oelib.registry.extra;
 
 import cc.sighs.oelib.registry.RegistrationDispatcher;
 import cc.sighs.oelib.registry.action.EntityRendererAction;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 
 import java.util.function.Supplier;
 
-@Environment(EnvType.CLIENT)
 public final class EntityRendererRegister {
     private EntityRendererRegister() {
     }

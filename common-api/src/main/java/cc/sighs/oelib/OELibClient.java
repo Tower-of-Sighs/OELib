@@ -11,5 +11,6 @@ public class OELibClient {
         OverlayRegistry.init();
         ShaderEvents.register();
         ExampleInit.initClient();
+
     }
 }
