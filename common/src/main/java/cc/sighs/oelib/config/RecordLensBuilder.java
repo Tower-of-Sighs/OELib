@@ -10,6 +10,8 @@ import org.jetbrains.annotations.NotNull;
 import java.io.Serializable;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.SerializedLambda;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
 import java.util.List;
@@ -205,19 +207,9 @@ public final class RecordLensBuilder {
 
     @SuppressWarnings("unchecked")
     private static <S, A> ConfigLens<S, A> createLens(MethodHandles.Lookup lookup, Class<?> recordClass, String componentName) {
+        RecordComponent[] components = recordClass.getRecordComponents();
+        int index = findComponentIndex(components, componentName, recordClass);
         try {
-            RecordComponent[] components = recordClass.getRecordComponents();
-            int index = -1;
-            for (int i = 0; i < components.length; i++) {
-                if (components[i].getName().equals(componentName)) {
-                    index = i;
-                    break;
-                }
-            }
-            if (index < 0) {
-                throw new IllegalArgumentException("Unknown record component '" + componentName + "' in " + recordClass.getName());
-            }
-
             var accessors = RecordLensClassGenerator.generate(recordClass, components, index, lookup);
 
             Lens<S, S, A, A> lens = Optics.lens(
@@ -237,11 +229,88 @@ public final class RecordLensBuilder {
                     }
             );
             return new ConfigLens<>(componentName, lens, ConfigLens.rootPlan(lookup, recordClass, components[index].getType(), componentName));
-        } catch (IllegalStateException | IllegalArgumentException e) {
+        } catch (RuntimeException e) {
+            if (isModuleAccessFailure(e)) {
+                return createReflectiveLens(recordClass, components, index, componentName);
+            }
             throw e;
-        } catch (Throwable t) {
-            throw new IllegalStateException("Failed to create record lens for " + recordClass.getName() + "#" + componentName, t);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <S, A> ConfigLens<S, A> createReflectiveLens(Class<?> recordClass, RecordComponent[] components, int index, String componentName) {
+        RecordComponent targetComp = components[index];
+        Method accessor = targetComp.getAccessor();
+        accessor.setAccessible(true);
+
+        Class<?>[] paramTypes = new Class<?>[components.length];
+        for (int i = 0; i < components.length; i++) {
+            paramTypes[i] = components[i].getType();
+        }
+        Constructor<?> ctor;
+        try {
+            ctor = recordClass.getDeclaredConstructor(paramTypes);
+            ctor.setAccessible(true);
+        } catch (NoSuchMethodException e) {
+            throw new IllegalStateException("Cannot find canonical constructor for " + recordClass.getName(), e);
+        }
+
+        Method[] componentAccessors = new Method[components.length];
+        for (int i = 0; i < components.length; i++) {
+            componentAccessors[i] = components[i].getAccessor();
+            componentAccessors[i].setAccessible(true);
+        }
+
+        Lens<S, S, A, A> lens = Optics.lens(
+                source -> {
+                    try {
+                        return (A) accessor.invoke(source);
+                    } catch (Throwable t) {
+                        throw new IllegalStateException("Failed to reflectively view " + componentName, t);
+                    }
+                },
+                (value, source) -> {
+                    try {
+                        Object[] args = new Object[components.length];
+                        for (int i = 0; i < components.length; i++) {
+                            if (i == index) {
+                                args[i] = value;
+                            } else {
+                                args[i] = componentAccessors[i].invoke(source);
+                            }
+                        }
+                        return (S) ctor.newInstance(args);
+                    } catch (Throwable t) {
+                        throw new IllegalStateException("Failed to reflectively update " + componentName, t);
+                    }
+                }
+        );
+        return new ConfigLens<>(componentName, lens);
+    }
+
+    private static int findComponentIndex(RecordComponent[] components, String componentName, Class<?> recordClass) {
+        for (int i = 0; i < components.length; i++) {
+            if (components[i].getName().equals(componentName)) {
+                return i;
+            }
+        }
+        throw new IllegalArgumentException("Unknown record component '" + componentName + "' in " + recordClass.getName());
+    }
+
+    /**
+     * Returns {@code true} if the given exception was caused by a module-access
+     * failure from {@link MethodHandles#privateLookupIn} or
+     * {@link MethodHandles.Lookup#defineHiddenClass}.
+     */
+    private static boolean isModuleAccessFailure(Throwable t) {
+        Throwable cause = t;
+        while (cause != null) {
+            if (cause instanceof IllegalAccessException) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     private static ConfigLens<?, ?> createPathLens(MethodHandles.Lookup lookup, PathLensKey key) {
@@ -266,9 +335,85 @@ public final class RecordLensBuilder {
             );
             return new ConfigLens<>(key.path(), lens,
                     new ConfigLens.RecordLensPlan(lookup, key.rootClass(), key.leafClass(), List.of(parts)));
-        } catch (Throwable t) {
-            throw new IllegalStateException("Failed to create path lens for " + key, t);
+        } catch (RuntimeException e) {
+            if (isModuleAccessFailure(e)) {
+                return createReflectivePathLens(key);
+            }
+            throw e;
         }
+    }
+
+    private static ConfigLens<?, ?> createReflectivePathLens(PathLensKey key) {
+        String[] parts = key.path().split("\\.");
+        Lens<Object, Object, Object, Object> lens = Optics.lens(
+                source -> {
+                    try {
+                        Object current = source;
+                        Class<?> currentClass = key.rootClass();
+                        for (String part : parts) {
+                            RecordComponent[] comps = currentClass.getRecordComponents();
+                            RecordComponent comp = null;
+                            for (RecordComponent c : comps) {
+                                if (c.getName().equals(part)) {
+                                    comp = c;
+                                    break;
+                                }
+                            }
+                            if (comp == null) {
+                                throw new IllegalArgumentException("Unknown component '" + part + "' in " + currentClass.getName());
+                            }
+                            Method m = comp.getAccessor();
+                            m.setAccessible(true);
+                            Object next = m.invoke(current);
+                            currentClass = comp.getType();
+                            current = next;
+                        }
+                        return current;
+                    } catch (RuntimeException e) {
+                        throw e;
+                    } catch (Throwable t) {
+                        throw new IllegalStateException("Failed to reflectively view path " + key.path(), t);
+                    }
+                },
+                (value, source) -> {
+                    try {
+                        return rebuildPath(source, key.rootClass(), parts, parts.length - 1, value);
+                    } catch (RuntimeException e) {
+                        throw e;
+                    } catch (Throwable t) {
+                        throw new IllegalStateException("Failed to reflectively update path " + key.path(), t);
+                    }
+                }
+        );
+        return new ConfigLens<>(key.path(), lens);
+    }
+
+    private static Object rebuildPath(Object source, Class<?> ownerClass, String[] parts, int depth, Object newValue) throws Throwable {
+        RecordComponent[] components = ownerClass.getRecordComponents();
+        Method[] accessors = new Method[components.length];
+        Class<?>[] paramTypes = new Class<?>[components.length];
+        for (int i = 0; i < components.length; i++) {
+            accessors[i] = components[i].getAccessor();
+            accessors[i].setAccessible(true);
+            paramTypes[i] = components[i].getType();
+        }
+        Constructor<?> ctor = ownerClass.getDeclaredConstructor(paramTypes);
+        ctor.setAccessible(true);
+
+        Object[] args = new Object[components.length];
+        for (int i = 0; i < components.length; i++) {
+            if (components[i].getName().equals(parts[depth])) {
+                if (depth == parts.length - 1) {
+                    args[i] = newValue;
+                } else {
+                    Object nested = accessors[i].invoke(source);
+                    args[i] = rebuildPath(nested, components[i].getType(), parts, depth + 1, newValue);
+                }
+            } else {
+                args[i] = accessors[i].invoke(source);
+            }
+        }
+        return ctor.newInstance(args);
     }
 
     private static String extractComponentName(Serializable getter) {

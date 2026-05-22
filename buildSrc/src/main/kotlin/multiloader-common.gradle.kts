@@ -19,7 +19,7 @@ val licenseVal: String = property("license") as String
 val creditsVal: String = findProperty("credits") as String? ?: ""
 
 base {
-    archivesName = "${modName}-${project.name}-${mcVersion}"
+    archivesName = "${modName}-${project.name}-${mcVersion}-${modVersion}"
 }
 
 java {

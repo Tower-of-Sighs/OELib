@@ -36,7 +36,7 @@ public final class ConfigLens<S, A> {
     private final Lens<S, S, A, A> lens;
     private final RecordLensPlan plan;
 
-    ConfigLens(String path, Lens<S, S, A, A> lens) {
+    public ConfigLens(String path, Lens<S, S, A, A> lens) {
         this(path, lens, null);
     }
 
