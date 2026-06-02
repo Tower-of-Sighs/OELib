@@ -1,6 +1,8 @@
 package cc.sighs.oelib.config;
 
-import cc.sighs.oelib.config.optics.*;
+import cc.sighs.oelib.config.optics.ConfigPrism;
+import cc.sighs.oelib.config.optics.internal.ConfigTraversal;
+import org.jetbrains.annotations.ApiStatus;
 
 import java.util.Objects;
 import java.util.function.*;
@@ -9,7 +11,7 @@ import java.util.function.*;
  * Utility operations on {@link ConfigUnit} instances that offer finer
  * control over persistence and batching.
  *
- * <p>The "NoSave" variants (for example {@link #updateNoSave(ConfigUnit, ConfigLens, UnaryOperator)})
+ * <p>The "NoSave" variants (for example {@link #updateNoSave(ConfigUnit, RecordLensBuilder.LensGetter, UnaryOperator)})
  * modify the in-memory value and fire change events but do not persist to
  * disk, allowing callers to defer persistence until a batch is complete.
  *
@@ -23,39 +25,41 @@ public final class ConfigUnitOps {
     }
 
     /**
-     * Updates a field through a lens without persisting to disk.
+     * Updates a field through a getter without persisting to disk.
      *
      * @param unit    the configuration unit
-     * @param lens    the lens targeting the field
+     * @param getter  a serializable method reference to a record component
      * @param updater a function transforming the current field value
      * @param <T>     the configuration type
      * @param <V>     the field value type
      * @return the committed configuration value
-     * @throws NullPointerException if any argument is {@code null}
      */
-    public static <T, V> T updateNoSave(ConfigUnit<T> unit, ConfigLens<T, V> lens, UnaryOperator<V> updater) {
+    public static <T, V> T updateNoSave(ConfigUnit<T> unit, RecordLensBuilder.LensGetter<T, V> getter, UnaryOperator<V> updater) {
         Objects.requireNonNull(unit);
-        Objects.requireNonNull(lens);
+        Objects.requireNonNull(getter);
         Objects.requireNonNull(updater);
+        Class<T> rc = unit.recordClass();
+        var lens = RecordLensBuilder.lens(rc, getter);
         T current = unit.get();
         T updated = lens.update(current, updater);
         return unit.commitCandidate(current, updated, false);
     }
 
     /**
-     * Sets a field through a lens, persists, and returns the committed field value.
+     * Sets a field through a getter, persists, and returns the committed field value.
      *
-     * @param unit  the configuration unit
-     * @param lens  the lens targeting the field
-     * @param value the new field value
-     * @param <T>   the configuration type
-     * @param <V>   the field value type
+     * @param unit   the configuration unit
+     * @param getter a serializable method reference to a record component
+     * @param value  the new field value
+     * @param <T>    the configuration type
+     * @param <V>    the field value type
      * @return the committed field value
-     * @throws NullPointerException if any argument is {@code null}
      */
-    public static <T, V> V setAndGet(ConfigUnit<T> unit, ConfigLens<T, V> lens, V value) {
+    public static <T, V> V setAndGet(ConfigUnit<T> unit, RecordLensBuilder.LensGetter<T, V> getter, V value) {
         Objects.requireNonNull(unit);
-        Objects.requireNonNull(lens);
+        Objects.requireNonNull(getter);
+        Class<T> rc = unit.recordClass();
+        var lens = RecordLensBuilder.lens(rc, getter);
         T current = unit.get();
         T updated = lens.set(current, value);
         T committed = unit.commitCandidate(current, updated, true);
@@ -63,20 +67,21 @@ public final class ConfigUnitOps {
     }
 
     /**
-     * Sets a field through a lens without persisting and returns the
+     * Sets a field through a getter without persisting and returns the
      * committed field value.
      *
-     * @param unit  the configuration unit
-     * @param lens  the lens targeting the field
-     * @param value the new field value
-     * @param <T>   the configuration type
-     * @param <V>   the field value type
+     * @param unit   the configuration unit
+     * @param getter a serializable method reference to a record component
+     * @param value  the new field value
+     * @param <T>    the configuration type
+     * @param <V>    the field value type
      * @return the committed field value
-     * @throws NullPointerException if any argument is {@code null}
      */
-    public static <T, V> V setAndGetNoSave(ConfigUnit<T> unit, ConfigLens<T, V> lens, V value) {
+    public static <T, V> V setAndGetNoSave(ConfigUnit<T> unit, RecordLensBuilder.LensGetter<T, V> getter, V value) {
         Objects.requireNonNull(unit);
-        Objects.requireNonNull(lens);
+        Objects.requireNonNull(getter);
+        Class<T> rc = unit.recordClass();
+        var lens = RecordLensBuilder.lens(rc, getter);
         T current = unit.get();
         T updated = lens.set(current, value);
         T committed = unit.commitCandidate(current, updated, false);
@@ -84,78 +89,82 @@ public final class ConfigUnitOps {
     }
 
     /**
-     * Updates an {@code int} field through a specialized lens without persisting.
+     * Updates an {@code int} field through a getter without persisting.
      *
      * @param unit    the configuration unit
-     * @param lens    the integer-specialized lens
+     * @param getter  a serializable method reference to an {@code int} record component
      * @param updater a function transforming the current value
      * @param <T>     the configuration type
      * @return the committed configuration value
-     * @throws NullPointerException if any argument is {@code null}
      */
-    public static <T> T updateIntNoSave(ConfigUnit<T> unit, ConfigIntLens<T> lens, IntUnaryOperator updater) {
+    public static <T> T updateIntNoSave(ConfigUnit<T> unit, RecordLensBuilder.LensGetter<T, Integer> getter, IntUnaryOperator updater) {
         Objects.requireNonNull(unit);
-        Objects.requireNonNull(lens);
+        Objects.requireNonNull(getter);
         Objects.requireNonNull(updater);
+        Class<T> rc = unit.recordClass();
+        var lens = RecordLensBuilder.lens(rc, getter).asInt();
         T current = unit.get();
         T updated = lens.update(current, updater);
         return unit.commitCandidate(current, updated, false);
     }
 
     /**
-     * Updates a {@code long} field through a specialized lens without persisting.
+     * Updates a {@code long} field through a getter without persisting.
      *
      * @param unit    the configuration unit
-     * @param lens    the long-specialized lens
+     * @param getter  a serializable method reference to a {@code long} record component
      * @param updater a function transforming the current value
      * @param <T>     the configuration type
      * @return the committed configuration value
-     * @throws NullPointerException if any argument is {@code null}
      */
-    public static <T> T updateLongNoSave(ConfigUnit<T> unit, ConfigLongLens<T> lens, LongUnaryOperator updater) {
+    public static <T> T updateLongNoSave(ConfigUnit<T> unit, RecordLensBuilder.LensGetter<T, Long> getter, LongUnaryOperator updater) {
         Objects.requireNonNull(unit);
-        Objects.requireNonNull(lens);
+        Objects.requireNonNull(getter);
         Objects.requireNonNull(updater);
+        Class<T> rc = unit.recordClass();
+        var lens = RecordLensBuilder.lens(rc, getter).asLong();
         T current = unit.get();
         T updated = lens.update(current, updater);
         return unit.commitCandidate(current, updated, false);
     }
 
     /**
-     * Updates a {@code double} field through a specialized lens without persisting.
+     * Updates a {@code double} field through a getter without persisting.
      *
      * @param unit    the configuration unit
-     * @param lens    the double-specialized lens
+     * @param getter  a serializable method reference to a {@code double} record component
      * @param updater a function transforming the current value
      * @param <T>     the configuration type
      * @return the committed configuration value
-     * @throws NullPointerException if any argument is {@code null}
      */
-    public static <T> T updateDoubleNoSave(ConfigUnit<T> unit, ConfigDoubleLens<T> lens, DoubleUnaryOperator updater) {
+    public static <T> T updateDoubleNoSave(ConfigUnit<T> unit, RecordLensBuilder.LensGetter<T, Double> getter, DoubleUnaryOperator updater) {
         Objects.requireNonNull(unit);
-        Objects.requireNonNull(lens);
+        Objects.requireNonNull(getter);
         Objects.requireNonNull(updater);
+        Class<T> rc = unit.recordClass();
+        var lens = RecordLensBuilder.lens(rc, getter).asDouble();
         T current = unit.get();
         T updated = lens.update(current, updater);
         return unit.commitCandidate(current, updated, false);
     }
 
     /**
-     * Updates a {@code boolean} field through a specialized lens without persisting.
+     * Updates a {@code boolean} field through a getter without persisting.
      *
      * @param unit    the configuration unit
-     * @param lens    the boolean-specialized lens
+     * @param getter  a serializable method reference to a {@code boolean} record component
      * @param updater a function transforming the current value
      * @param <T>     the configuration type
      * @return the committed configuration value
-     * @throws NullPointerException if any argument is {@code null}
      */
-    public static <T> T updateBooleanNoSave(ConfigUnit<T> unit, ConfigBooleanLens<T> lens, ConfigLens.BooleanUnaryOperator updater) {
+    public static <T> T updateBooleanNoSave(ConfigUnit<T> unit, RecordLensBuilder.LensGetter<T, Boolean> getter, UnaryOperator<Boolean> updater) {
         Objects.requireNonNull(unit);
-        Objects.requireNonNull(lens);
+        Objects.requireNonNull(getter);
         Objects.requireNonNull(updater);
+        Class<T> rc = unit.recordClass();
+        var lens = RecordLensBuilder.lens(rc, getter).asBoolean();
         T current = unit.get();
-        T updated = lens.update(current, updater);
+        T updated = lens.raw().update(current, updater);
         return unit.commitCandidate(current, updated, false);
     }
 
@@ -217,6 +226,25 @@ public final class ConfigUnitOps {
      */
     public static <T, V> T whenSubtypeNoSave(ConfigUnit<T> unit, ConfigPrism<T, V> prism, UnaryOperator<V> updater) {
         return ifPresentNoSave(unit, prism, updater);
+    }
+
+    /**
+     * Applies a traversal update without persisting to disk.
+     *
+     * @param unit      the configuration unit
+     * @param traversal the traversal that selects which elements to focus
+     * @param modifier  a function that transforms each focused element
+     * @param <T>       the configuration type
+     * @param <V>       the element type
+     */
+    @ApiStatus.Internal
+    public static <T, V> void traverseNoSave(ConfigUnit<T> unit, ConfigTraversal<T, V> traversal, UnaryOperator<V> modifier) {
+        Objects.requireNonNull(unit);
+        Objects.requireNonNull(traversal);
+        Objects.requireNonNull(modifier);
+        T current = unit.get();
+        T updated = traversal.update(current, modifier);
+        unit.commitCandidate(current, updated, false);
     }
 
     /**
@@ -296,17 +324,18 @@ public final class ConfigUnitOps {
         }
 
         /**
-         * Applies a lens-based update to the accumulated value.
+         * Applies a getter-based update to the accumulated value.
          *
-         * @param lens    the lens targeting the field
+         * @param getter  a serializable method reference to a record component
          * @param updater a function transforming the current field value
          * @param <V>     the field value type
          * @return this mutator
-         * @throws NullPointerException if {@code lens} or {@code updater} is {@code null}
          */
-        public <V> BatchMutator<T> update(ConfigLens<T, V> lens, UnaryOperator<V> updater) {
-            Objects.requireNonNull(lens);
+        public <V> BatchMutator<T> update(RecordLensBuilder.LensGetter<T, V> getter, UnaryOperator<V> updater) {
+            Objects.requireNonNull(getter);
             Objects.requireNonNull(updater);
+            Class<T> rc = rc();
+            var lens = RecordLensBuilder.lens(rc, getter);
             value = lens.update(value, updater);
             changed = true;
             return this;
@@ -315,14 +344,15 @@ public final class ConfigUnitOps {
         /**
          * Sets a field and returns the new field value.
          *
-         * @param lens     the lens targeting the field
+         * @param getter  a serializable method reference to a record component
          * @param newValue the new field value
-         * @param <V>      the field value type
+         * @param <V>     the field value type
          * @return the new field value
-         * @throws NullPointerException if {@code lens} is {@code null}
          */
-        public <V> V setAndGet(ConfigLens<T, V> lens, V newValue) {
-            Objects.requireNonNull(lens);
+        public <V> V setAndGet(RecordLensBuilder.LensGetter<T, V> getter, V newValue) {
+            Objects.requireNonNull(getter);
+            Class<T> rc = rc();
+            var lens = RecordLensBuilder.lens(rc, getter);
             value = lens.set(value, newValue);
             changed = true;
             return lens.view(value);
@@ -331,13 +361,15 @@ public final class ConfigUnitOps {
         /**
          * Applies an integer update to the accumulated value.
          *
-         * @param lens    the integer-specialized lens
+         * @param getter  a serializable method reference to an {@code int} record component
          * @param updater a function transforming the current value
          * @return this mutator
          */
-        public BatchMutator<T> updateInt(ConfigIntLens<T> lens, IntUnaryOperator updater) {
-            Objects.requireNonNull(lens);
+        public BatchMutator<T> updateInt(RecordLensBuilder.LensGetter<T, Integer> getter, IntUnaryOperator updater) {
+            Objects.requireNonNull(getter);
             Objects.requireNonNull(updater);
+            Class<T> rc = rc();
+            var lens = RecordLensBuilder.lens(rc, getter).asInt();
             value = lens.update(value, updater);
             changed = true;
             return this;
@@ -346,13 +378,15 @@ public final class ConfigUnitOps {
         /**
          * Applies a long update to the accumulated value.
          *
-         * @param lens    the long-specialized lens
+         * @param getter  a serializable method reference to a {@code long} record component
          * @param updater a function transforming the current value
          * @return this mutator
          */
-        public BatchMutator<T> updateLong(ConfigLongLens<T> lens, LongUnaryOperator updater) {
-            Objects.requireNonNull(lens);
+        public BatchMutator<T> updateLong(RecordLensBuilder.LensGetter<T, Long> getter, LongUnaryOperator updater) {
+            Objects.requireNonNull(getter);
             Objects.requireNonNull(updater);
+            Class<T> rc = rc();
+            var lens = RecordLensBuilder.lens(rc, getter).asLong();
             value = lens.update(value, updater);
             changed = true;
             return this;
@@ -361,13 +395,15 @@ public final class ConfigUnitOps {
         /**
          * Applies a double update to the accumulated value.
          *
-         * @param lens    the double-specialized lens
+         * @param getter  a serializable method reference to a {@code double} record component
          * @param updater a function transforming the current value
          * @return this mutator
          */
-        public BatchMutator<T> updateDouble(ConfigDoubleLens<T> lens, DoubleUnaryOperator updater) {
-            Objects.requireNonNull(lens);
+        public BatchMutator<T> updateDouble(RecordLensBuilder.LensGetter<T, Double> getter, DoubleUnaryOperator updater) {
+            Objects.requireNonNull(getter);
             Objects.requireNonNull(updater);
+            Class<T> rc = rc();
+            var lens = RecordLensBuilder.lens(rc, getter).asDouble();
             value = lens.update(value, updater);
             changed = true;
             return this;
@@ -376,14 +412,16 @@ public final class ConfigUnitOps {
         /**
          * Applies a boolean update to the accumulated value.
          *
-         * @param lens    the boolean-specialized lens
+         * @param getter  a serializable method reference to a {@code boolean} record component
          * @param updater a function transforming the current value
          * @return this mutator
          */
-        public BatchMutator<T> updateBoolean(ConfigBooleanLens<T> lens, ConfigLens.BooleanUnaryOperator updater) {
-            Objects.requireNonNull(lens);
+        public BatchMutator<T> updateBoolean(RecordLensBuilder.LensGetter<T, Boolean> getter, UnaryOperator<Boolean> updater) {
+            Objects.requireNonNull(getter);
             Objects.requireNonNull(updater);
-            value = lens.update(value, updater);
+            Class<T> rc = rc();
+            var lens = RecordLensBuilder.lens(rc, getter).asBoolean();
+            value = lens.raw().update(value, updater);
             changed = true;
             return this;
         }
@@ -405,6 +443,26 @@ public final class ConfigUnitOps {
                 changed = true;
             }
             return this;
+        }
+
+        /**
+         * Applies a traversal update to the accumulated value.
+         *
+         * @param traversal the traversal that selects which elements to focus
+         * @param modifier  a function that transforms each focused element
+         * @param <V>       the element type
+         */
+        @ApiStatus.Internal
+        public <V> void traverse(ConfigTraversal<T, V> traversal, UnaryOperator<V> modifier) {
+            Objects.requireNonNull(traversal);
+            Objects.requireNonNull(modifier);
+            value = traversal.update(value, modifier);
+            changed = true;
+        }
+
+        @SuppressWarnings("unchecked")
+        private Class<T> rc() {
+            return (Class<T>) value.getClass();
         }
     }
 }

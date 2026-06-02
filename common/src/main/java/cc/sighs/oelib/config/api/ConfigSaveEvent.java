@@ -1,19 +1,55 @@
 package cc.sighs.oelib.config.api;
 
 import cc.sighs.oelib.config.ConfigUnit;
+import cc.sighs.oelib.event.Event;
 
 /**
- * An event published around configuration persistence.
+ * Events published before and after a configuration value is persisted to disk.
  *
- * <p>This event is fired twice per save operation: once before the value
- * is written to disk (via
- * {@link ConfigEvents#beforeSave(ConfigUnit, Object)}) and once after
- * the write completes (via
- * {@link ConfigEvents#afterSave(ConfigUnit, Object)}).
- *
- * @param unit  the configuration unit being persisted
- * @param value the value being written
- * @param <T>   the type of the configuration value
+ * @param <T> the type of the configuration value
  */
-public record ConfigSaveEvent<T>(ConfigUnit<T> unit, T value) {
+public abstract class ConfigSaveEvent<T> implements Event {
+    private final ConfigUnit<T> unit;
+    private final T value;
+
+    protected ConfigSaveEvent(ConfigUnit<T> unit, T value) {
+        this.unit = unit;
+        this.value = value;
+    }
+
+    /**
+     * Returns the configuration unit being persisted.
+     *
+     * @return the unit
+     */
+    public ConfigUnit<T> unit() {
+        return unit;
+    }
+
+    /**
+     * Returns the value being written.
+     *
+     * @return the value
+     */
+    public T value() {
+        return value;
+    }
+
+    /**
+     * Fired before the value is written to disk.
+     */
+    public static final class Pre<T> extends ConfigSaveEvent<T> {
+        public Pre(ConfigUnit<T> unit, T value) {
+            super(unit, value);
+        }
+    }
+
+    /**
+     * Fired after the value has been written to disk.
+     */
+    public static final class Post<T> extends ConfigSaveEvent<T> {
+        public Post(ConfigUnit<T> unit, T value) {
+            super(unit, value);
+        }
+    }
 }

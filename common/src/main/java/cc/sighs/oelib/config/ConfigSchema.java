@@ -13,6 +13,7 @@ import com.mojang.datafixers.kinds.App;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.ApiStatus;
 
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
@@ -350,6 +351,7 @@ public final class ConfigSchema {
          * @param <V>    the type of the component value
          * @return a lens targeting that component
          */
+        @ApiStatus.Internal
         public <V> ConfigLens<T, V> lens(RecordLensBuilder.LensGetter<T, V> getter) {
             return RecordLensBuilder.lens(rootClass, getter);
         }
@@ -363,6 +365,7 @@ public final class ConfigSchema {
          * @param <V>    the type of the component value
          * @return a lens targeting that component
          */
+        @ApiStatus.Internal
         public <V> ConfigLens<T, V> lens(MethodHandles.Lookup lookup, RecordLensBuilder.LensGetter<T, V> getter) {
             return RecordLensBuilder.lens(lookup, rootClass, getter);
         }
@@ -375,6 +378,7 @@ public final class ConfigSchema {
          * @return a lens targeting that component
          * @throws IllegalArgumentException if the component does not exist
          */
+        @ApiStatus.Internal
         public <V> ConfigLens<T, V> lens(String componentName) {
             return RecordLensBuilder.lens(rootClass, componentName);
         }
