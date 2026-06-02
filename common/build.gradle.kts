@@ -40,6 +40,14 @@ dependencies {
     jmhAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:1.37")
 }
 
+extra["mavenDependencyWhitelist"] = listOf(
+    "cn.6tail",
+    "de.marhali",
+    "com.electronwill.night-config",
+    "org.mvel",
+    "io.smallrye.classfile"
+)
+
 configurations {
     register("commonJava") {
         isCanBeResolved = false

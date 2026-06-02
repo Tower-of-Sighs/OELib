@@ -45,6 +45,14 @@ dependencies {
     include("io.smallrye.classfile:jdk-classfile-backport:26")
 }
 
+extra["mavenDependencyWhitelist"] = listOf(
+    "cn.6tail",
+    "de.marhali",
+    "com.electronwill.night-config",
+    "org.mvel",
+    "io.smallrye.classfile"
+)
+
 loom {
     accessWidenerPath = project(":common").file("src/main/resources/oelib.accesswidener")
     mixin {

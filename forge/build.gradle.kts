@@ -83,6 +83,13 @@ dependencies {
     "additionalRuntimeClasspath"("io.smallrye.classfile:jdk-classfile-backport:26")
 }
 
+extra["mavenDependencyWhitelist"] = listOf(
+    "cn.6tail",
+    "de.marhali",
+    "org.mvel",
+    "io.smallrye.classfile"
+)
+
 tasks.named<Jar>("jar") {
     finalizedBy("reobfJar")
     manifest {
