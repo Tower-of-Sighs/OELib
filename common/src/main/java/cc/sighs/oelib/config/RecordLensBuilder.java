@@ -3,8 +3,6 @@ package cc.sighs.oelib.config;
 import cc.sighs.oelib.config.optics.ConfigLens;
 import cc.sighs.oelib.config.optics.ConfigPrism;
 import cc.sighs.oelib.config.util.RecordLensClassGenerator;
-import com.mojang.datafixers.optics.Lens;
-import com.mojang.datafixers.optics.Optics;
 import org.jspecify.annotations.NonNull;
 
 import java.io.Serializable;
@@ -17,6 +15,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /**
@@ -220,23 +219,21 @@ public final class RecordLensBuilder {
 
             var accessors = RecordLensClassGenerator.generate(recordClass, components, index, lookup);
 
-            Lens<S, S, A, A> lens = Optics.lens(
-                    source -> {
-                        try {
-                            return (A) accessors.view().invokeExact((Object) source);
-                        } catch (Throwable t) {
-                            throw new IllegalStateException("Failed to view record component " + componentName, t);
-                        }
-                    },
-                    (value, source) -> {
-                        try {
-                            return (S) accessors.update().invokeExact((Object) value, (Object) source);
-                        } catch (Throwable t) {
-                            throw new IllegalStateException("Failed to update record component " + componentName, t);
-                        }
-                    }
-            );
-            return new ConfigLens<>(componentName, lens, ConfigLens.rootPlan(lookup, recordClass, components[index].getType(), componentName));
+            Function<S, A> viewFn = source -> {
+                try {
+                    return (A) accessors.view().invokeExact((Object) source);
+                } catch (Throwable t) {
+                    throw new IllegalStateException("Failed to view record component " + componentName, t);
+                }
+            };
+            BiFunction<A, S, S> setFn = (value, source) -> {
+                try {
+                    return (S) accessors.update().invokeExact((Object) value, (Object) source);
+                } catch (Throwable t) {
+                    throw new IllegalStateException("Failed to update record component " + componentName, t);
+                }
+            };
+            return new ConfigLens<>(componentName, viewFn, setFn, ConfigLens.rootPlan(lookup, recordClass, components[index].getType(), componentName));
         } catch (IllegalStateException | IllegalArgumentException e) {
             throw e;
         } catch (Throwable t) {
@@ -249,23 +246,21 @@ public final class RecordLensBuilder {
         try {
             String[] parts = key.path().split("\\.");
             var accessors = RecordLensClassGenerator.generatePath(key.rootClass(), parts, lookup);
-            Lens<Object, Object, Object, Object> lens = Optics.lens(
-                    source -> {
-                        try {
-                            return accessors.view().invokeExact(source);
-                        } catch (Throwable t) {
-                            throw new IllegalStateException("Failed to view record path " + key.path(), t);
-                        }
-                    },
-                    (value, source) -> {
-                        try {
-                            return accessors.update().invokeExact(value, source);
-                        } catch (Throwable t) {
-                            throw new IllegalStateException("Failed to update record path " + key.path(), t);
-                        }
-                    }
-            );
-            return new ConfigLens<>(key.path(), lens,
+            Function<Object, Object> viewFn = source -> {
+                try {
+                    return accessors.view().invokeExact(source);
+                } catch (Throwable t) {
+                    throw new IllegalStateException("Failed to view record path " + key.path(), t);
+                }
+            };
+            BiFunction<Object, Object, Object> setFn = (value, source) -> {
+                try {
+                    return accessors.update().invokeExact(value, source);
+                } catch (Throwable t) {
+                    throw new IllegalStateException("Failed to update record path " + key.path(), t);
+                }
+            };
+            return new ConfigLens<>(key.path(), viewFn, setFn,
                     new ConfigLens.RecordLensPlan(lookup, key.rootClass(), key.leafClass(), List.of(parts)));
         } catch (Throwable t) {
             throw new IllegalStateException("Failed to create path lens for " + key, t);

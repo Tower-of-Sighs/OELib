@@ -2,18 +2,13 @@ package cc.sighs.oelib.config.optics;
 
 import cc.sighs.oelib.config.ConfigMutation;
 import cc.sighs.oelib.config.RecordLensBuilder;
-import com.mojang.datafixers.optics.Lens;
-import com.mojang.datafixers.optics.Optics;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.DoubleUnaryOperator;
-import java.util.function.IntUnaryOperator;
-import java.util.function.LongUnaryOperator;
-import java.util.function.UnaryOperator;
+import java.util.function.*;
 
 /**
  * A composable, bidirectional accessor for a field within a configuration record.
@@ -33,23 +28,22 @@ import java.util.function.UnaryOperator;
  */
 public final class ConfigLens<S, A> {
     private final String path;
-    private final Lens<S, S, A, A> lens;
+    private final Function<S, A> viewFn;
+    private final BiFunction<A, S, S> setFn;
     private final RecordLensPlan plan;
-
-    ConfigLens(String path, Lens<S, S, A, A> lens) {
-        this(path, lens, null);
-    }
 
     /**
      * Constructs a lens with an optional record plan for optimized composition.
      *
-     * @param path the dotted path to this field
-     * @param lens the underlying Mojang optics lens
-     * @param plan the record lens plan, or {@code null}
+     * @param path   the dotted path to this field
+     * @param viewFn a function that extracts the field value from the source
+     * @param setFn  a function that produces a new source with the field replaced
+     * @param plan   the record lens plan, or {@code null}
      */
-    public ConfigLens(String path, Lens<S, S, A, A> lens, @Nullable RecordLensPlan plan) {
+    public ConfigLens(String path, Function<S, A> viewFn, BiFunction<A, S, S> setFn, @Nullable RecordLensPlan plan) {
         this.path = Objects.requireNonNull(path);
-        this.lens = Objects.requireNonNull(lens);
+        this.viewFn = Objects.requireNonNull(viewFn);
+        this.setFn = Objects.requireNonNull(setFn);
         this.plan = plan;
     }
 
@@ -82,7 +76,7 @@ public final class ConfigLens<S, A> {
      * @return the field value
      */
     public A view(S source) {
-        return lens.view(source);
+        return viewFn.apply(source);
     }
 
     /**
@@ -93,7 +87,7 @@ public final class ConfigLens<S, A> {
      * @return a new record with the field replaced
      */
     public S set(S source, A value) {
-        return lens.update(value, source);
+        return setFn.apply(value, source);
     }
 
     /**
@@ -107,7 +101,7 @@ public final class ConfigLens<S, A> {
      */
     public S update(S source, UnaryOperator<A> updater) {
         Objects.requireNonNull(updater);
-        return lens.update(updater.apply(lens.view(source)), source);
+        return setFn.apply(updater.apply(viewFn.apply(source)), source);
     }
 
     /**
@@ -121,10 +115,10 @@ public final class ConfigLens<S, A> {
      */
     public S updateInt(S source, IntUnaryOperator updater) {
         Objects.requireNonNull(updater);
-        Integer value = (Integer) lens.view(source);
+        Integer value = (Integer) viewFn.apply(source);
         @SuppressWarnings("unchecked")
         A after = (A) Integer.valueOf(updater.applyAsInt(value));
-        return lens.update(after, source);
+        return setFn.apply(after, source);
     }
 
     /**
@@ -138,10 +132,10 @@ public final class ConfigLens<S, A> {
      */
     public S updateLong(S source, LongUnaryOperator updater) {
         Objects.requireNonNull(updater);
-        Long value = (Long) lens.view(source);
+        Long value = (Long) viewFn.apply(source);
         @SuppressWarnings("unchecked")
         A after = (A) Long.valueOf(updater.applyAsLong(value));
-        return lens.update(after, source);
+        return setFn.apply(after, source);
     }
 
     /**
@@ -155,10 +149,10 @@ public final class ConfigLens<S, A> {
      */
     public S updateDouble(S source, DoubleUnaryOperator updater) {
         Objects.requireNonNull(updater);
-        Double value = (Double) lens.view(source);
+        Double value = (Double) viewFn.apply(source);
         @SuppressWarnings("unchecked")
         A after = (A) Double.valueOf(updater.applyAsDouble(value));
-        return lens.update(after, source);
+        return setFn.apply(after, source);
     }
 
     /**
@@ -172,10 +166,10 @@ public final class ConfigLens<S, A> {
      */
     public S updateBoolean(S source, BooleanUnaryOperator updater) {
         Objects.requireNonNull(updater);
-        Boolean value = (Boolean) lens.view(source);
+        Boolean value = (Boolean) viewFn.apply(source);
         @SuppressWarnings("unchecked")
         A after = (A) Boolean.valueOf(updater.applyAsBoolean(value));
-        return lens.update(after, source);
+        return setFn.apply(after, source);
     }
 
     /**
@@ -319,20 +313,12 @@ public final class ConfigLens<S, A> {
             }
         }
         String composedPath = path.isBlank() ? child.path : path + "." + child.path;
-        Lens<S, S, B, B> composed = Optics.lens(
+        return new ConfigLens<>(
+                composedPath,
                 source -> child.view(view(source)),
-                (value, source) -> set(source, child.set(view(source), value))
+                (value, source) -> set(source, child.set(view(source), value)),
+                null
         );
-        return new ConfigLens<>(composedPath, composed);
-    }
-
-    /**
-     * Returns the underlying Mojang optics lens.
-     *
-     * @return the raw lens
-     */
-    public Lens<S, S, A, A> raw() {
-        return lens;
     }
 
     /**
@@ -341,6 +327,7 @@ public final class ConfigLens<S, A> {
      *
      * @return the plan, or {@code null}
      */
+    @Nullable
     public RecordLensPlan plan() {
         return plan;
     }

@@ -2,8 +2,6 @@ package cc.sighs.oelib.config;
 
 import cc.sighs.oelib.config.field.ConfigField;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
-import cc.sighs.oelib.config.optics.ConfigIntLens;
-import cc.sighs.oelib.config.optics.ConfigPrism;
 import cc.sighs.oelib.config.testsupport.TestFileUtil;
 import cc.sighs.oelib.config.testsupport.TestPlatform;
 import cc.sighs.oelib.config.util.ConfigIOUtil;
@@ -51,9 +49,6 @@ class ConfigUnitRuntimeTest {
         );
 
         ConfigUnit<RuntimeConfig> unit = definition.unit();
-        var countLens = definition.lens(RuntimeConfig::count);
-        var optLens = definition.lens(RuntimeConfig::opt);
-        var optPrism = RecordLensBuilder.optional(optLens);
 
         var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
         Files.createDirectories(savePath.getParent());
@@ -63,18 +58,18 @@ class ConfigUnitRuntimeTest {
         assertEquals(4, loaded.count());
         assertEquals(Optional.of(5), loaded.opt());
 
-        unit.update(countLens, value -> value + 1);
-        unit.ifPresent(optPrism, value -> value + 2);
-        assertEquals(5, unit.view(countLens));
-        assertEquals(Optional.of(7), unit.view(optLens));
+        unit.update(RuntimeConfig::count, value -> value + 1);
+        unit.ifPresent(RuntimeConfig::opt, value -> value + 2);
+        assertEquals(5, unit.get().count());
+        assertEquals(Optional.of(7), unit.get().opt());
 
-        assertThrows(IllegalStateException.class, () -> unit.update(countLens, ignored -> 99));
-        assertEquals(5, unit.view(countLens));
+        assertThrows(IllegalStateException.class, () -> unit.update(RuntimeConfig::count, ignored -> 99));
+        assertEquals(5, unit.get().count());
 
         unit.setValue(new RuntimeConfig(123, Optional.of(9)));
         unit.save();
-        assertEquals(5, unit.view(countLens));
-        assertEquals(Optional.of(7), unit.view(optLens));
+        assertEquals(5, unit.get().count());
+        assertEquals(Optional.of(7), unit.get().opt());
         assertTrue(Files.exists(savePath));
     }
 
@@ -106,12 +101,11 @@ class ConfigUnitRuntimeTest {
                 ).apply(schema, RuntimeConfig::new)
         );
         ConfigUnit<RuntimeConfig> unit = definition.unit();
-        var countLens = definition.lens(RuntimeConfig::count);
         var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
 
         unit.get();
-        ConfigUnitOps.updateNoSave(unit, countLens, value -> value + 4);
-        assertEquals(5, unit.view(countLens));
+        ConfigUnitOps.updateNoSave(unit, RuntimeConfig::count, value -> value + 4);
+        assertEquals(5, unit.get().count());
         assertFalse(Files.exists(savePath));
 
         unit.save();
@@ -134,25 +128,24 @@ class ConfigUnitRuntimeTest {
         );
 
         ConfigUnit<RuntimeConfig> unit = definition.unit();
-        ConfigIntLens<RuntimeConfig> countLens = definition.lens(RuntimeConfig::count).asInt();
-        ConfigPrism<RuntimeConfig, Integer> optPrism = RecordLensBuilder.optional(definition.lens(RuntimeConfig::opt));
+        var optPrism = RecordLensBuilder.optional(definition.lens(RuntimeConfig::opt));
         var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
 
         unit.get();
         ConfigUnitOps.withBatchNoSave(unit, batch -> {
-            batch.updateInt(countLens, value -> value + 3);
+            batch.updateInt(RuntimeConfig::count, value -> value + 3);
             batch.ifPresent(optPrism, value -> value + 1);
         });
         assertFalse(Files.exists(savePath));
 
         ConfigUnitOps.withBatch(unit, batch -> {
-            batch.updateInt(countLens, value -> value + 2);
+            batch.updateInt(RuntimeConfig::count, value -> value + 2);
             batch.ifPresent(optPrism, value -> value + 1);
         });
 
         assertTrue(Files.exists(savePath));
-        assertEquals(6, unit.view(definition.lens(RuntimeConfig::count)));
-        assertEquals(Optional.empty(), unit.view(definition.lens(RuntimeConfig::opt)));
+        assertEquals(6, unit.get().count());
+        assertEquals(Optional.empty(), unit.get().opt());
     }
 
     @Test
@@ -168,13 +161,12 @@ class ConfigUnitRuntimeTest {
                 ).apply(schema, RuntimeConfig::new)
         );
         ConfigUnit<RuntimeConfig> unit = definition.unit();
-        var countLens = definition.lens(RuntimeConfig::count);
         var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
 
         unit.get();
-        int updated = ConfigUnitOps.setAndGet(unit, countLens, 11);
+        int updated = ConfigUnitOps.setAndGet(unit, RuntimeConfig::count, 11);
         assertEquals(11, updated);
-        assertEquals(11, unit.view(countLens));
+        assertEquals(11, unit.get().count());
         assertTrue(Files.exists(savePath));
         String content = Files.readString(savePath, StandardCharsets.UTF_8);
         assertEquals(11, JsonParser.parseString(content).getAsJsonObject().get("count").getAsInt());
@@ -193,13 +185,12 @@ class ConfigUnitRuntimeTest {
                 ).apply(schema, RuntimeConfig::new)
         );
         ConfigUnit<RuntimeConfig> unit = definition.unit();
-        var countLens = definition.lens(RuntimeConfig::count);
         var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
 
         unit.get();
-        int updated = ConfigUnitOps.setAndGetNoSave(unit, countLens, 13);
+        int updated = ConfigUnitOps.setAndGetNoSave(unit, RuntimeConfig::count, 13);
         assertEquals(13, updated);
-        assertEquals(13, unit.view(countLens));
+        assertEquals(13, unit.get().count());
         assertFalse(Files.exists(savePath));
 
         unit.save();
@@ -221,22 +212,21 @@ class ConfigUnitRuntimeTest {
                 ).apply(schema, RuntimeConfig::new)
         );
         ConfigUnit<RuntimeConfig> unit = definition.unit();
-        var countLens = definition.lens(RuntimeConfig::count);
         var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
 
         unit.get();
         ConfigUnitOps.withBatchNoSave(unit, batch -> {
-            int noSaveValue = batch.setAndGet(countLens, 17);
+            int noSaveValue = batch.setAndGet(RuntimeConfig::count, 17);
             assertEquals(17, noSaveValue);
         });
-        assertEquals(17, unit.view(countLens));
+        assertEquals(17, unit.get().count());
         assertFalse(Files.exists(savePath));
 
         ConfigUnitOps.withBatch(unit, batch -> {
-            int savedValue = batch.setAndGet(countLens, 19);
+            int savedValue = batch.setAndGet(RuntimeConfig::count, 19);
             assertEquals(19, savedValue);
         });
-        assertEquals(19, unit.view(countLens));
+        assertEquals(19, unit.get().count());
         assertTrue(Files.exists(savePath));
         String content = Files.readString(savePath, StandardCharsets.UTF_8);
         assertEquals(19, JsonParser.parseString(content).getAsJsonObject().get("count").getAsInt());
