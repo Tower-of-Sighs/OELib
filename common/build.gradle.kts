@@ -32,6 +32,10 @@ dependencies {
     implementation("org.mvel:mvel2:2.5.0.Final")
     implementation("io.smallrye.classfile:jdk-classfile-backport:26")
 
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testRuntimeOnly ("org.junit.platform:junit-platform-launcher:1.11.4")
+    testImplementation(files(sourceSets.main.get().compileClasspath))
+
     jmh("org.openjdk.jmh:jmh-core:1.37")
     jmhAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:1.37")
 }
@@ -47,7 +51,15 @@ configurations {
     }
 }
 
+configurations.testImplementation {
+    extendsFrom(configurations.compileOnly.get())
+}
+
 artifacts {
     add("commonJava", sourceSets.main.get().java.sourceDirectories.singleFile)
     add("commonResources", sourceSets.main.get().resources.sourceDirectories.singleFile)
+}
+
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
 }
