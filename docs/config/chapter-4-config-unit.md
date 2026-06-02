@@ -72,7 +72,7 @@ UNIT.reload();
 | `afterSave` | 写入磁盘之后 |
 | `onChanged` | 内存中的值被替换后 |
 
-事件通过 `IConfigEventDispatcher` 接口订阅，由 `ServiceLoader` 发现实现类。
+事件监听通过 `@Subscribe` 注解编写，详见[事件系统文档](../EVENT.md)和第 11 章。
 
 ## 4.5 完整生命周期
 
