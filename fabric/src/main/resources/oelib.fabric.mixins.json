@@ -2,12 +2,12 @@
   "required": true,
   "minVersion": "0.8",
   "package": "cc.sighs.oelib.fabric.mixin",
-  "plugin": "cc.sighs.oelib.fabric.mixin.MixinPlugin",
+
   "compatibilityLevel": "JAVA_17",
   "mixins": [
   ],
   "client": [
-    "FabricIconHandlerMixin"
+    "cc.sighs.oelib.misc.fabric.mixin.FabricIconHandlerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

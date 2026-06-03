@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "cc.sighs.oelib.misc.neoforge.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "refmap": "${mod_id}.refmap.json",
+  "mixins": [],
+  "client": [
+    "NeoForgeIconHandlerMixin"
+  ],
+  "server": [],
+  "injectors": {
+    "defaultRequire": 1
+    }
+}

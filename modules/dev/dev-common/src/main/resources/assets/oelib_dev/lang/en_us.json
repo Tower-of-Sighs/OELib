@@ -1,0 +1,21 @@
+{
+  "itemGroup.oelib_dev.general": "OELib Dev",
+  "item.oelib_dev.example_item": "Example Item",
+  "block.oelib_dev.example_block": "Example Block",
+
+  "key.categories.oelib_dev": "OELib Dev",
+  "key.oelib_dev.open_fluid_example": "Example Key",
+
+  "config.oelib.dev_features.testList": "List Test",
+  "config.oelib.dev_features.testString": "String Test",
+  "config.oelib.dev_features.testDouble": "Double Test",
+  "config.oelib.dev_features.testInt": "Int Test",
+  "config.oelib.dev_features.testEnum": "Enum Test",
+  "config.oelib.dev_features.testEnum.TEST": "Enum Test 1",
+  "config.oelib.dev_features.testEnum.TEST2": "Enum Test 2",
+  "config.oelib.dev_features.enableExampleContent": "Enable Example Content",
+  "config.oelib.dev_features.enableExampleContent.tooltip": "For internal testing purposes",
+  "config.oelib.dev_features.nestedDemo": "Nested Demo",
+  "config.oelib.dev_features.nestedDemo.enabled": "Enable Nested Demo",
+  "config.oelib.dev_features.nestedDemo.level": "Nested Level"
+}

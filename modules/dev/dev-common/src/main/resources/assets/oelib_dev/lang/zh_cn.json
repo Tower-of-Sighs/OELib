@@ -1,0 +1,19 @@
+{
+  "itemGroup.oelib_dev.general": "OELib Dev",
+  "item.oelib_dev.example_item": "示例物品",
+  "block.oelib_dev.example_block": "示例方块",
+
+
+  "config.oelib.dev_features.testList": "List 测试",
+  "config.oelib.dev_features.testString": "String 测试",
+  "config.oelib.dev_features.testDouble": "Double 测试",
+  "config.oelib.dev_features.testInt": "Int 测试",
+  "config.oelib.dev_features.testEnum": "Enum 测试",
+  "config.oelib.dev_features.testEnum.TEST": "Enum 测试 1",
+  "config.oelib.dev_features.testEnum.TEST2": "Enum 测试 2",
+  "config.oelib.dev_features.enableExampleContent": "启用示例内容",
+  "config.oelib.dev_features.enableExampleContent.tooltip": "内部测试用",
+  "config.oelib.dev_features.nestedDemo": "嵌套示例",
+  "config.oelib.dev_features.nestedDemo.enabled": "启用嵌套示例",
+  "config.oelib.dev_features.nestedDemo.level": "嵌套等级"
+}

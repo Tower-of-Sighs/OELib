@@ -1,0 +1,9 @@
+{
+  "config.oelib.title": "OELib Config",
+  "config.oelib.save": "Save",
+  "config.oelib.reset": "Reset",
+  "config.oelib.search": "Search...",
+  "config.oelib.done": "Save and exit",
+  "config.oelib.unsaved.title": "Unsaved Changes",
+  "config.oelib.unsaved.message": "You have unsaved config changes. Save before closing?"
+}

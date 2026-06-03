@@ -6,7 +6,6 @@
   "mixins": [
   ],
   "client": [
-    "NeoForgeIconHandlerMixin"
   ],
   "injectors": {
     "defaultRequire": 1
