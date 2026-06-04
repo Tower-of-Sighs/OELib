@@ -33,6 +33,7 @@ dependencies {
 moduleDependencies {
     api(":modules:network")
     api(":modules:event")
+    api(":modules:misc")
 }
 
 configurations.testImplementation {

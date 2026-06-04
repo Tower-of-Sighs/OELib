@@ -3,6 +3,8 @@
   "item.oelib_dev.example_item": "示例物品",
   "block.oelib_dev.example_block": "示例方块",
 
+  "key.categories.oelib_dev": "OELib Dev",
+  "key.oelib_dev.open_fluid_example": "示例按键",
 
   "config.oelib.dev_features.testList": "List 测试",
   "config.oelib.dev_features.testString": "String 测试",

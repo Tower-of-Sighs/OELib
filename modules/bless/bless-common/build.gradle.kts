@@ -23,6 +23,7 @@ dependencies {
 moduleDependencies {
     api(":modules:config")
     api(":modules:registry")
+    api(":modules:misc")
 }
 
 configurations {

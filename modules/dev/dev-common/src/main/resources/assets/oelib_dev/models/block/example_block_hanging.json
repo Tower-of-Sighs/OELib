@@ -5,8 +5,8 @@
     32
   ],
   "textures": {
-    "1": "oelib:block/example_block",
-    "particle": "oelib:block/example_block"
+    "1": "oelib_dev:block/example_block",
+    "particle": "oelib_dev:block/example_block"
   },
   "elements": [
     {

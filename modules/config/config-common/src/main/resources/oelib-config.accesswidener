@@ -3,3 +3,4 @@ accessWidener v2 named
 transitive-accessible method net/minecraft/client/gui/screens/Screen addRenderableWidget (Lnet/minecraft/client/gui/components/events/GuiEventListener;)Lnet/minecraft/client/gui/components/events/GuiEventListener;
 transitive-accessible method net/minecraft/client/gui/screens/Screen removeWidget (Lnet/minecraft/client/gui/components/events/GuiEventListener;)V
 transitive-accessible field net/minecraft/client/gui/components/Checkbox selected Z
+transitive-accessible field net/minecraft/client/gui/screens/Screen renderables Ljava/util/List;

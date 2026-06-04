@@ -6,7 +6,6 @@ import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigValueMeta;
 import cc.sighs.oelib.config.net.ConfigUpdateRequestPacket;
 import cc.sighs.oelib.config.ui.entries.*;
-import cc.sighs.oelib.config.ui.scissor.ScissorsHandler;
 import cc.sighs.oelib.config.ui.widget.DynamicEntryListWidget;
 import cc.sighs.oelib.config.util.ConfigGuiUtil;
 import cc.sighs.oelib.config.util.ConfigSerializationUtil;
@@ -18,6 +17,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.CommonComponents;
@@ -276,6 +276,20 @@ public class ConfigScreen extends Screen {
         }
     }
 
+    private void renderBg(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        if (minecraft.level == null) {
+            renderPanorama(guiGraphics, partialTick);
+        }
+        this.renderBlurredBackground(partialTick);
+        guiGraphics.fill(0, 0, this.width, this.height, 0x80000000);
+    }
+
+    private void renderNoneBg(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        for (Renderable renderable : this.renderables) {
+            renderable.render(guiGraphics, mouseX, mouseY, partialTick);
+        }
+    }
+
     @Override
     public void render(GuiGraphics gui, int mouseX, int mouseY, float partialTick) {
         if (needsRefreshFromUnits()) {
@@ -286,8 +300,7 @@ public class ConfigScreen extends Screen {
         mouseYLast = -1;
         refScroller.update(partialTick);
         sideSlider.update(partialTick);
-        super.renderBackground(gui, mouseX, mouseY, partialTick);
-        ScissorsHandler.INSTANCE.clearScissors();
+        renderBg(gui, mouseX, mouseY, partialTick);
         int sidebar = sidebarWidth();
         int contentLeft = sidebar;
         int sliderX = sidebar - 14;
@@ -356,7 +369,7 @@ public class ConfigScreen extends Screen {
         if (listWidget != null) {
             listWidget.render(gui, mouseX, mouseY, partialTick);
         }
-        super.render(gui, mouseX, mouseY, partialTick);
+        renderNoneBg(gui, mouseX, mouseY, partialTick);
         gui.disableScissor();
 
         if (saveButton != null) {
@@ -666,31 +679,34 @@ public class ConfigScreen extends Screen {
                 int yIt = listWidget.top - listWidget.getScrollOffset();
                 for (AbstractConfigEntry<?> entry : listWidget.children()) {
                     int headerH = 20;
-                    if (entry instanceof MapEntry me) {
-                        if (mouseY >= yIt && mouseY <= yIt + headerH) {
-                            if (me.toggleIfHit(mouseX, mouseY)) {
-                                return true;
+                    switch (entry) {
+                        case MapEntry me -> {
+                            if (mouseY >= yIt && mouseY <= yIt + headerH) {
+                                if (me.toggleIfHit(mouseX, mouseY)) {
+                                    return true;
+                                }
                             }
+                            yIt += me.getItemHeight();
                         }
-                        yIt += me.getItemHeight();
-                    } else if (entry instanceof ListEntry le) {
-                        if (mouseY >= yIt && mouseY <= yIt + headerH) {
-                            if (le.toggleIfHit(mouseX, mouseY)) {
-                                return true;
+                        case ListEntry le -> {
+                            if (mouseY >= yIt && mouseY <= yIt + headerH) {
+                                if (le.toggleIfHit(mouseX, mouseY)) {
+                                    return true;
+                                }
                             }
+                            yIt += le.getItemHeight();
                         }
-                        yIt += le.getItemHeight();
-                    } else if (entry instanceof PathGroupEntry ge) {
-                        if (mouseY >= yIt && mouseY <= yIt + headerH) {
-                            if (ge.toggleIfHit(mouseX, mouseY)) {
-                                setGroupExpanded(ge.stateKey(), ge.expanded());
-                                init();
-                                return true;
+                        case PathGroupEntry ge -> {
+                            if (mouseY >= yIt && mouseY <= yIt + headerH) {
+                                if (ge.toggleIfHit(mouseX, mouseY)) {
+                                    setGroupExpanded(ge.stateKey(), ge.expanded());
+                                    init();
+                                    return true;
+                                }
                             }
+                            yIt += ge.getItemHeight();
                         }
-                        yIt += ge.getItemHeight();
-                    } else {
-                        yIt += entry.getItemHeight();
+                        default -> yIt += entry.getItemHeight();
                     }
                 }
             }

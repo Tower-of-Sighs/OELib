@@ -53,17 +53,30 @@ project.evaluationDependsOn(commonProjectPath)
 val commonProj = project(commonProjectPath)
 val apiDeps = ModuleDependenciesExtension.getApiDeps(commonProj)
 val implDeps = ModuleDependenciesExtension.getImplDeps(commonProj)
-val apiCfg = if (suffix == "fabric") "modApi" else "api"
-val implCfg = if (suffix == "fabric") "modImplementation" else "implementation"
+// Use sourceSet output as lazy file deps to bypass Loom's mod/remap processing.
+// Provider lambda resolves at execution time when all projects are evaluated.
 if (apiDeps.isNotEmpty() || implDeps.isNotEmpty()) {
-    project.afterEvaluate {
-        for (dep in apiDeps) {
-            val depPath = ":modules:$dep:$dep-$suffix"
-            project.dependencies.add(apiCfg, project.dependencies.project(mapOf("path" to depPath)))
+    for (dep in apiDeps) {
+        val depPath = ":modules:$dep:$dep-$suffix"
+        val depProj = project(depPath)
+        val output = project.files(project.provider { depProj.sourceSets.main.get().output })
+        project.dependencies.add("api", output)
+        // Also add to Loom's mod runtime classpath for dev environment
+        project.afterEvaluate {
+            if (project.configurations.findByName("modRuntimeClasspath") != null) {
+                project.dependencies.add("modRuntimeClasspath", output)
+            }
         }
-        for (dep in implDeps) {
-            val depPath = ":modules:$dep:$dep-$suffix"
-            project.dependencies.add(implCfg, project.dependencies.project(mapOf("path" to depPath)))
+    }
+    for (dep in implDeps) {
+        val depPath = ":modules:$dep:$dep-$suffix"
+        val depProj = project(depPath)
+        val output = project.files(project.provider { depProj.sourceSets.main.get().output })
+        project.dependencies.add("implementation", output)
+        project.afterEvaluate {
+            if (project.configurations.findByName("modRuntimeClasspath") != null) {
+                project.dependencies.add("modRuntimeClasspath", output)
+            }
         }
     }
 }
@@ -76,8 +89,7 @@ if (apiDeps.isNotEmpty() || implDeps.isNotEmpty()) {
     val forwardBuffer = mutableListOf<Pair<String, String>>()
     for (dep in apiDeps + implDeps) {
         val depPath = ":modules:$dep:$dep-$suffix"
-        try { project.evaluationDependsOn(depPath) } catch (_: Exception) { continue }
-        val depProj = project(depPath)
+        val depProj = try { project(depPath) } catch (_: Exception) { continue }
         fun collect(srcConfig: String, dstConfig: String = srcConfig) {
             depProj.configurations.findByName(srcConfig)?.dependencies
                 ?.withType(org.gradle.api.artifacts.ExternalModuleDependency::class.java)
@@ -86,11 +98,16 @@ if (apiDeps.isNotEmpty() || implDeps.isNotEmpty()) {
                     forwardBuffer.add(dstConfig to "$g:$a:$v")
                 }
         }
-        collect("api", apiCfg); collect("modApi", apiCfg); collect("additionalRuntimeClasspath")
+        collect("api", "api"); collect("modApi", "api"); collect("additionalRuntimeClasspath")
     }
+    // Add forwarded deps in afterEvaluate so MDG/Loom configs exist
     if (forwardBuffer.isNotEmpty()) {
         project.afterEvaluate {
-            for ((cfg, notation) in forwardBuffer) project.dependencies.add(cfg, notation)
+            for ((cfg, notation) in forwardBuffer) {
+                if (project.configurations.findByName(cfg) != null) {
+                    project.dependencies.add(cfg, notation)
+                }
+            }
         }
     }
 }

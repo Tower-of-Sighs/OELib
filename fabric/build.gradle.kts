@@ -68,3 +68,20 @@ loom {
         }
     }
 }
+
+// Register each module fabric source set as a mod so AW/mixin are processed in dev
+project.afterEvaluate {
+    @Suppress("UNCHECKED_CAST")
+    val discoveredModules = rootProject.extra["discoveredModules"] as? Map<String, File> ?: emptyMap()
+    discoveredModules.forEach { (name, _) ->
+        try {
+            val proj = project(":modules:$name:${name}-fabric")
+            project.evaluationDependsOn(proj.path)
+            loom.mods.register("oelib_$name") {
+                sourceSet(proj.sourceSets.main.get())
+            }
+        } catch (_: Exception) {
+            // Skip if module not available or not fabric
+        }
+    }
+}

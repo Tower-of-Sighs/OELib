@@ -1,10 +1,10 @@
 {
   "variants": {
     "hanging=false": {
-      "model": "oelib:block/example_block"
+      "model": "oelib_dev:block/example_block"
     },
     "hanging=true": {
-      "model": "oelib:block/example_block_hanging"
+      "model": "oelib_dev:block/example_block_hanging"
     }
   }
 }

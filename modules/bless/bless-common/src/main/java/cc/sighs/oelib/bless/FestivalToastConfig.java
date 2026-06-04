@@ -1,6 +1,5 @@
 package cc.sighs.oelib.bless;
 
-import cc.sighs.oelib.OELibBless;
 import cc.sighs.oelib.bless.render.ChongYangOverlay;
 import cc.sighs.oelib.bless.render.NewYearOverlay;
 import cc.sighs.oelib.bless.render.ValentineOverlay;
@@ -25,7 +24,7 @@ public record FestivalToastConfig(
     private static final String FILE_NAME = "oelib_festivals";
 
     public static final ConfigSchema.Definition<FestivalToastConfig> DEFINITION = ConfigSchema.defineClient(
-            ResourceLocation.fromNamespaceAndPath(OELibBless.MOD_ID, "festival_toast"),
+            ResourceLocation.fromNamespaceAndPath("oelib", "festival_toast"),
             FestivalToastConfig.class,
             meta -> meta
                     .directory("oelib")

@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "oelib:item/example_block_item"
+    "layer0": "oelib_dev:item/example_block_item"
   }
 }

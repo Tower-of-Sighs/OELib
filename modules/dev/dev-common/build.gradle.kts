@@ -22,6 +22,10 @@ moduleDependencies {
     api(":modules:data")
     api(":modules:bless")
     api(":modules:renderer")
+    api(":modules:event")
+    api(":modules:misc")
+    api(":modules:config")
+    api(":modules:network")
     annotationProcessor(":modules:data")
 }
 

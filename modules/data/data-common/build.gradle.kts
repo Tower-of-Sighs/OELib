@@ -22,6 +22,7 @@ dependencies {
 moduleDependencies {
     api(":modules:event")
     api(":modules:network")
+    api(":modules:misc")
 }
 
 configurations {
