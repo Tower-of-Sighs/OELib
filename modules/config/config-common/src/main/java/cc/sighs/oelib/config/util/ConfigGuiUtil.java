@@ -1,7 +1,7 @@
 package cc.sighs.oelib.config.util;
 
-import cc.sighs.oelib.OELibConfig;
 import cc.sighs.oelib.config.ConfigUnit;
+import cc.sighs.oelib.config.OELibConfig;
 import cc.sighs.oelib.config.ui.screen.ConfigScreen;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;

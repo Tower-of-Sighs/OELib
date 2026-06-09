@@ -1,7 +1,7 @@
 package cc.sighs.oelib.data.neoforge;
 
-import cc.sighs.oelib.OELibData;
 import cc.sighs.oelib.data.DataRegistry;
+import cc.sighs.oelib.data.OELibData;
 import cc.sighs.oelib.data.api.DataValidator;
 import cc.sighs.oelib.data.spi.IDataManager;
 import net.minecraft.resources.ResourceLocation;

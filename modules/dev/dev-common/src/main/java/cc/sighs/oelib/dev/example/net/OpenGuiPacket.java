@@ -1,6 +1,6 @@
 package cc.sighs.oelib.dev.example.net;
 
-import cc.sighs.oelib.OELibDev;
+import cc.sighs.oelib.dev.OELibDev;
 import cc.sighs.oelib.dev.example.ExampleBlock;
 import cc.sighs.oelib.dev.example.FluidRenderExampleMenu;
 import cc.sighs.oelib.network.api.INetworkContext;

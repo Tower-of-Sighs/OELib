@@ -1,7 +1,7 @@
 package cc.sighs.oelib.config.fabric;
 
-import cc.sighs.oelib.OELibConfig;
 import cc.sighs.oelib.config.ClientConfigManager;
+import cc.sighs.oelib.config.OELibConfig;
 import net.fabricmc.fabric.api.resource.IdentifiableResourceReloadListener;
 import net.minecraft.resources.ResourceLocation;
 

@@ -1,6 +1,6 @@
 package cc.sighs.oelib.registry.neoforge;
 
-import cc.sighs.oelib.OELibRegistry;
+import cc.sighs.oelib.registry.OELibRegistry;
 import cc.sighs.oelib.registry.action.*;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.screens.Screen;

@@ -1,6 +1,6 @@
 package cc.sighs.oelib.network.serialization;
 
-import cc.sighs.oelib.OELibNetwork;
+import cc.sighs.oelib.network.OELibNetwork;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;

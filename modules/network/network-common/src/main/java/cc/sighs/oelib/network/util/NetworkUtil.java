@@ -1,6 +1,6 @@
 package cc.sighs.oelib.network.util;
 
-import cc.sighs.oelib.OELibNetwork;
+import cc.sighs.oelib.network.OELibNetwork;
 import cc.sighs.oelib.network.api.INetworkPacket;
 import cc.sighs.oelib.network.chunk.GenericChunkPacket;
 import cc.sighs.oelib.platform.Platform;

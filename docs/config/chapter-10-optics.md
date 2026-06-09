@@ -1,74 +1,33 @@
 # Chapter 10: Optics 架构揭秘
 
-> 本章涉及光学（Optics）理论的基本概念。如果你此前没有接触过函数式编程中的 Lens、Prism 等概念，阅读起来可能会有一定困难。
-> 我们建议有兴趣深入了解的读者先学习真正的光学理论，例如：
-> - [Monocle](https://www.optics.dev/Monocle/)（Scala optics 库，文档详尽）
-> - [higher-kinded-j](https://github.com/higher-kinded-j/higher-kinded-j/tree/main/hkj-book)（Java optics 库，有配套书籍）
-> - [Profunctor Optics: Modular Data Accessors](https://research-information.bris.ac.uk/en/publications/profunctor-optics-modular-data-accessors)（原理论文）
->
-> 如果你只是想用 OELib Config 来管理配置文件，完全不需要阅读本章——前九章已经覆盖了全部日常使用场景。
+前九章你一直在使用 `update`、`ifPresent`、`updateElements` 这些 API。它们工作得不错，但你有没有想过：为什么 `UNIT.update(MyConfig::port, v -> v + 1)` 能精确修改 `Record` 中的某个字段，而不影响其他字段？为什么 `ifPresent` 能在值为空时自动跳过？
 
-前九章你一直在使用 `update`、`ifPresent`、`updateElements` 这些 API。它们工作得不错，但你有没有想过：为什么 `update(MyConfig::port, v -> v + 1)` 能精确修改 Record 中的某个字段，而不影响其他字段？为什么 `ifPresent` 能在值为空时自动跳过？
+**核心问题**：一个方法引用 `MyConfig::port` 只是一段指向 getter 的 lambda，它本身只能"读"，不能"写"。OELib Config 是如何从这样一个只能读的 getter 中，提取出字段名，然后构造出一对可读可写的指针，进而实现不可变 Record 的字段级更新的？
 
-这些 API 的背后是一套 **Optics（光学）** 体系。本章将揭示它们是什么、如何工作、以及为什么选择这样的设计。
+答案是一套 **Optics（光学）** 体系。本章将通过逐行代入 Java 泛型类型的方式，揭示这套体系的工作原理。
 
 ---
 
-## 10.1 你一直在用 Optics
+## 10.1 Lens：从方法引用到字段指针
 
-从第 5 章开始的每一次修改，表面上是简单的业务 API 调用，背后其实都是 Optics 在驱动。
+### 10.1.1 问题：getter 只能读，不能写
 
-以下是用户视角与系统内部执行视角的对比：
-
-```java
-// 用户看到的是：
-UNIT.update(MyConfig::port, v -> v + 1);
-
-```
-
-```mermaid
-graph TD
-    A["用户调用 UNIT.update"] --> B["1. 定位: getter 转换为 Lens 字段指针"]
-    B --> C["2. 操作: Lens.update 生成新 Record 候选值"]
-    C --> D["3. 提交: commitCandidate 进行校验、持久化与事件发布"]
-    style B fill:#f9f,stroke:#333,stroke-width:2px
-    style C fill:#bbf,stroke:#333,stroke-width:2px
-    style D fill:#bfb,stroke:#333,stroke-width:2px
-```
-
-第 6 章的 `ifPresent`：
+假设有如下配置 Record：
 
 ```java
-UNIT.ifPresent(MyConfig::maxPlayers, v -> v + 1);
-// 内部：getter → Lens → Prism（条件包装）→ updateIfPresent → commitCandidate
-
+public record MyConfig(int port, String host) {}
 ```
 
-第 7 章的 `updateElements`：
+用户写出 `MyConfig::port` 时，Java 编译出一个方法引用。这个引用只能做一件事：传入 `MyConfig` 返回 `Integer`。它无法产生"将 port 改为新值后的新 MyConfig"。
 
-```java
-UNIT.updateElements(MyConfig::whitelist, String::toLowerCase);
-// 内部：getter → Lens → Traversal（集合包装）→ update → commitCandidate
+**我们需要把 `S -> A` 扩展为一对 `(S -> A, (A, S) -> S)` ———— 一个能读也能写的双向指针。**
 
-```
-
-> **核心设计理念**
-> 每个业务 API 的背后都是不变的 Optics 三部曲：**定位 → 操作 → 提交**。
-> * **定位** 这一步由 `Lens`、`Prism`、`Traversal` 精确完成。
-> * **操作** 和 **提交** 由 `ConfigUnit` 统一拦截并管理。
->
->
-
----
-
-## 10.2 Lens：字段指针
-
-`ConfigLens<S, A>` 是 Optics 体系中最基础的构成单元。它描述了“如何从源类型 `S` 中读取属性 `A`，以及如何将新的 `A` 写回 `S`”。
+### 10.1.2 源码实现：ConfigLens
 
 ```java
 public final class ConfigLens<S, A> {
-    private final Function<S, A> viewFn;       // S → A
-    private final BiFunction<A, S, S> setFn;   // (A, S) → S
+    private final Function<S, A> viewFn;       // S -> A, 读取
+    private final BiFunction<A, S, S> setFn;   // (A, S) -> S, 写入（重建）
 
     public A view(S source) { return viewFn.apply(source); }
     public S set(S source, A value) { return setFn.apply(value, source); }
@@ -76,296 +35,706 @@ public final class ConfigLens<S, A> {
         return setFn.apply(updater.apply(viewFn.apply(source)), source);
     }
 }
-
 ```
 
-简单来说，**Lens 就是一个打包在一起的 getter + setter 对**。这里没有任何黑魔法。
+两个类型参数：`S`（源类型，即 Record 类型），`A`（目标字段类型）。两个核心函数：
+- `viewFn`：从 `S` 中取出 `A`
+- `setFn`：给定新的 `A` 值，将其"写回" `S`，返回全新的 `S`
 
-### Lens 的创建方式
+所谓"写回"，对于不可变的 Record 来说，就是**重建**：构造一个除了目标字段外其他字段完全相同的新 Record。
 
-通常通过 `RecordLensBuilder.lens()` 从方法引用（getter）中自动创建：
+### 10.1.3 泛型代入：具体化到 MyConfig
 
-```java
-// 通过 RecordLensBuilder.lens() 从 getter 创建
-ConfigLens<MyConfig, Integer> portLens =
-        RecordLensBuilder.lens(MyConfig.class, MyConfig::port);
-
-```
-
-`RecordLensBuilder` 会从 getter 方法引用中提取字段名，并通过 `RecordLensClassGenerator` 在运行时生成隐藏类——使用 `invokevirtual` 读取、`invokespecial`（调用 Record 构造函数）写入，**完全无需传统的反射，保证了极致的性能**。
-
-### Compose：字段指针的组合
-
-Lens 的核心价值在于 **Compose（组合）**。两个 Lens 可以组合成一个全新的 Lens，从而具备**直通嵌套字段**的能力：
-
-```java
-ConfigLens<AppConfig, DatabaseConfig> dbLens =
-        RecordLensBuilder.lens(AppConfig.class, AppConfig::database);
-ConfigLens<DatabaseConfig, String> hostLens =
-        RecordLensBuilder.lens(DatabaseConfig.class, DatabaseConfig::host);
-
-// 组合后：直通 AppConfig.database.host
-ConfigLens<AppConfig, String> dbHostLens = dbLens.compose(hostLens);
+当 `RecordLensBuilder.lens(MyConfig.class, MyConfig::port)` 被调用时，泛型参数被推导为：
 
 ```
+ConfigLens<MyConfig, Integer>
+    viewFn:  MyConfig           -> Integer
+    setFn:  (Integer, MyConfig) -> MyConfig
+```
+
+即：
 
 ```mermaid
 graph LR
-    subgraph dbLens [dbLens]
-        AppConfig -- view --> DatabaseConfig
+    subgraph viewFn[S -> A]
+        S["MyConfig (源 Record)"] --> A["Integer (port 字段值)"]
     end
-    subgraph hostLens [hostLens]
-        DatabaseConfig -- view --> String
+    subgraph setFn[(A, S) -> S]
+        V["新 Integer 值"] --- S2["MyConfig (源)"] --> NEW["新的 MyConfig"]
     end
-    AppConfig -. compose .-> String
-
 ```
 
-组合 Lens 的 `set` 操作采用**从内向外逐层重建**的机制：
-
-1. 先用 `hostLens` 替换 `DatabaseConfig` 中的 `host`，生成新的 `DatabaseConfig`。
-2. 再用 `dbLens` 将这个新的 `DatabaseConfig` 替换回 `AppConfig` 中。
-
-在此期间，中间层的 Record 虽然被重建，但其未改变的值以及无关字段完全不受影响。
-
-### 类型推演链
-
-```text
-dbLens:     AppConfig → DatabaseConfig
-hostLens:              DatabaseConfig → String
-─────────────────────────────────────────────
-compose:    AppConfig ───────────────→ String
-
-```
-
-> **注意：** 组合时中间类型必须绝对匹配。即 `hostLens` 的源类型（`DatabaseConfig`）必须等于 `dbLens` 的目标类型，这一约束在编译时由 Java 泛型进行严格检查。
-
----
-
-## 10.3 Prism：条件字段访问器
-
-`ConfigPrism<S, A>` 可以理解为**可能失败的 Lens**——它不一定能成功匹配或定位到目标值。
+如果用伪代码表达 setFn 的内部逻辑，相当于：
 
 ```java
-public final class ConfigPrism<S, A> {
-    private final Function<S, Optional<A>> preview;  // S → Optional<A>
-    private final BiFunction<A, S, S> setter;        // (A, S) → S
+// setFn 等价于:
+(Integer newPort, MyConfig old) -> new MyConfig(newPort, old.host())
+```
+
+目标字段使用新值，其余字段从旧 Record 逐项拷贝。这正是不可变 Record 的"修改"方式————没有就地修改，只有重建。
+
+### 10.1.4 生成过程：从 getter 方法引用到 Lens
+
+`RecordLensBuilder` 做了三件事：
+
+```mermaid
+flowchart LR
+    REF["MyConfig::port<br/>(方法引用)"] --> EXTRACT["提取方法名 'port'"]
+    EXTRACT --> GEN["生成隐藏字节码"]
+    GEN --> LENS["ConfigLens&lt;MyConfig, Integer&gt;<br/>viewFn + setFn"]
+```
+
+**第一步：提取字段名**
+
+```java
+// RecordLensBuilder.extractComponentName
+SerializedLambda lambda = ...;
+return lambda.getImplMethodName(); // 返回 "port"
+```
+
+通过序列化机制，将方法引用拆解为 `SerializedLambda`，从中读取出 `implMethodName`，即 Record 组件名称。
+
+**第二步：按名称索引查找 RecordComponent**
+
+```java
+RecordComponent[] components = recordClass.getRecordComponents();
+// 遍历找到 name == "port" 的那个，记录其索引
+```
+
+**第三步：生成零反射字节码**
+
+`RecordLensClassGenerator` 使用 Class-File API 为每个 Record 组件生成一个隐藏类，内建两个静态方法：
+
+```java
+// 生成的 view 方法 — 等效于:
+static Integer view(MyConfig source) { return source.port(); }
+
+// 生成的 update 方法 — 等效于:
+static MyConfig update(Integer newPort, MyConfig source) {
+    return new MyConfig(newPort, source.host());
 }
-
 ```
 
-### 创建方式
+这两个方法通过 `invokevirtual`（读）和 `invokespecial`（构造）实现，**完全不使用 `Method.invoke` 反射**，性能接近手写代码。
 
-1. **从 Optional 字段创建：**
-```java
-ConfigLens<MyConfig, Optional<Integer>> optLens = ...;
-ConfigPrism<MyConfig, Integer> prism = RecordLensBuilder.optional(optLens);
-
-```
-
-
-2. **从密封类型的子类型（Sealed Subtypes）创建：**
-```java
-ConfigPrism<MyConfig, ModeA> aPrism =
-        RecordLensBuilder.subtype(modeLens, ModeA.class);
-
-```
-
-
-
-### Lens 与 Prism 的核心操作对比
-
-| 操作 | Lens | Prism |
-| --- | --- | --- |
-| **读取** | `view(S)` → 总是返回 `A` | `preview(S)` → 返回 `Optional<A>` |
-| **写入** | `set(S, A)` → 总是成功 | `set(S, A)` → 不匹配时行为未定义（通常跳过） |
-| **条件写入** | 无 | `updateIfPresent(S, f)` → **只有匹配时**才执行变换 |
-
-* **Compose 规则：** `Lens + Prism = Prism`。因为 Lens 只能保证外层目标存在，但一旦引入了可能失败的 Prism，组合后的最终结果便引入了不确定性。
+生成的隐藏类被注册为 Nestmate，通过 `MethodHandle` 调用，最终包装为 Lambda 存入 `ConfigLens` 的 `viewFn` 和 `setFn`。
 
 ---
 
-## 10.4 Traversal 和 Fold：集合遍历
+## 10.2 Compose：从单字段到嵌套字段
 
-`ConfigTraversal<S, A>` 描述了如何**同时聚焦集合（如 List、Map）中的零到多个元素**。
+### 10.2.1 问题：嵌套 Record 需要多步聚焦
+
+真实配置很少是扁平的，更常见的是嵌套结构：
+
+```java
+public record DatabaseConfig(String host, int port) {}
+public record AppConfig(String name, DatabaseConfig database) {}
+```
+
+要读取 `AppConfig.database.host`，手动做法是：先读 `database`，再读 `host`。但我们希望一次组合，得到直通根到叶的 Lens。
+
+### 10.2.2 泛型代入：两个 Lens 组合
+
+定义两个 Lens：
+
+```java
+ConfigLens<AppConfig, DatabaseConfig> dbLens
+    = RecordLensBuilder.lens(AppConfig.class, AppConfig::database);
+// dbLens: viewFn = AppConfig -> DatabaseConfig
+//         setFn  = (DatabaseConfig, AppConfig) -> AppConfig
+
+ConfigLens<DatabaseConfig, String> hostLens
+    = RecordLensBuilder.lens(DatabaseConfig.class, DatabaseConfig::host);
+// hostLens: viewFn = DatabaseConfig -> String
+//          setFn  = (String, DatabaseConfig) -> DatabaseConfig
+```
+
+调用 `dbLens.compose(hostLens)`，返回 `ConfigLens<AppConfig, String>`。
+
+**中间类型约束**：`hostLens` 的源类型 `DatabaseConfig` 必须等于 `dbLens` 的目标类型 `DatabaseConfig`。这是 Java 泛型在编译期的检查：`ConfigLens<A, B>.compose(ConfigLens<B, C>)` ———— 中间类型 `B` 必须完全一致。
+
+### 10.2.3 源码实现：compose 方法
+
+```java
+public <B> ConfigLens<S, B> compose(ConfigLens<A, B> child) {
+    // ...
+    return new ConfigLens<>(
+        path + "." + child.path,                      // 路径: "database.host"
+        source -> child.view(view(source)),            // view: 先取 database, 再取 host
+        (value, source) -> set(source, child.set(view(source), value))  // set: 从内向外重建
+    );
+}
+```
+
+**代入具体类型**：当 `S = AppConfig, A = DatabaseConfig, B = String`：
+
+```mermaid
+flowchart TD
+    subgraph view[view: AppConfig → String]
+        direction LR
+        APP1["AppConfig src"] -->|"dbLens.view"| DB1["DatabaseConfig db"]
+        DB1 -->|"hostLens.view"| STR1["String (host)"]
+    end
+
+    subgraph set[set: 从内向外重建]
+        direction TB
+        STEP1["step1: hostLens.set(db, newHost)<br/>→ 新的 DatabaseConfig"] --> STEP2["step2: dbLens.set(src, newDb)<br/>→ 新的 AppConfig"]
+    end
+```
+
+组合后的 `set` 采用**从内向外逐层重建**机制：
+
+1. `hostLens.set(view(source), value)`：用新值替换 `DatabaseConfig` 中的 `host`，产生新的 `DatabaseConfig`
+2. `set(source, newDb)`：将新的 `DatabaseConfig` 替换回 `AppConfig`，产生新的 `AppConfig`
+
+这种嵌套重建保证了**中间层 Record 的未改字段完全不受影响**————`DatabaseConfig` 中的 `port` 保持不变，`AppConfig` 中的 `name` 也保持不变。
+
+---
+
+## 10.3 ConfigAffine：可空条件访问器
+
+### 10.3.1 问题：Optional 字段为空时怎么办
+
+```java
+public record MyConfig(Optional<Integer> maxPlayers, String host) {}
+```
+
+当 `maxPlayers` 为 `Optional.empty()` 时，`Lens.view()` 会返回空 Optional。但用户想要的效果是：**如果值为空，跳过不处理**。普通的 Lens 不具备这种"条件判断"能力。
+
+### 10.3.2 为什么不是 Prism，而是 Affine
+
+在标准光学理论中，**Prism** 和 **Affine** 的区别在于一个关键操作：
+
+- **Prism**：`preview` (S → Optional<A>) + **`review`** (A → S)。能从焦点值 **构造** 出完整的源。适用于**和类型（sum types）**的模式匹配。
+- **Affine**（又名 AffineTraversal）：`preview` (S → Optional<A>) + **`set`** (S × A → S)。能 **读取**（可能失败）和 **更新**，但 **不能从焦点构造出整体** —— 更新时必须传入旧的源。
+
+我们的类只有 `preview` + `set`，没有 `review`（给定一个 `Integer`，无法凭空构造出 `MyConfig`），因此是 **Affine**，不是 Prism。
+
+```mermaid
+flowchart LR
+    subgraph Prism 理论
+        P_PRE["preview: S → Optional&lt;A&gt;"] --- P_REV["review: A → S<br/>从焦点构造整体"]
+    end
+    subgraph Affine 实际
+        A_PRE["preview: S → Optional&lt;A&gt;"] --- A_SET["set: (A, S) → S<br/>需要旧的源才能更新"]
+    end
+```
+
+### 10.3.3 源码实现：ConfigAffine
+
+```java
+public final class ConfigAffine<S, A> {
+    private final Function<S, Optional<A>> preview;  // S -> Optional<A>
+    private final BiFunction<A, S, S> setter;         // (A, S) -> S
+
+    public Optional<A> preview(S source) {
+        return preview.apply(source);                 // 可能为空
+    }
+
+    public S updateIfPresent(S source, UnaryOperator<A> updater) {
+        Optional<A> matched = preview(source);
+        if (matched.isEmpty()) {
+            return source;                            // 不匹配，原样返回
+        }
+        return set(source, updater.apply(matched.get()));
+    }
+}
+```
+
+与 Lens 的关键区别：
+
+| 操作 | Lens | Affine |
+|---|---|---|
+| 读取 | `view(S)` → **总是**返回 `A` | `preview(S)` → 返回 `Optional<A>` |
+| 条件更新 | 无 | `updateIfPresent` → 不匹配时跳过 |
+
+```mermaid
+flowchart TD
+    INPUT["S source"] --> PREVIEW["preview(source)"]
+    PREVIEW --> EMPTY{"Optional.empty()?"}
+    EMPTY -->|"是"| SKIP["返回原 source<br/>不做任何修改"]
+    EMPTY -->|"否"| APPLY["set(source, updater(value))<br/>→ 新 S"]
+```
+
+### 10.3.4 泛型代入：从 Optional 字段到 Affine
+
+`RecordLensBuilder.optional()` 将一个指向 `Optional<A>` 的 Lens 包装为 Affine：
+
+```java
+// 假设:
+ConfigLens<MyConfig, Optional<Integer>> optLens = ...;  // 指向 maxPlayers
+
+// 包装为 Affine:
+ConfigAffine<MyConfig, Integer> affine =
+    RecordLensBuilder.optional(optLens);
+```
+
+代入泛型 `S = MyConfig, A = Integer`：
+
+```mermaid
+flowchart LR
+    subgraph Optional 包装
+        LENS["ConfigLens&lt;MyConfig, Optional&lt;Integer&gt;&gt;<br/>view → Optional&lt;Integer&gt;<br/>set 写入 Optional&lt;Integer&gt;"]
+        AFFINE["ConfigAffine&lt;MyConfig, Integer&gt;<br/>preview → Optional&lt;Integer&gt;<br/>set 写入 Integer (自动包装为 Optional.of)"]
+    end
+    LENS -->|"optional() 包装"| AFFINE
+```
+
+源码中 `optional()` 的实现体现出这种含义转换：
+
+```java
+public static <S, A> ConfigAffine<S, A> optional(ConfigLens<S, Optional<A>> lens) {
+    return new ConfigAffine<>(
+        lens.path(),
+        lens::view,               // preview = 直接沿用 view, 返回 Optional<A>
+        (value, source) -> lens.set(source, Optional.ofNullable(value))  // setter = 自动包装为 Optional
+    );
+}
+```
+
+`preview` 直接复用 Lens 的 `view`（它本来就返回 `Optional<A>`），`setter` 负责将裸值 `A` 重新包装为 `Optional.ofNullable(value)` 后再写回。
+
+注意这里只有 `set` 没有 `review`：给定一个 `Integer` 无法构造出 `MyConfig`，必须同时有旧的 `MyConfig` 源。这正是 Affine 而非 Prism 的特征。
+
+### 10.3.5 子类型 Affine
+
+类似地，密封类型场景也会用到 Affine：
+
+```java
+public sealed interface Mode permits ModeA, ModeB {}
+public record Config(Mode mode) {}
+
+ConfigLens<Config, Mode> modeLens = ...;
+ConfigAffine<Config, ModeA> aAffine =
+    RecordLensBuilder.subtype(modeLens, ModeA.class);
+```
+
+此时 `preview` 的语义是：如果运行时类型是 `ModeA` 则匹配，否则返回空：
+
+```java
+// subtype() 源码:
+source -> {
+    A value = lens.view(source);
+    if (subtypeClass.isInstance(value)) {
+        return Optional.of(subtypeClass.cast(value));
+    }
+    return Optional.empty();
+}
+```
+
+这里同样没有 `review`：给定一个 `ModeA` 无法构造出 `Config`（不知道 `Config` 还需要什么其他字段），因此只能是 Affine。
+
+---
+
+## 10.4 Traversal：集合中的多焦点聚焦
+
+### 10.4.1 问题：如何批量更新 List 中的每个元素
+
+```java
+public record MyConfig(List<String> whitelist, Map<String, Integer> limits) {}
+```
+
+要对 `whitelist` 中的每个 `String` 应用变换，手写循环可以，但如何将这个操作也纳入 Optics 的统一框架？我们需要一种能"同时聚焦多个元素"的 Optic。
+
+### 10.4.2 源码实现：ConfigTraversal
 
 ```java
 public final class ConfigTraversal<S, A> extends ConfigFold<S, A> {
     private final BiFunction<S, UnaryOperator<A>, S> updateAll;
-}
 
+    public S update(S source, UnaryOperator<A> modifier) {
+        return updateAll.apply(source, modifier);
+    }
+}
 ```
 
-### 创建方式
+`Traversal` 的能力用一句话概括：**给定一个 `S -> A` 方向上的批量变换函数 `UnaryOperator<A>`，沿着 `S -> [A]` 的路径分发到每个元素，再聚合成新的 `S`**。
+
+### 10.4.3 泛型代入：List 元素遍历
+
+`Traversals.onList` 将一个指向 `List<T>` 字段的 Lens 转化为遍历其中每个元素的 Traversal：
 
 ```java
-// List 元素遍历
-ConfigTraversal<MyConfig, String> t =
-        Traversals.onList(RecordLensBuilder.lens(MyConfig.class, MyConfig::names));
-
-// Map 值遍历
-ConfigTraversal<MyConfig, Integer> v =
-        Traversals.onMapValues(RecordLensBuilder.lens(MyConfig.class, MyConfig::limits));
-
+// 假设 lens = ConfigLens<MyConfig, List<String>>, 指向 whitelist
+ConfigTraversal<MyConfig, String> t = Traversals.onList(lens);
 ```
 
-`ConfigFold<S, A>` 是 Traversal 的**只读版本**——它只暴露出提取操作，而不允许进行更新。系统中的 `count`、`anyMatch`、`allMatch`、`getAll` 等业务 API，底层全部由 `ConfigFold` 驱动。
-
-### Compose 组合规则
-
-| 组合方式 | 结果类型 | 核心原因 |
-| --- | --- | --- |
-| `Traversal + Lens` | **Traversal** | 对集合中的每一个元素，进一步提取其子字段 |
-| `Traversal + Traversal` | **Traversal** | 展开两层嵌套集合（多维集合遍历） |
-| `Traversal compose Lens` | **Traversal** | Lens 不会改变元素数量，依旧保持多焦点性质 |
-| `Lens compose Traversal` | **Traversal** | 先由 Lens 定位到集合字段，再由 Traversal 展开多焦点 |
-
----
-
-## 10.5 类型映射与组合规则
-
-我们可以将这四种 Optics 类型抽象为“不同形态的类型映射”：
-
-| Optic 类型 | 映射机制 | 焦点数量 | 能力 |
-| --- | --- | --- | --- |
-| **Lens** | `S → A` | **恰好一个** | 读写 |
-| **Prism** | `S ⇢ A` | **零个或一个** | 读写（可能跳过） |
-| **Traversal** | `S ↠ A` | **零个或多个** | 读写（批量） |
-| **Fold** | `S ⇢ A` | **零个或多个** | **只读** |
+代入 `S = MyConfig, T = String`：
 
 ```mermaid
-graph TD
-    Optics[Optics 家族体系] --> ReadOnly[只读分支]
-    Optics --> ReadWrite[读写分支]
-    ReadOnly --> Fold[Fold: 0..N 个焦点]
-    ReadWrite --> Lens[Lens: 恰好 1 个焦点]
-    ReadWrite --> Prism[Prism: 0 或 1 个焦点]
-    ReadWrite --> Traversal[Traversal: 0..N 个焦点]
-    
-    style Fold fill:#fdf,stroke:#333
-    style Lens fill:#ddf,stroke:#333
-    style Prism fill:#ddf,stroke:#333
-    style Traversal fill:#ddf,stroke:#333
-
+flowchart LR
+    subgraph onList 构造
+        L["ConfigLens&lt;MyConfig, List&lt;String&gt;&gt;"]
+        T["ConfigTraversal&lt;MyConfig, String&gt;<br/>extract → List&lt;String&gt;<br/>updateAll → 批量变换后重建"]
+    end
+    L --> T
 ```
 
-组合后的最终形态，完全由**焦点数量的乘积**决定，其背后的数学基础非常直观：
+源码实现：
 
-* `Lens (1) + Lens (1) = Lens (1)` *(1 × 1 = 1)*
-* `Lens (1) + Prism (0\|1) = Prism (0\|1)` *(1 × (0|1) = 0|1)*
-* `Prism (0\|1) + Lens (1) = Prism (0\|1)` *((0|1) × 1 = 0|1)*
-* `Traversal (0..n) + Lens (1) = Traversal (0..n)` *(0..n × 1 = 0..n)*
-* `Traversal (0..n) + Traversal (0..n) = Traversal (0..n)` *(0..n × 0..n = 0..n)*
-
-> 不需要理解复杂的范畴论。你只需要记住：**组合后的焦点数量等于各组件焦点数量相乘**。
-
----
-
-## 10.6 Mutation：统一提交
-
-无论你在上层使用的是哪一种 Optics，它们的变换请求最终都会收敛、坍缩为统一的 `ConfigMutation` 结构：
-
-```text
-Lens.setTo(value) / Lens.map(fn)         ──→ ConfigMutation<S>
-Prism.updateIfPresent (内部委托)          ──→ ConfigMutation<S>
-Traversal.toMutation(fn)                 ──→ ConfigMutation<S>
-
+```java
+public static <S, T> ConfigTraversal<S, T> onList(ConfigLens<S, List<T>> lens) {
+    return new ConfigTraversal<>(
+        lens.path(),
+        source -> List.copyOf(lens.view(source)),     // extract: 读出 List, 返回不可变副本
+        (source, op) -> lens.set(source,               // updateAll: 取出 -> 映射 -> 写回
+            lens.view(source).stream()
+                .map(op)
+                .collect(Collectors.toList()))
+    );
+}
 ```
 
-`ConfigMutation<S>` 在本质上是一个简单的 `S → S` 函数。它**只负责描述“如何将旧配置变换为新配置”，而完全不关心“何时提交”或“如何持久化”**。当用户调用 `updateAll` 时，多个 mutation 会被打包在一起，交由底层的事务机制一次性提交。
+**执行流程**：
 
 ```mermaid
-graph LR
-    L[Lens 操作] --> M[ConfigMutation]
-    P[Prism 操作] --> M
-    T[Traversal 操作] --> M
-    M --> CU[ConfigUnit 提交层]
-    CU --> C[校验 Check]
-    CU --> S[持久化 Save]
-    CU --> E[发布事件 Event]
-
+flowchart LR
+    SRC["MyConfig src"] -->|"lens.view"| LIST["List&lt;String&gt;<br/>[a, b, c]"]
+    LIST -->|"stream().map(op)"| MAPPED["List&lt;String&gt;<br/>[A, B, C]"]
+    MAPPED -->|"lens.set"| NEW["新的 MyConfig"]
 ```
 
-这就是 Optics 层与持久化层之间清晰的**解耦边界**：Optics 负责纯粹的**定位与数据变换**，而 `ConfigUnit` 则负责**校验、生命周期维护与持久化落地**。
+每次 `update` 都会产生一个全新的 List 实例（通过 `stream().map().collect()`），再通过 `lens.set` 写回，整个过程不可变。
+
+### 10.4.4 Map 值遍历
+
+`Traversals.onMapValues` 类似，但保留 Map 的键结构：
+
+```java
+public static <S, K, V> ConfigTraversal<S, V> onMapValues(ConfigLens<S, Map<K, V>> lens) {
+    return new ConfigTraversal<>(
+        lens.path(),
+        source -> List.copyOf(lens.view(source).values()),
+        (source, op) -> {
+            Map<K, V> map = lens.view(source);
+            Map<K, V> result = new LinkedHashMap<>(map.size());
+            for (Map.Entry<K, V> entry : map.entrySet()) {
+                result.put(entry.getKey(), op.apply(entry.getValue()));
+            }
+            return lens.set(source, result);
+        }
+    );
+}
+```
+
+注意 `extract` 只暴露值（丢掉键），但 `updateAll` 会遍历 `entrySet()`，**保留键结构不变，只变换值**。
 
 ---
 
-## 10.7 设计权衡
+## 10.5 Fold：只读的多焦点提取
 
-OELib Config 在落地这套 Optics 体系时，为了实用性做出了两项关键的工程取舍：
+### 10.5.1 与 Traversal 的关系
 
-### 取舍一：不依赖 DFU 的原生 Optics 体系
+`ConfigFold` 是 `ConfigTraversal` 的父类，也是其**只读版本**：
 
-Mojang 的 DFU (DataFixerUpper) 内部提供了一套极其完整的 Profunctor Optics 实现。然而，它深度绑定了 DFU 晦涩的 Kind 系统（如 `App`、`App2`、`K1`、`K2`、`Applicative`），这不仅使代码可读性极差，还会引入沉重的依赖代价。
+```
+ConfigFold<S, A>      — extract(S) → List<A> , 只有读取能力
+    ↑ 继承
+ConfigTraversal<S, A> — + updateAll(S, UnaryOperator<A>) → S , 增加写入能力
+```
 
-因此，OELib 选择**纯手工实现精简版的 Lens、Prism、Traversal 和 Fold**，仅保留对 DFU `Dynamic` 的依赖用作配置迁移与序列化。
+### 10.5.2 源码：查询操作
 
-### 取舍二：克制的非完备光学库
+```java
+public class ConfigFold<S, A> {
+    private final Function<S, List<A>> extractFn;
 
-我们并没有追求学术上的完美，因此没有去实现 `Iso`（等构）、`Getter`、`Setter`、`Grate`、`Affine` 等更高级的光学类型，也没有引入 Free Monad DSL 或复杂的注解处理器。
+    public List<A> extract(S source) { return extractFn.apply(source); }
 
-OELib 只聚焦于满足配置库最核心的三个场景：**聚焦特定字段**、**条件可选访问**和**集合批量遍历**。并将这些复杂的概念完好地隐藏在了 `ConfigUnit` 面向业务的 API 之下。
+    public long count(S source)           { return extract(source).size(); }
+    public boolean anyMatch(S source, Predicate<? super A> p) { ... }
+    public boolean allMatch(S source, Predicate<? super A> p) { ... }
+    public <R> R fold(S source, R identity, BiFunction<R, ? super A, R> acc) { ... }
+}
+```
 
-> **对开发者的启示**
-> 如果你熟悉 Scala 的 Monocle 或 Kotlin 的 Arrow，你会发现这里的实现有些简陋。
-> 但如果你只是想在 Minecraft Mod 里面写一个优雅的配置文件，你根本不需要懂这些——你只需要快乐地调用 `UNIT.update(getter, modifier)`。
+### 10.5.3 泛型代入：Map 键的只读提取
+
+```java
+// 构造一个只读 Fold: 提取 Map 的所有键
+ConfigLens<MyConfig, Map<String, Integer>> lens = ...;
+ConfigFold<MyConfig, String> keyFold = Folds.onMapKeys(lens);
+```
+
+代入 `S = MyConfig, K = String`：
+
+```
+Folds.onMapKeys:  ConfigLens<MyConfig, Map<String, Integer>>
+              →  ConfigFold<MyConfig, String>
+              →  extractFn = MyConfig -> List<String> (map 的 keySet)
+```
+
+`Folds.onMapKeys` 的实现：
+
+```java
+public static <S, K, V> ConfigFold<S, K> onMapKeys(ConfigLens<S, Map<K, V>> lens) {
+    return new ConfigFold<>(
+        lens.path(),
+        source -> List.copyOf(lens.view(source).keySet())
+    );
+}
+```
+
+只读意味着不能在查询上下文中意外修改配置，这是一层编译期的安全边界。
 
 ---
 
-## 10.8 回顾：从业务 API 到底层 optics
+## 10.6 Composition：类型安全性下的组合规则
 
-最后，让我们通过一张完整的架构映射表与分层图，理清从代码表面到底层实现的全部脉络：
+四种 Optics 可以相互组合，组合结果由**焦点数量的乘积**决定。
 
-| 用户面向的业务 API | 底层驱动的 Optics 组件 | 内部行为 | 最终提交层 |
-| --- | --- | --- | --- |
-| `UNIT.update(g, m)` | `ConfigLens` | `compose` → `view`/`set` | `ConfigMutation` → `commitCandidate` |
-| `UNIT.ifPresent(g, m)` | `ConfigPrism` | `optional`/`subtype` 匹配 | `ConfigMutation` → `commitCandidate` |
-| `UNIT.updateElements(g, m)` | `ConfigTraversal` | `Traversals.onList` → 批量更新 | `ConfigMutation` → `commitCandidate` |
-| `UNIT.updateValues(g, m)` | `ConfigTraversal` | `Traversals.onMapValues` → 批量更新 | `ConfigMutation` → `commitCandidate` |
-| `UNIT.count(g)` | `ConfigFold` | `extract` 数据提取 | `get()` 直接返回，**无 mutation** |
-| `UNIT.updateAll(m1, m2)` | — | 组合多个 Mutation | `ConfigMutation[]` → `commitCandidate` |
+### 10.6.1 compose 方法的多态
+
+每种 Optic 的 `compose` 都遵循一个模式：**组合后的焦点数 = 左焦点数 × 右焦点数**。
+
+| 组合 | 左焦点 | 右焦点 | 结果焦点 | 结果类型 |
+|---|---|---|---|---|
+| `Lens.compose(Lens)` | 1 | 1 | 1 | Lens |
+| `Traversal.compose(Lens)` | 0..N | 1 | 0..N | Traversal |
+| `Traversal.compose(Traversal)` | 0..N | 0..N | 0..N | Traversal |
+| `Fold.compose(Lens)` | 0..N | 1 | 0..N | Fold |
+| `Fold.compose(Traversal)` | 0..N | 0..N | 0..N | Fold |
+
+**Lens + Affine** 呢？由于 `ConfigLens` 没有与 `ConfigAffine` 直接组合的方法，这种组合发生在业务层：当用户通过 `ConfigUnit.ifPresent()` 传入 getter 时，内部先构造 Lens，再包装为 Affine，再调用 `affine.updateIfPresent`。
+
+### 10.6.2 代入示例：Traversal + Lens
+
+```java
+// 假设嵌套 List: record Config(List<DatabaseConfig> databases) {}
+// 目标: 对每个 database 的 host 字段做变换
+
+ConfigLens<Config, List<DatabaseConfig>> dbListLens = ...;
+ConfigLens<DatabaseConfig, String> hostLens = ...;
+
+ConfigTraversal<Config, DatabaseConfig> dbTraversal = Traversals.onList(dbListLens);
+ConfigTraversal<Config, String> hostTraversal = dbTraversal.compose(hostLens);
+```
+
+`compose` 的实现：
+
+```java
+public <B> ConfigTraversal<S, B> compose(ConfigLens<A, B> lens) {
+    return new ConfigTraversal<>(
+        path() + "." + lens.path(),                     // 路径拼接
+        source -> {                                      // extract: 展平
+            List<A> as = extract(source);                // 先取 List<DatabaseConfig>
+            List<B> bs = new ArrayList<>(as.size());
+            for (A a : as) {
+                bs.add(lens.view(a));                    // 再取每个的 host
+            }
+            return bs;
+        },
+        (source, op) -> updateAll.apply(source,          // updateAll: 逐层下发
+            a -> lens.set(a, op.apply(lens.view(a))))
+    );
+}
+```
+
+**代入具体类型后**：
+
+```
+extract: Config → List<DatabaseConfig> → 对每个 DatabaseConfig.view(host) → List<String>
+updateAll: 对每个 DatabaseConfig, 执行 hostLens.set → 产生新 DatabaseConfig → 写回 List
+```
 
 ```mermaid
-graph TD
-    subgraph "1. 用户 API 层 (User Surface)"
-        API1[UNIT.update]
-        API2[UNIT.ifPresent]
-        API3[UNIT.updateElements]
+flowchart LR
+    subgraph 提取
+        C1["Config"] -->|"dbList.view"| LDB["List&lt;DatabaseConfig&gt;<br/>[db1, db2]"]
+        LDB -->|"每个 .view(host)"| LSTR["List&lt;String&gt;<br/>[host1, host2]"]
     end
-
-    subgraph "2. 底层 Optics 层 (Focus & Transform)"
-        Lens[ConfigLens]
-        Prism[ConfigPrism]
-        Traversal[ConfigTraversal]
+    subgraph 更新
+        LDB2["List&lt;DatabaseConfig&gt;<br/>[db1, db2]"] -->|"逐元素 hostLens.set"| LDB3["List&lt;DatabaseConfig&gt;<br/>[db1', db2']"]
+        LDB3 -->|"dbList.set"| C2["新的 Config"]
     end
-
-    subgraph "3. 统一变换层 (Mutation)"
-        Mut[ConfigMutation<S>]
-    end
-
-    subgraph "4. 事务提交层 (Commit & IO)"
-        CU[ConfigUnit] --> Check[1. 触发校验]
-        CU --> IO[2. 异步持久化]
-        CU --> Event[3. 广播变更事件]
-    end
-
-    API1 --> Lens
-    API2 --> Prism
-    API3 --> Traversal
-
-    Lens --> Mut
-    Prism --> Mut
-    Traversal --> Mut
-
-    Mut --> CU
-
 ```
 
-通过这一层层各司其职的严密结构：
+---
 
-* `RecordLensBuilder` 负责利用高性能字节码从 getter 织入 Lens。
-* 各类 `Optic` 负责进行类型安全的定位与数据结构重组。
-* `ConfigMutation` 将复杂的改动坍缩为最纯粹的函数变换。
-* `ConfigUnit` 兜底处理现实世界中的校验、IO 与事件通知。
+## 10.7 ConfigMutation：从 Optics 到提交层的桥梁
 
-用户无需感知复杂的范畴论或光学概念，就能享受到**绝对类型安全、不可变数据结构、以及极高工程可维护性**带来的红利。这正是这套 Optics 架构设计的魅力所在。
+### 10.7.1 问题：Optics 只是变换工具，不负责持久化
+
+Lens 能精确修改字段，Affine 能条件跳过，Traversal 能批量更新。但它们只关注**数据变换**，不关心**何时写入磁盘、如何校验、是否发布事件**。我们需要一个中间结构，将 Optics 的变换能力封装为纯数据变换，再交给 `ConfigUnit` 做 IO。
+
+### 10.7.2 源码：ConfigMutation 就是一个 S -> S
+
+```java
+@FunctionalInterface
+public interface ConfigMutation<S> {
+    S apply(S source);
+}
+```
+
+它的本质就是 **旧配置 → 新配置** 的纯函数。
+
+**Optics 到 Mutation 的转换**：
+
+```java
+// ConfigLens 中:
+public ConfigMutation<S> setTo(A value) {
+    return source -> set(source, value);    // 闭包捕获 value
+}
+
+public ConfigMutation<S> map(UnaryOperator<A> updater) {
+    return source -> update(source, updater);  // 闭包捕获 updater
+}
+
+// ConfigTraversal 中:
+public ConfigMutation<S> toMutation(UnaryOperator<A> modifier) {
+    return source -> update(source, modifier);  // 闭包捕获 modifier
+}
+```
+
+每一个 Mutation 都是一个闭包，捕获了之前构造好的 Lens/Affine/Traversal 和一个变换函数，在调用时执行实际的数据变换。
+
+```mermaid
+flowchart LR
+    L["ConfigLens&lt;S, A&gt;<br/>.setTo(v) / .map(fn)"] -->|"转为闭包"| M["ConfigMutation&lt;S&gt;<br/>S → S"]
+    P["ConfigAffine&lt;S, A&gt;<br/>.updateIfPresent"] -->|"转为闭包"| M
+    T["ConfigTraversal&lt;S, A&gt;<br/>.toMutation(fn)"] -->|"转为闭包"| M
+    M --> CU["ConfigUnit.commitCandidate()"]
+```
+
+### 10.7.3 批量提交：updateAll
+
+多个 Mutation 可以组合：
+
+```java
+UNIT.updateAll(
+    ConfigMutation.set(MyConfig::port, 8080),
+    ConfigMutation.map(MyConfig::host, String::toLowerCase)
+);
+```
+
+`updateAll` 内部逐次应用每个 Mutation（通过 `mutation.apply(updated)`），最后一次性调用 `commitCandidate`。这意味着**多个字段修改只需要一次校验、一次 IO、一次事件发布**。
+
+---
+
+## 10.8 ConfigUnit：业务 API 背后的 Optics 三部曲
+
+### 10.8.1 全景：每个业务 API 的完整调用链路
+
+现在让我们回到开头的问题：`UNIT.update(MyConfig::port, v -> v + 1)` 内部发生了什么？
+
+```mermaid
+flowchart TD
+    START["UNIT.update(MyConfig::port, v -> v + 1)"] --> A["1. RecordLensBuilder.lens()<br/>从方法引用提取字段名'port'<br/>生成隐藏字节码 → ConfigLens"]
+    A --> B["2. lens.update(current, updater)<br/>view → 读当前 port 值<br/>updater.apply(旧值) → 新值<br/>set → 重建新 MyConfig"]
+    B --> C["3. commitCandidate(旧, 新, true)<br/>校验字段 → 写入磁盘 → 发布事件"]
+```
+
+**这就是 Optics 三部曲：定位 → 变换 → 提交**。
+
+### 10.8.2 从业务 API 到 Optics 的映射
+
+| 业务 API | 定位阶段 | 变换阶段 | 提交阶段 |
+|---|---|---|---|
+| `UNIT.update(g, m)` | `Lens` = 从 getter 创建 | `lens.update(current, m)` | `commitCandidate` |
+| `UNIT.ifPresent(g, m)` | `Lens` → `Affine.optional` | `affine.updateIfPresent(current, m)` | `commitCandidate` |
+| `UNIT.ifPresent(g, cls, m)` | `Lens` → `Affine.subtype` | `affine.updateIfPresent(current, m)` | `commitCandidate` |
+| `UNIT.updateElements(g, m)` | `Lens` → `Traversals.onList` | `traversal.update(current, m)` | `commitCandidate` |
+| `UNIT.updateValues(g, m)` | `Lens` → `Traversals.onMapValues` | `traversal.update(current, m)` | `commitCandidate` |
+| `UNIT.updateAll(m1, m2)` | 外部已构建 Mutation | `m1.apply()` → `m2.apply()` 串联 | `commitCandidate` |
+
+### 10.8.3 代入完整链路：updateElements
+
+```java
+UNIT.updateElements(MyConfig::whitelist, String::toLowerCase);
+```
+
+代入 `T = MyConfig, V = String`：
+
+```mermaid
+flowchart LR
+    subgraph 定位
+        G["MyConfig::whitelist<br/>方法引用"] --> L["ConfigLens&lt;MyConfig, List&lt;String&gt;&gt;<br/>字段指针"]
+        L --> TR["ConfigTraversal&lt;MyConfig, String&gt;<br/>Traversals.onList(lens)"]
+    end
+    subgraph 变换
+        TR -->|"traversal.update"| U["遍历 List<br/>逐个 String::toLowerCase<br/>重建 List → 重建 MyConfig"]
+    end
+    subgraph 提交
+        U --> C["commitCandidate<br/>校验 · 持久化 · 事件"]
+    end
+```
+
+### 10.8.4 提交阶段的职责
+
+`commitCandidate` 是整个流程的收束点：
+
+```java
+T commitCandidate(T previous, T candidate, boolean persist) {
+    validateValueOrThrow(candidate);        // 1. 校验所有字段
+    if (!Objects.equals(candidate, previous)) {
+        setValue(candidate);                // 2. 更新内存值 + 发布事件
+    }
+    if (persist) {
+        writeToDisk(candidate);             // 3. 写入磁盘
+    }
+    lastValidValue = candidate;             // 4. 记录最后有效值（用于回滚）
+    return candidate;
+}
+```
+
+无论上层操作多么不同（单个字段更新、条件更新、批量更新、多个 Mutation），最终都汇聚到同一个 `commitCandidate` 方法，确保**校验、事件、持久化的一致性**。
+
+---
+
+## 10.9 设计权衡
+
+### 10.9.1 自研而非使用 DFU Optics
+
+Mojang 的 DataFixerUpper 内部提供了一套 Profunctor Optics，但它深度绑定了 DFU 的 Kind 系统（`App`、`App2`、`K1`、`K2`、`Applicative`），可读性差且依赖重。OELib 选择纯手工实现精简版的 Lens、Affine、Traversal、Fold，仅保留对 DFU `Dynamic` 的依赖用于配置迁移。
+
+### 10.9.2 克制：只实现配置库需要的
+
+没有实现 `Iso`、`Getter`、`Setter`、`Grate` 等更高级的光学类型。只聚焦三个核心场景：**聚焦特定字段**、**条件可选访问**、**集合批量遍历**。这些概念被完好地隐藏在了 `ConfigUnit` 面向业务的 API 之下。
+
+---
+
+## 10.10 回顾：从业务 API 到底层 Optics
+
+```mermaid
+flowchart TD
+    subgraph 1. 用户 API 层
+        UPD["UNIT.update(getter, fn)"]
+        IFP["UNIT.ifPresent(getter, fn)"]
+        UEL["UNIT.updateElements(getter, fn)"]
+    end
+
+    subgraph 2. Optics 定位 & 变换
+        L["ConfigLens&lt;S, A&gt;<br/>1个焦点 · 精确读写"]
+        P["ConfigAffine&lt;S, A&gt;<br/>0|1个焦点 · 条件匹配"]
+        T["ConfigTraversal&lt;S, A&gt;<br/>0..N个焦点 · 批量变换"]
+    end
+
+    subgraph 3. 统一变换
+        M["ConfigMutation&lt;S&gt;<br/>S → S 纯函数"]
+    end
+
+    subgraph 4. 提交 & 持久化
+        CC["commitCandidate<br/>校验 · 写盘 · 事件"]
+    end
+
+    UPD --> L
+    IFP --> P
+    UEL --> T
+
+    L --> M
+    P --> M
+    T --> M
+
+    M --> CC
+```
+
+每一层各司其职：
+
+- `RecordLensBuilder` 通过字节码生成，将方法引用零反射地转化为 Lens
+- Lens / Affine / Traversal / Fold 各自处理不同"焦点数"的数据定位需求
+- `ConfigMutation` 将复杂的变换坍缩为 `S -> S` 纯函数，与 IO 完全解耦
+- `ConfigUnit.commitCandidate` 兜底处理校验、持久化、事件通知
+
+用户只需写出 `UNIT.update(MyConfig::port, v -> v + 1)`，就能享受到**绝对类型安全、不可变数据结构、零反射高性能**的字段级更新。

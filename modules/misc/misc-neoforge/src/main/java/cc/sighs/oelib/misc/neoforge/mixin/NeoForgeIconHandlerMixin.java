@@ -1,6 +1,6 @@
 package cc.sighs.oelib.misc.neoforge.mixin;
 
-import cc.sighs.oelib.OELibMisc;
+import cc.sighs.oelib.misc.OELibMisc;
 import cc.sighs.oelib.misc.icon.DynamicIconRegistry;
 import net.neoforged.neoforge.client.gui.ModListScreen;
 import net.neoforged.neoforgespi.language.IModInfo;

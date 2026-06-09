@@ -7,6 +7,7 @@
 所有配置都是一个 Java Record：
 
 ```java
+import java.lang.invoke.MethodHandles;
 import java.util.List;
 
 public record GreetingConfig(
@@ -17,11 +18,11 @@ public record GreetingConfig(
 ) {}
 ```
 
-Record 的每个 component 对应配置文件中的一个字段。
+Record 的每个 component 对应配置文件中的一个字段，也就是说你的配置里有什么，那你的 Record 就写什么。
 
 ## 2.2 定义 ConfigSchema
 
-用 `ConfigSchema.defineClient` 声明配置的字段名、类型、默认值，并绑定到 Record 的 component 上：
+用 `ConfigSchema.defineClient/Server` 声明配置的字段名、类型、默认值，并绑定到 Record 的 component 上：
 
 ```java
 import cc.sighs.oelib.config.ConfigManager;
@@ -32,6 +33,7 @@ import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import com.mojang.serialization.Codec;
 import net.minecraft.resources.Identifier;
 
+import java.lang.invoke.MethodHandles;
 import java.util.List;
 
 public record GreetingConfig(
@@ -43,6 +45,7 @@ public record GreetingConfig(
     private static final String FILE_NAME = "greeter-main";
 
     public static final ConfigSchema.Definition<GreetingConfig> DEFINITION = ConfigSchema.defineClient(
+            MethodHandles.lookup(),
             Identifier.fromNamespaceAndPath("greeter", "main"),
             GreetingConfig.class,
             meta -> meta
@@ -67,7 +70,7 @@ public record GreetingConfig(
 }
 ```
 
-`defineClient` 声明这是一个客户端配置（服务端用 `defineServer`）。参数依次是唯一标识符、Record 的 Class、元信息配置、字段声明。
+`defineClient` 声明这是一个客户端配置（服务端用 `defineServer`）。参数依次是当前类的上下文 Lookup、唯一标识符、Record 的 Class、元信息配置、字段声明。
 
 每个字段的声明链：**字段名 → 默认值 → getter 引用**。`forGetter(GreetingConfig::message)` 将字段与 Record 的 component 绑定。
 
@@ -98,6 +101,7 @@ import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import com.mojang.serialization.Codec;
 import net.minecraft.resources.Identifier;
 
+import java.lang.invoke.MethodHandles;
 import java.util.List;
 
 public record GreetingConfig(
@@ -109,7 +113,7 @@ public record GreetingConfig(
     private static final String FILE_NAME = "greeter-main";
 
     public static final ConfigSchema.Definition<GreetingConfig> DEFINITION = ConfigSchema.defineClient(
-            Identifier.fromNamespaceAndPath("greeter", "main"),
+            MethodHandles.lookup(), Identifier.fromNamespaceAndPath("greeter", "main"),
             GreetingConfig.class,
             meta -> meta
                     .directory("greeter")

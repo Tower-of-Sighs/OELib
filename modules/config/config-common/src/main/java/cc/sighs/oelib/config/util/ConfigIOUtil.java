@@ -1,8 +1,8 @@
 package cc.sighs.oelib.config.util;
 
-import cc.sighs.oelib.OELibConfig;
 import cc.sighs.oelib.config.ConfigManager;
 import cc.sighs.oelib.config.ConfigUnit;
+import cc.sighs.oelib.config.OELibConfig;
 import cc.sighs.oelib.config.ServerConfigManager;
 import cc.sighs.oelib.config.datafix.ConfigFixRegistry;
 import cc.sighs.oelib.config.model.ConfigMeta;

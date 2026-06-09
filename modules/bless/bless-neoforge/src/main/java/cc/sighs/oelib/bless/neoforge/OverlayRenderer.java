@@ -1,6 +1,6 @@
 package cc.sighs.oelib.bless.neoforge;
 
-import cc.sighs.oelib.OELibBless;
+import cc.sighs.oelib.bless.OELibBless;
 import cc.sighs.oelib.bless.render.AbstractShaderOverlay;
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;

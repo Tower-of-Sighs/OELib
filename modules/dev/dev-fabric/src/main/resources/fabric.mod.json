@@ -15,10 +15,10 @@
     "environment": "*",
     "entrypoints": {
         "main": [
-            "cc.sighs.oelib.OELibDevFabric"
+            "cc.sighs.oelib.dev.fabric.OELibDevFabric"
         ],
         "client": [
-            "cc.sighs.oelib.OELibDevFabricClient"
+            "cc.sighs.oelib.dev.fabric.OELibDevFabricClient"
         ]
     },
     "mixins": [

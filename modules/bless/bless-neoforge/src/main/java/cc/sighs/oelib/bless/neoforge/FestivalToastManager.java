@@ -1,6 +1,6 @@
 package cc.sighs.oelib.bless.neoforge;
 
-import cc.sighs.oelib.OELibBless;
+import cc.sighs.oelib.bless.OELibBless;
 import cc.sighs.oelib.bless.util.BlessUtil;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;

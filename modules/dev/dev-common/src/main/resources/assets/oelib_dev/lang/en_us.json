@@ -15,7 +15,31 @@
   "config.oelib.dev_features.testEnum.TEST2": "Enum Test 2",
   "config.oelib.dev_features.enableExampleContent": "Enable Example Content",
   "config.oelib.dev_features.enableExampleContent.tooltip": "For internal testing purposes",
+  "config.oelib.dev_features.demoMode": "Demo Mode",
+  "config.oelib.dev_features.demoMode.type": "Mode Type",
+  "config.oelib.dev_features.demoMode.type.level": "Level Mode",
+  "config.oelib.dev_features.demoMode.type.toggle": "Toggle Mode",
+  "config.oelib.dev_features.demoMode.level": "Mode Level",
+  "config.oelib.dev_features.demoMode.enabled": "Mode Enabled",
   "config.oelib.dev_features.nestedDemo": "Nested Demo",
   "config.oelib.dev_features.nestedDemo.enabled": "Enable Nested Demo",
-  "config.oelib.dev_features.nestedDemo.level": "Nested Level"
+  "config.oelib.dev_features.nestedDemo.level": "Nested Level",
+
+  "config.oelib.dev_features.optionalChild": "Optional Child Config",
+  "config.oelib.dev_features.optionalChild.enabled": "Optional Child Enabled",
+  "config.oelib.dev_features.optionalChild.level": "Optional Child Level",
+
+  "config.oelib.dev_features.featureConfigs": "Feature Configurations",
+  "config.oelib.dev_features.featureConfigs.id": "Feature ID",
+  "config.oelib.dev_features.featureConfigs.weight": "Feature Weight",
+  "config.oelib.dev_features.featureConfigs.extraConfig": "Extra Config",
+  "config.oelib.dev_features.featureConfigs.extraConfig.enabled": "Extra Config Enabled",
+  "config.oelib.dev_features.featureConfigs.extraConfig.level": "Extra Config Level",
+
+  "config.oelib.dev_features.featureConfigMap": "Feature Config Map",
+  "config.oelib.dev_features.featureConfigMap.id": "Map Feature ID",
+  "config.oelib.dev_features.featureConfigMap.weight": "Map Feature Weight",
+  "config.oelib.dev_features.featureConfigMap.extraConfig": "Map Extra Config",
+  "config.oelib.dev_features.featureConfigMap.extraConfig.enabled": "Map Extra Config Enabled",
+  "config.oelib.dev_features.featureConfigMap.extraConfig.level": "Map Extra Config Level"
 }

@@ -15,10 +15,10 @@
     "environment": "*",
     "entrypoints": {
         "main": [
-            "cc.sighs.oelib.OELibBlessFabric"
+            "cc.sighs.oelib.bless.fabric.OELibBlessFabric"
         ],
         "client": [
-            "cc.sighs.oelib.OELibBlessFabricClient"
+            "cc.sighs.oelib.bless.fabric.OELibBlessFabricClient"
         ],
         "modmenu": [
             "cc.sighs.oelib.bless.fabric.compat.modmenu.OELibBlessModMenu"

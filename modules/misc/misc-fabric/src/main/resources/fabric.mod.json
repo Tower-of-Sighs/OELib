@@ -15,7 +15,7 @@
     "environment": "*",
     "entrypoints": {
         "main": [
-          "cc.sighs.oelib.OELibMiscFabric"
+          "cc.sighs.oelib.misc.fabric.OELibMiscFabric"
         ]
     },
     "mixins": [

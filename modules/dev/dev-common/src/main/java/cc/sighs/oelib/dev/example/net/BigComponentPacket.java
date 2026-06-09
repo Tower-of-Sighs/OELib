@@ -1,6 +1,6 @@
 package cc.sighs.oelib.dev.example.net;
 
-import cc.sighs.oelib.OELibDev;
+import cc.sighs.oelib.dev.OELibDev;
 import cc.sighs.oelib.network.api.INetworkContext;
 import cc.sighs.oelib.network.api.INetworkPacket;
 import cc.sighs.oelib.network.api.NetworkPacket;

@@ -1,6 +1,6 @@
 package cc.sighs.oelib.misc.fabric.mixin;
 
-import cc.sighs.oelib.OELibMisc;
+import cc.sighs.oelib.misc.OELibMisc;
 import cc.sighs.oelib.misc.icon.DynamicIconRegistry;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.terraformersmc.modmenu.util.mod.fabric.FabricIconHandler;

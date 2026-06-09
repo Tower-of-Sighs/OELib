@@ -1,6 +1,6 @@
 package cc.sighs.oelib.data.mvel;
 
-import cc.sighs.oelib.OELibData;
+import cc.sighs.oelib.data.OELibData;
 import cc.sighs.oelib.data.mvel.gen.ExpressionFunctionRegistry;
 import cc.sighs.oelib.data.mvel.gen.ExpressionFunctionsRegistrar;
 import org.mvel2.MVEL;

@@ -1,6 +1,6 @@
 package cc.sighs.oelib.registry.neoforge;
 
-import cc.sighs.oelib.OELibRegistry;
+import cc.sighs.oelib.registry.OELibRegistry;
 import cc.sighs.oelib.registry.RegisterSupplier;
 import cc.sighs.oelib.registry.action.*;
 import cc.sighs.oelib.registry.api.CreativeTabModifyCallback;

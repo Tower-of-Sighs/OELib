@@ -1,7 +1,7 @@
 package cc.sighs.oelib.config.neoforge;
 
-import cc.sighs.oelib.OELibConfig;
 import cc.sighs.oelib.config.ClientConfigManager;
+import cc.sighs.oelib.config.OELibConfig;
 import cc.sighs.oelib.config.ServerConfigManager;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;

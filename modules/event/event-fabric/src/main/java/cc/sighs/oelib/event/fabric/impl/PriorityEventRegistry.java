@@ -1,6 +1,6 @@
 package cc.sighs.oelib.event.fabric.impl;
 
-import cc.sighs.oelib.OELibEvent;
+import cc.sighs.oelib.event.OELibEvent;
 import cc.sighs.oelib.event.fabric.EventPriority;
 import net.fabricmc.fabric.api.event.Event;
 import net.minecraft.resources.ResourceLocation;

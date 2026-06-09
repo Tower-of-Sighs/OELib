@@ -1,6 +1,6 @@
 package cc.sighs.oelib.data.net;
 
-import cc.sighs.oelib.OELibData;
+import cc.sighs.oelib.data.OELibData;
 import cc.sighs.oelib.data.util.CodecUtils;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;

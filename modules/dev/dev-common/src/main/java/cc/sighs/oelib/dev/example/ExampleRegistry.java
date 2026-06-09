@@ -1,6 +1,6 @@
 package cc.sighs.oelib.dev.example;
 
-import cc.sighs.oelib.OELibDev;
+import cc.sighs.oelib.dev.OELibDev;
 import cc.sighs.oelib.registry.DeferredRegister;
 import cc.sighs.oelib.registry.RegisterSupplier;
 import cc.sighs.oelib.registry.extra.FuelRegister;

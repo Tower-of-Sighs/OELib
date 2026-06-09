@@ -1,6 +1,5 @@
 package cc.sighs.oelib.bless;
 
-import cc.sighs.oelib.OELibBless;
 import cc.sighs.oelib.registry.extra.ShaderRegister;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import net.minecraft.resources.ResourceLocation;

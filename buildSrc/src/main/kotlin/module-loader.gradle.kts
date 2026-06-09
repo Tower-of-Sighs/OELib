@@ -53,30 +53,37 @@ project.evaluationDependsOn(commonProjectPath)
 val commonProj = project(commonProjectPath)
 val apiDeps = ModuleDependenciesExtension.getApiDeps(commonProj)
 val implDeps = ModuleDependenciesExtension.getImplDeps(commonProj)
-// Use sourceSet output as lazy file deps to bypass Loom's mod/remap processing.
-// Provider lambda resolves at execution time when all projects are evaluated.
 if (apiDeps.isNotEmpty() || implDeps.isNotEmpty()) {
     for (dep in apiDeps) {
         val depPath = ":modules:$dep:$dep-$suffix"
         val depProj = project(depPath)
-        val output = project.files(project.provider { depProj.sourceSets.main.get().output })
-        project.dependencies.add("api", output)
-        // Also add to Loom's mod runtime classpath for dev environment
-        project.afterEvaluate {
-            if (project.configurations.findByName("modRuntimeClasspath") != null) {
-                project.dependencies.add("modRuntimeClasspath", output)
+        // Fabric: source set output avoids Loom's mod processing issues
+        // NeoForge: use project dependency so MDG handles module path correctly (no JPMS conflict)
+        if (suffix == "fabric") {
+            val output = project.files(project.provider { depProj.sourceSets.main.get().output })
+            project.dependencies.add("api", output)
+            project.afterEvaluate {
+                if (project.configurations.findByName("modRuntimeClasspath") != null) {
+                    project.dependencies.add("modRuntimeClasspath", output)
+                }
             }
+        } else {
+            project.dependencies.add("api", project.dependencies.project(mapOf("path" to depPath)))
         }
     }
     for (dep in implDeps) {
         val depPath = ":modules:$dep:$dep-$suffix"
         val depProj = project(depPath)
-        val output = project.files(project.provider { depProj.sourceSets.main.get().output })
-        project.dependencies.add("implementation", output)
-        project.afterEvaluate {
-            if (project.configurations.findByName("modRuntimeClasspath") != null) {
-                project.dependencies.add("modRuntimeClasspath", output)
+        if (suffix == "fabric") {
+            val output = project.files(project.provider { depProj.sourceSets.main.get().output })
+            project.dependencies.add("implementation", output)
+            project.afterEvaluate {
+                if (project.configurations.findByName("modRuntimeClasspath") != null) {
+                    project.dependencies.add("modRuntimeClasspath", output)
+                }
             }
+        } else {
+            project.dependencies.add("implementation", project.dependencies.project(mapOf("path" to depPath)))
         }
     }
 }
@@ -98,9 +105,11 @@ if (apiDeps.isNotEmpty() || implDeps.isNotEmpty()) {
                     forwardBuffer.add(dstConfig to "$g:$a:$v")
                 }
         }
-        collect("api", "api"); collect("modApi", "api"); collect("additionalRuntimeClasspath")
+        if (suffix == "fabric") {
+            collect("api", "api"); collect("modApi", "api")
+        }
+        // NeoForge: project deps are already fully transitive, no forwarding needed
     }
-    // Add forwarded deps in afterEvaluate so MDG/Loom configs exist
     if (forwardBuffer.isNotEmpty()) {
         project.afterEvaluate {
             for ((cfg, notation) in forwardBuffer) {

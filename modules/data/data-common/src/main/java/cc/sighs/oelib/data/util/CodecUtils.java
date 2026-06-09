@@ -1,6 +1,6 @@
 package cc.sighs.oelib.data.util;
 
-import cc.sighs.oelib.OELibData;
+import cc.sighs.oelib.data.OELibData;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;

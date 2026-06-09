@@ -1,6 +1,6 @@
 package cc.sighs.oelib.network.serialization;
 
-import cc.sighs.oelib.OELibNetwork;
+import cc.sighs.oelib.network.OELibNetwork;
 import cc.sighs.oelib.network.util.ReflectionUtil;
 import com.mojang.serialization.Codec;
 import io.netty.buffer.ByteBuf;

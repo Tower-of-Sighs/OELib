@@ -1,7 +1,7 @@
 package cc.sighs.oelib.data.net;
 
-import cc.sighs.oelib.OELibData;
 import cc.sighs.oelib.data.DataManager;
+import cc.sighs.oelib.data.OELibData;
 import cc.sighs.oelib.data.util.CodecUtils;
 import cc.sighs.oelib.network.api.INetworkContext;
 import cc.sighs.oelib.network.api.INetworkPacket;

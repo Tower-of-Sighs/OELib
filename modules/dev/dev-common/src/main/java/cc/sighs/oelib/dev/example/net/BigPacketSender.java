@@ -1,6 +1,6 @@
 package cc.sighs.oelib.dev.example.net;
 
-import cc.sighs.oelib.OELibDev;
+import cc.sighs.oelib.dev.OELibDev;
 import com.mojang.datafixers.util.Either;
 import com.mojang.datafixers.util.Pair;
 import com.sun.management.GarbageCollectionNotificationInfo;

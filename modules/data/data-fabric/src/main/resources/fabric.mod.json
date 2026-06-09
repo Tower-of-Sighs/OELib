@@ -15,7 +15,7 @@
     "environment": "*",
     "entrypoints": {
         "main": [
-          "cc.sighs.oelib.OELibDataFabric"
+            "cc.sighs.oelib.data.fabric.OELibDataFabric"
         ]
     },
     "mixins": [

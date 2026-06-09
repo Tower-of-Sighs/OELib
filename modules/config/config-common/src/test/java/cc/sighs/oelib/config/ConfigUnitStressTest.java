@@ -2,8 +2,8 @@ package cc.sighs.oelib.config;
 
 import cc.sighs.oelib.config.field.ConfigField;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
+import cc.sighs.oelib.config.optics.ConfigAffine;
 import cc.sighs.oelib.config.optics.ConfigLens;
-import cc.sighs.oelib.config.optics.ConfigPrism;
 import cc.sighs.oelib.config.testsupport.TestFileUtil;
 import cc.sighs.oelib.config.testsupport.TestPlatform;
 import com.mojang.serialization.Codec;
@@ -11,6 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.invoke.MethodHandles;
 import java.nio.file.Files;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,6 +30,7 @@ class ConfigUnitStressTest {
     void updateAllAndIfPresentRemainStableUnderLoad() {
         String fileName = "unit_stress_" + UUID.randomUUID().toString().replace("-", "");
         var definition = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 ResourceLocation.fromNamespaceAndPath("oelibtest", "unit_stress"),
                 UnitStressConfig.class,
                 meta -> meta.fileName(fileName).directory("unit-tests").format(ConfigStorageFormat.JSON),
@@ -41,7 +43,7 @@ class ConfigUnitStressTest {
         ConfigUnit<UnitStressConfig> unit = definition.unit();
         ConfigLens<UnitStressConfig, Integer> countLens = definition.lens(UnitStressConfig::count);
         ConfigLens<UnitStressConfig, Optional<Integer>> optLens = definition.lens(UnitStressConfig::opt);
-        ConfigPrism<UnitStressConfig, Integer> optPrism = RecordLensBuilder.optional(optLens);
+        ConfigAffine<UnitStressConfig, Integer> optPrism = RecordLensBuilder.optional(optLens);
 
         unit.updateAll(countLens.setTo(1), optLens.setTo(Optional.of(2)));
         for (int i = 0; i < 2_000; i++) {

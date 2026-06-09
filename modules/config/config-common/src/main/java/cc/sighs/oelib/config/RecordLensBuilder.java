@@ -1,32 +1,32 @@
 package cc.sighs.oelib.config;
 
+import cc.sighs.oelib.config.optics.ConfigAffine;
 import cc.sighs.oelib.config.optics.ConfigLens;
-import cc.sighs.oelib.config.optics.ConfigPrism;
 import cc.sighs.oelib.config.util.RecordLensClassGenerator;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.Serializable;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.SerializedLambda;
+import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.RecordComponent;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.lang.reflect.Type;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /**
- * Factory for building {@link ConfigLens} and {@link ConfigPrism} instances
+ * Factory for building {@link ConfigLens} and {@link ConfigAffine} instances
  * that target components of Java {@code record} classes.
  *
  * <p>Lenses are created lazily and cached per (record class, component name, lookup class)
  * tuple. The backing implementation generates a hidden class via the Class-File API
  * at lookup time to avoid reflection overhead on every access.
  *
- * <p>Prisms (optional and subtype views) are derived from lenses through
+ * <p>Affines (optional and subtype views) are derived from lenses through
  * {@link #optional(ConfigLens)} and {@link #subtype(ConfigLens, Class)}.
  *
  * <p>Only record classes are supported. Passing a non-record class to any
@@ -76,7 +76,7 @@ public final class RecordLensBuilder {
     public static <S, A> ConfigLens<S, A> lens(MethodHandles.Lookup lookup, Class<S> recordClass, LensGetter<S, A> getter) {
         Objects.requireNonNull(lookup);
         Objects.requireNonNull(getter);
-        String component = extractComponentName(getter);
+        String component = componentName(getter);
         return lens(lookup, recordClass, component);
     }
 
@@ -156,18 +156,20 @@ public final class RecordLensBuilder {
     }
 
     /**
-     * Wraps a lens over {@link Optional}{@code <A>} as a {@link ConfigPrism}
-     * that only matches when the optional is present.
+     * Returns an affine over the present value of an {@link Optional}-typed
+     * lens target.
      *
-     * @param lens a lens targeting an {@code Optional<A>} field
-     * @param <S>  the record type
-     * @param <A>  the inner optional type
-     * @return a prism that views and updates the inner value when present
-     * @throws NullPointerException if {@code lens} is {@code null}
+     * <p>The returned affine focuses a value if and only if the target
+     * optional is present.
+     *
+     * @param  lens the lens targeting an {@code Optional} field
+     * @param  <S> the record type
+     * @param  <A> the optional element type
+     * @return an affine over the present optional element
      */
-    public static <S, A> ConfigPrism<S, A> optional(ConfigLens<S, Optional<A>> lens) {
+    public static <S, A> ConfigAffine<S, A> optional(ConfigLens<S, Optional<A>> lens) {
         Objects.requireNonNull(lens);
-        return new ConfigPrism<>(
+        return new ConfigAffine<>(
                 lens.path(),
                 lens::view,
                 (value, source) -> lens.set(source, Optional.ofNullable(value))
@@ -175,21 +177,23 @@ public final class RecordLensBuilder {
     }
 
     /**
-     * Wraps a lens over a base type {@code A} as a {@link ConfigPrism} that
-     * only matches when the runtime value is an instance of {@code subtypeClass}.
+     * Returns an affine over a lens target when the runtime value is an
+     * instance of the given subtype.
      *
-     * @param lens         the lens targeting the base type
-     * @param subtypeClass the expected subtype
-     * @param <S>          the record type
-     * @param <A>          the base type
-     * @param <X>          the subtype
-     * @return a prism that views and updates only when the value is of the subtype
-     * @throws NullPointerException if any argument is {@code null}
+     * <p>The returned affine focuses a value if and only if the target value
+     * is an instance of {@code subtypeClass}.
+     *
+     * @param  lens the lens targeting the base type
+     * @param  subtypeClass the subtype required for a match
+     * @param  <S> the record type
+     * @param  <A> the base type
+     * @param  <X> the subtype
+     * @return an affine over values assignable to {@code subtypeClass}
      */
-    public static <S, A, X extends A> ConfigPrism<S, X> subtype(ConfigLens<S, A> lens, Class<X> subtypeClass) {
+    public static <S, A, X extends A> ConfigAffine<S, X> subtype(ConfigLens<S, A> lens, Class<X> subtypeClass) {
         Objects.requireNonNull(lens);
         Objects.requireNonNull(subtypeClass);
-        return new ConfigPrism<>(
+        return new ConfigAffine<>(
                 lens.path(),
                 source -> {
                     A value = lens.view(source);
@@ -266,15 +270,68 @@ public final class RecordLensBuilder {
         }
     }
 
-    private static String extractComponentName(Serializable getter) {
+    static String componentName(Serializable getter) {
         try {
-            var method = getter.getClass().getDeclaredMethod("writeReplace");
-            method.setAccessible(true);
-            SerializedLambda lambda = (SerializedLambda) method.invoke(getter);
-            return lambda.getImplMethodName();
+            return serializedLambda(getter).getImplMethodName();
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Failed to inspect getter lambda; use a record accessor method reference", e);
         }
+    }
+
+    static Class<?> componentType(Class<?> recordClass, String componentName) {
+        Objects.requireNonNull(recordClass);
+        Objects.requireNonNull(componentName);
+        if (!recordClass.isRecord()) {
+            throw new IllegalArgumentException("Only record types are supported: " + recordClass.getName());
+        }
+        for (RecordComponent component : recordClass.getRecordComponents()) {
+            if (component.getName().equals(componentName)) {
+                return component.getType();
+            }
+        }
+        throw new IllegalArgumentException("Unknown record component '" + componentName + "' in " + recordClass.getName());
+    }
+
+    static Class<?> optionalElementType(Serializable getter) {
+        return genericReturnTypeArgument(getter, Optional.class, 0);
+    }
+
+    static Class<?> listElementType(Serializable getter) {
+        return genericReturnTypeArgument(getter, List.class, 0);
+    }
+
+    static Class<?> mapKeyType(Serializable getter) {
+        return genericReturnTypeArgument(getter, Map.class, 0);
+    }
+
+    static Class<?> mapValueType(Serializable getter) {
+        return genericReturnTypeArgument(getter, Map.class, 1);
+    }
+
+    private static Class<?> genericReturnTypeArgument(Serializable getter, Class<?> rawType, int index) {
+        try {
+            SerializedLambda lambda = serializedLambda(getter);
+            Class<?> implClass = Class.forName(lambda.getImplClass().replace('/', '.'));
+            Method method = implClass.getDeclaredMethod(lambda.getImplMethodName());
+            Type returnType = method.getGenericReturnType();
+            if (returnType instanceof ParameterizedType parameterizedType && parameterizedType.getRawType() == rawType) {
+                Type argument = parameterizedType.getActualTypeArguments()[index];
+                if (argument instanceof Class<?> clazz) {
+                    return clazz;
+                }
+            }
+            throw new IllegalArgumentException(
+                    "Getter return type is not " + rawType.getSimpleName() + " with a reifiable type argument: " + lambda.getImplMethodName()
+            );
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Failed to inspect getter lambda; use a record accessor method reference", e);
+        }
+    }
+
+    private static SerializedLambda serializedLambda(Serializable getter) throws ReflectiveOperationException {
+        var method = getter.getClass().getDeclaredMethod("writeReplace");
+        method.setAccessible(true);
+        return (SerializedLambda) method.invoke(getter);
     }
 
     /**

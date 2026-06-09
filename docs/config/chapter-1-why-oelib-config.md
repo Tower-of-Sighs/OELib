@@ -41,9 +41,11 @@ OELib Config 的思路是**先有 Codec，后有配置**。Codec 同时承载编
 ## 1.3 最终效果展示
 
 ```java
+import java.lang.invoke.MethodHandles;
+
 record ServerConfig(int port, List<String> whitelist) {}
 
-var def = ConfigSchema.defineServer(id, ServerConfig.class,
+var def = ConfigSchema.defineServer(MethodHandles.lookup(), id, ServerConfig.class,
     meta -> meta.fileName("server"),
     schema -> schema.group(
         ConfigField.intRange("port", 1024, 65535)

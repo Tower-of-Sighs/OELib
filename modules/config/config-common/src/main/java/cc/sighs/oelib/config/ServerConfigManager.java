@@ -1,6 +1,5 @@
 package cc.sighs.oelib.config;
 
-import cc.sighs.oelib.OELibConfig;
 import cc.sighs.oelib.config.api.ConfigEvents;
 import cc.sighs.oelib.config.api.IConfigPermissionChecker;
 import cc.sighs.oelib.config.model.ConfigSide;

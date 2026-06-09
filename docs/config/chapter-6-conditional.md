@@ -86,7 +86,7 @@ int value = data.asInt(0);
 | Optional 字段 | `UNIT.ifPresent(getter, modifier)` |
 | 密封类型匹配 | `UNIT.whenSubtype(getter, class, modifier)` |
 
-条件更新的内部实现基于 `ConfigPrism`——一个可能失败的字段访问器。日常使用中通过 `ifPresent` 和 `whenSubtype` 调用，不需要直接使用 Prism。
+条件更新的内部实现基于 `ConfigAffine`——一个可空条件访问器（比 Prism 弱，只有 `preview` + `set`，没有从焦点逆向构造整体的能力，因此称为 Affine）。日常使用中通过 `ifPresent` 和 `whenSubtype` 调用，不需要直接使用 Affine。
 
 ## 下一步
 

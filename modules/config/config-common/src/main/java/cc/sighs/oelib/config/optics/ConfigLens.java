@@ -2,6 +2,7 @@ package cc.sighs.oelib.config.optics;
 
 import cc.sighs.oelib.config.ConfigMutation;
 import cc.sighs.oelib.config.RecordLensBuilder;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.invoke.MethodHandles;
@@ -26,6 +27,7 @@ import java.util.function.*;
  * @param <S> the source (record) type
  * @param <A> the field (component) type
  */
+@ApiStatus.Internal
 public final class ConfigLens<S, A> {
     private final String path;
     private final Function<S, A> viewFn;

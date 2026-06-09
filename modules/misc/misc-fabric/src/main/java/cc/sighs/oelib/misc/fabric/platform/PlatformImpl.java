@@ -1,6 +1,6 @@
 package cc.sighs.oelib.misc.fabric.platform;
 
-import cc.sighs.oelib.OELibMiscFabric;
+import cc.sighs.oelib.misc.fabric.OELibMiscFabric;
 import cc.sighs.oelib.platform.IPlatform;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;

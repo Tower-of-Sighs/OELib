@@ -1,7 +1,7 @@
 package cc.sighs.oelib.config.net;
 
-import cc.sighs.oelib.OELibConfig;
 import cc.sighs.oelib.config.ConfigManager;
+import cc.sighs.oelib.config.OELibConfig;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import cc.sighs.oelib.config.util.ConfigIOUtil;
 import cc.sighs.oelib.network.api.INetworkContext;

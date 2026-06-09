@@ -1,6 +1,6 @@
 package cc.sighs.oelib.registry.fabric;
 
-import cc.sighs.oelib.OELibRegistry;
+import cc.sighs.oelib.registry.OELibRegistry;
 import cc.sighs.oelib.registry.action.*;
 import com.mojang.brigadier.CommandDispatcher;
 import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;

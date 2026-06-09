@@ -1,6 +1,6 @@
 package cc.sighs.oelib.config.datafix;
 
-import cc.sighs.oelib.OELibConfig;
+import cc.sighs.oelib.config.OELibConfig;
 import cc.sighs.oelib.config.util.ConfigPathUtil;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;

@@ -1,6 +1,5 @@
 package cc.sighs.oelib.data;
 
-import cc.sighs.oelib.OELibData;
 import cc.sighs.oelib.data.api.DataDriven;
 import cc.sighs.oelib.data.api.DataValidator;
 import cc.sighs.oelib.data.mvel.ExpressionEngine;

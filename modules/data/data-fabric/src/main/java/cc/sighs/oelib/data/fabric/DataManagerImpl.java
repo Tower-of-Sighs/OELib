@@ -1,6 +1,6 @@
 package cc.sighs.oelib.data.fabric;
 
-import cc.sighs.oelib.OELibData;
+import cc.sighs.oelib.data.OELibData;
 import cc.sighs.oelib.data.api.DataValidator;
 import cc.sighs.oelib.data.spi.IDataManager;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;

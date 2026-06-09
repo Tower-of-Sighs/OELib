@@ -19,7 +19,7 @@ ConfigUnit            管理"配置怎么活着"
 获取方式：
 
 ```java
-public static final ConfigSchema.Definition<MyConfig> DEFINITION = ConfigSchema.defineClient(...);
+public static final ConfigSchema.Definition<MyConfig> DEFINITION = ConfigSchema.defineClient(MethodHandles.lookup(), ...);
 public static final ConfigUnit<MyConfig> UNIT = DEFINITION.unit();
 ```
 
@@ -38,6 +38,10 @@ MyConfig config = UNIT.get();
 3. Codec 中定义的默认值
 
 后续调用直接返回缓存值，不涉及 I/O。
+
+## 4.2.1 关于 MethodHandles.lookup()
+
+`ConfigSchema.defineClient` 的第一个参数是 `MethodHandles.Lookup`。这是为了让 `RecordLensClassGenerator` 能生成隐藏类访问器——`MethodHandles.privateLookupIn(recordClass, lookup)` 需要调用方对 Record 类有私有访问权限。如果 lookup 来自不同模块且没有模块导出声明，JPMS 会拦截。只需要在定义配置时传一次，后续所有 API 自动复用。
 
 ## 4.3 持久化
 
@@ -72,7 +76,7 @@ UNIT.reload();
 | `afterSave` | 写入磁盘之后 |
 | `onChanged` | 内存中的值被替换后 |
 
-事件监听通过 `@Subscribe` 注解编写，详见[事件系统文档](../EVENT.md)和第 11 章。
+事件监听通过 `@Subscribe` 注解编写，详见[事件系统文档](../EVENT.md)和[第 11 章](./chapter-11-events-and-ui.md)。
 
 ## 4.5 完整生命周期
 
