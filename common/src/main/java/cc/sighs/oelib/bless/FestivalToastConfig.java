@@ -9,11 +9,11 @@ import cc.sighs.oelib.config.ConfigSchema;
 import cc.sighs.oelib.config.ConfigUnit;
 import cc.sighs.oelib.config.field.ConfigField;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
-import cc.sighs.oelib.config.optics.ConfigLens;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.ResourceLocation;
 
+import java.lang.invoke.MethodHandles;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -25,6 +25,7 @@ public record FestivalToastConfig(
     private static final String FILE_NAME = "oelib_festivals";
 
     public static final ConfigSchema.Definition<FestivalToastConfig> DEFINITION = ConfigSchema.defineClient(
+            MethodHandles.lookup(),
             new ResourceLocation(OELib.MODID, "festival_toast"),
             FestivalToastConfig.class,
             meta -> meta
@@ -48,8 +49,6 @@ public record FestivalToastConfig(
             ).apply(schema, FestivalToastConfig::new)
     );
     public static final ConfigUnit<FestivalToastConfig> UNIT = DEFINITION.unit();
-    public static final ConfigLens<FestivalToastConfig, Map<String, FestivalEntry>> FESTIVALS_LENS =
-            DEFINITION.lens(FestivalToastConfig::festivals);
 
     public static FestivalToastConfig get() {
         return UNIT.get();

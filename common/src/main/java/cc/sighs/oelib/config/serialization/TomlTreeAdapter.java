@@ -3,6 +3,7 @@ package cc.sighs.oelib.config.serialization;
 import cc.sighs.oelib.config.model.ConfigValueMeta;
 import com.electronwill.nightconfig.core.CommentedConfig;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,11 +31,7 @@ public final class TomlTreeAdapter {
         for (CommentedConfig.Entry entry : config.entrySet()) {
             var key = entry.getKey();
             var value = entry.getValue();
-            if (value instanceof CommentedConfig child) {
-                result.put(key, readTree(child));
-            } else {
-                result.put(key, value);
-            }
+            result.put(key, normalizeReadValue(value));
         }
         return result;
     }
@@ -67,7 +64,7 @@ public final class TomlTreeAdapter {
                 }
                 writeMap(child, childMap, fullPath, fields);
             } else if (value instanceof List<?> list) {
-                config.set(localPath, list);
+                config.set(localPath, normalizeWriteList(list));
             } else {
                 config.set(localPath, value);
             }
@@ -78,5 +75,41 @@ public final class TomlTreeAdapter {
                 }
             }
         }
+    }
+
+    private static Object normalizeReadValue(Object value) {
+        if (value instanceof CommentedConfig child) {
+            return readTree(child);
+        }
+        if (value instanceof List<?> list) {
+            List<Object> result = new ArrayList<>(list.size());
+            for (Object element : list) {
+                result.add(normalizeReadValue(element));
+            }
+            return result;
+        }
+        return value;
+    }
+
+    private static List<Object> normalizeWriteList(List<?> list) {
+        List<Object> result = new ArrayList<>(list.size());
+        for (Object element : list) {
+            result.add(normalizeWriteValue(element));
+        }
+        return result;
+    }
+
+    private static Object normalizeWriteValue(Object value) {
+        if (value instanceof Map<?, ?> childMap) {
+            CommentedConfig child = CommentedConfig.inMemory();
+            for (Map.Entry<?, ?> entry : childMap.entrySet()) {
+                child.set(String.valueOf(entry.getKey()), normalizeWriteValue(entry.getValue()));
+            }
+            return child;
+        }
+        if (value instanceof List<?> list) {
+            return normalizeWriteList(list);
+        }
+        return value;
     }
 }

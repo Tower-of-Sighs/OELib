@@ -34,7 +34,7 @@ public class BlessUtil {
         }
         var map = new HashMap<>(config.festivals());
         map.put(id, new FestivalToastConfig.FestivalEntry(true, today.toString()));
-        FestivalToastConfig.UNIT.update(FestivalToastConfig.FESTIVALS_LENS, ignored -> map);
+        FestivalToastConfig.UNIT.update(FestivalToastConfig::festivals, ignored -> map);
         overlay.show();
     }
 

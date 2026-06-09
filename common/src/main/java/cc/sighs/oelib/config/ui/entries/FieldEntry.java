@@ -88,6 +88,9 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
 
         var value = ConfigGuiUtil.getPath(working, meta.key());
         defaultValueElement = ConfigGuiUtil.getPath(defaults, meta.key());
+        if (defaultValueElement == null) {
+            defaultValueElement = meta.defaultJsonValue().orElse(null);
+        }
 
         createUiControl(controlX, y, value);
         createResetButton(resetX, y);
@@ -177,7 +180,9 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
                         (d, v) -> {
                             ConfigGuiUtil.setPath(working, meta.key(), new JsonPrimitive(v));
                             updateResetButtonState();
-                            if (screen instanceof ConfigScreen cs) cs.markDirty();
+                            if (screen instanceof ConfigScreen cs) {
+                                cs.onFieldChanged(meta.key());
+                            }
                         });
         screen.addRenderableWidget(dropdown);
     }
@@ -225,7 +230,9 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
                 JsonElement newEl = parseStringToJson(str);
                 ConfigGuiUtil.setPath(working, meta.key(), newEl);
                 updateResetButtonState();
-                if (screen instanceof ConfigScreen cs) cs.markDirty();
+                if (screen instanceof ConfigScreen cs) {
+                    cs.onFieldChanged(meta.key());
+                }
             }
         });
     }

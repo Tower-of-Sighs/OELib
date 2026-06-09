@@ -1,7 +1,5 @@
 package cc.sighs.oelib.config;
 
-import cc.sighs.oelib.config.optics.internal.Traversals;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -23,12 +21,6 @@ import java.util.function.UnaryOperator;
  */
 @FunctionalInterface
 public interface ConfigMutation<S> {
-    /**
-     * Applies this mutation to the given source value.
-     *
-     * @param source the current configuration value
-     * @return the transformed configuration value
-     */
     S apply(S source);
 
     // -- Lens factories --
@@ -45,12 +37,25 @@ public interface ConfigMutation<S> {
     static <S, V> ConfigMutation<S> set(RecordLensBuilder.LensGetter<S, V> getter, V value) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(value);
-        return source -> {
-            @SuppressWarnings("unchecked")
-            Class<S> rc = (Class<S>) source.getClass();
-            var lens = RecordLensBuilder.lens(rc, getter);
+        return (ContextualMutation<S>) (source, resolver) -> {
+            var lens = resolver.lens(getter);
             return lens.set(source, value);
         };
+    }
+
+    /**
+     * Creates a mutation that sets the value selected by the given path.
+     *
+     * @param  path the path selecting exactly one value
+     * @param  value the replacement value
+     * @param  <S> the configuration type
+     * @param  <V> the focused value type
+     * @return a mutation that sets the focused value
+     */
+    static <S, V> ConfigMutation<S> set(ConfigPath.One<S, V> path, V value) {
+        Objects.requireNonNull(path);
+        Objects.requireNonNull(value);
+        return source -> path.set(source, value);
     }
 
     /**
@@ -65,15 +70,28 @@ public interface ConfigMutation<S> {
     static <S, V> ConfigMutation<S> map(RecordLensBuilder.LensGetter<S, V> getter, UnaryOperator<V> modifier) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(modifier);
-        return source -> {
-            @SuppressWarnings("unchecked")
-            Class<S> rc = (Class<S>) source.getClass();
-            var lens = RecordLensBuilder.lens(rc, getter);
+        return (ContextualMutation<S>) (source, resolver) -> {
+            var lens = resolver.lens(getter);
             return lens.update(source, modifier);
         };
     }
 
-    // -- Prism factories --
+    /**
+     * Creates a mutation that transforms the value selected by the given path.
+     *
+     * @param  path the path selecting exactly one value
+     * @param  modifier the function that transforms the focused value
+     * @param  <S> the configuration type
+     * @param  <V> the focused value type
+     * @return a mutation that transforms the focused value
+     */
+    static <S, V> ConfigMutation<S> map(ConfigPath.One<S, V> path, UnaryOperator<V> modifier) {
+        Objects.requireNonNull(path);
+        Objects.requireNonNull(modifier);
+        return source -> path.update(source, modifier);
+    }
+
+    // -- Affine factories --
 
     /**
      * Creates a mutation that transforms an {@code Optional} field only if
@@ -88,13 +106,26 @@ public interface ConfigMutation<S> {
     static <S, V> ConfigMutation<S> ifPresent(RecordLensBuilder.LensGetter<S, Optional<V>> getter, UnaryOperator<V> modifier) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(modifier);
-        return source -> {
-            @SuppressWarnings("unchecked")
-            Class<S> rc = (Class<S>) source.getClass();
-            var lens = RecordLensBuilder.lens(rc, getter);
-            var prism = RecordLensBuilder.optional(lens);
-            return prism.updateIfPresent(source, modifier);
+        return (ContextualMutation<S>) (source, resolver) -> {
+            var affine = resolver.optional(getter);
+            return affine.updateIfPresent(source, modifier);
         };
+    }
+
+    /**
+     * Creates a mutation that transforms the value selected by the given
+     * zero-or-one path when it is present.
+     *
+     * @param  path the path selecting zero or one value
+     * @param  modifier the function that transforms the focused value
+     * @param  <S> the configuration type
+     * @param  <V> the focused value type
+     * @return a mutation that conditionally transforms the focused value
+     */
+    static <S, V> ConfigMutation<S> ifPresent(ConfigPath.Maybe<S, V> path, UnaryOperator<V> modifier) {
+        Objects.requireNonNull(path);
+        Objects.requireNonNull(modifier);
+        return source -> path.updateIfPresent(source, modifier);
     }
 
     /**
@@ -113,12 +144,9 @@ public interface ConfigMutation<S> {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(subtype);
         Objects.requireNonNull(modifier);
-        return source -> {
-            @SuppressWarnings("unchecked")
-            Class<S> rc = (Class<S>) source.getClass();
-            var lens = RecordLensBuilder.lens(rc, getter);
-            var prism = RecordLensBuilder.subtype(lens, subtype);
-            return prism.updateIfPresent(source, modifier);
+        return (ContextualMutation<S>) (source, resolver) -> {
+            var affine = resolver.subtype(getter, subtype);
+            return affine.updateIfPresent(source, modifier);
         };
     }
 
@@ -136,13 +164,25 @@ public interface ConfigMutation<S> {
     static <S, T> ConfigMutation<S> updateElements(RecordLensBuilder.LensGetter<S, List<T>> getter, UnaryOperator<T> modifier) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(modifier);
-        return source -> {
-            @SuppressWarnings("unchecked")
-            Class<S> rc = (Class<S>) source.getClass();
-            var lens = RecordLensBuilder.lens(rc, getter);
-            var traversal = Traversals.onList(lens);
+        return (ContextualMutation<S>) (source, resolver) -> {
+            var traversal = resolver.listTraversal(getter);
             return traversal.update(source, modifier);
         };
+    }
+
+    /**
+     * Creates a mutation that transforms all values selected by the given path.
+     *
+     * @param  path the path selecting zero or more values
+     * @param  modifier the function that transforms each focused value
+     * @param  <S> the configuration type
+     * @param  <T> the focused value type
+     * @return a mutation that transforms all focused values
+     */
+    static <S, T> ConfigMutation<S> updateEach(ConfigPath.Many<S, T> path, UnaryOperator<T> modifier) {
+        Objects.requireNonNull(path);
+        Objects.requireNonNull(modifier);
+        return source -> path.updateEach(source, modifier);
     }
 
     /**
@@ -160,11 +200,8 @@ public interface ConfigMutation<S> {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
         Objects.requireNonNull(modifier);
-        return source -> {
-            @SuppressWarnings("unchecked")
-            Class<S> rc = (Class<S>) source.getClass();
-            var lens = RecordLensBuilder.lens(rc, getter);
-            var traversal = Traversals.onList(lens).filter(predicate);
+        return (ContextualMutation<S>) (source, resolver) -> {
+            var traversal = resolver.listTraversal(getter).filter(predicate);
             return traversal.update(source, modifier);
         };
     }
@@ -182,11 +219,8 @@ public interface ConfigMutation<S> {
     static <S, K, V> ConfigMutation<S> updateValues(RecordLensBuilder.LensGetter<S, Map<K, V>> getter, UnaryOperator<V> modifier) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(modifier);
-        return source -> {
-            @SuppressWarnings("unchecked")
-            Class<S> rc = (Class<S>) source.getClass();
-            var lens = RecordLensBuilder.lens(rc, getter);
-            var traversal = Traversals.onMapValues(lens);
+        return (ContextualMutation<S>) (source, resolver) -> {
+            var traversal = resolver.mapValuesTraversal(getter);
             return traversal.update(source, modifier);
         };
     }

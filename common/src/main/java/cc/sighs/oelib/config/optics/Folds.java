@@ -1,6 +1,5 @@
-package cc.sighs.oelib.config.optics.internal;
+package cc.sighs.oelib.config.optics;
 
-import cc.sighs.oelib.config.optics.ConfigLens;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.List;

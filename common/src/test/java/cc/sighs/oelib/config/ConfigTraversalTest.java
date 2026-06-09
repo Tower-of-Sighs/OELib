@@ -1,11 +1,7 @@
 package cc.sighs.oelib.config;
 
 import cc.sighs.oelib.config.field.ConfigField;
-import cc.sighs.oelib.config.optics.ConfigLens;
-import cc.sighs.oelib.config.optics.internal.ConfigFold;
-import cc.sighs.oelib.config.optics.internal.ConfigTraversal;
-import cc.sighs.oelib.config.optics.internal.Folds;
-import cc.sighs.oelib.config.optics.internal.Traversals;
+import cc.sighs.oelib.config.optics.*;
 import cc.sighs.oelib.config.testsupport.TestFileUtil;
 import cc.sighs.oelib.config.testsupport.TestPlatform;
 import com.mojang.serialization.Codec;
@@ -13,6 +9,7 @@ import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.invoke.MethodHandles;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -262,6 +259,7 @@ class ConfigTraversalTest {
     @Test
     void countReturnsNumberOfListElements() {
         var def = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 new ResourceLocation("oelibtest", "c_" + UUID.randomUUID().toString().replace("-", "")),
                 ListRoot.class,
                 meta -> meta.fileName("count_test").directory("unit-tests"),
@@ -277,6 +275,7 @@ class ConfigTraversalTest {
     @Test
     void anyMatchAndAllMatchReturnCorrectResults() {
         var def = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 new ResourceLocation("oelibtest", "m_" + UUID.randomUUID().toString().replace("-", "")),
                 ListRoot.class,
                 meta -> meta.fileName("match_test").directory("unit-tests"),
@@ -296,6 +295,7 @@ class ConfigTraversalTest {
     @Test
     void getAllWhereReturnsFilteredElements() {
         var def = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 new ResourceLocation("oelibtest", "gw_" + UUID.randomUUID().toString().replace("-", "")),
                 ListRoot.class,
                 meta -> meta.fileName("get_all_where").directory("unit-tests"),
@@ -312,6 +312,7 @@ class ConfigTraversalTest {
     @Test
     void getValuesAndGetKeysReturnCorrectCollections() {
         var def = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 new ResourceLocation("oelibtest", "kv_" + UUID.randomUUID().toString().replace("-", "")),
                 MapRoot.class,
                 meta -> meta.fileName("get_keys_vals").directory("unit-tests"),
@@ -332,6 +333,7 @@ class ConfigTraversalTest {
     void updateElementsTransformsAllListElements() {
         String id = UUID.randomUUID().toString().replace("-", "");
         var def = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 new ResourceLocation("oelibtest", id),
                 ListRoot.class,
                 meta -> meta.fileName(id).directory("unit-tests"),
@@ -349,6 +351,7 @@ class ConfigTraversalTest {
     void updateWhereOnlyTransformsMatchingElements() {
         String id = UUID.randomUUID().toString().replace("-", "");
         var def = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 new ResourceLocation("oelibtest", id),
                 ListRoot.class,
                 meta -> meta.fileName(id).directory("unit-tests"),
@@ -366,6 +369,7 @@ class ConfigTraversalTest {
     void updateValuesTransformsAllMapValues() {
         String id = UUID.randomUUID().toString().replace("-", "");
         var def = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 new ResourceLocation("oelibtest", id),
                 MapRoot.class,
                 meta -> meta.fileName(id).directory("unit-tests"),
@@ -375,7 +379,7 @@ class ConfigTraversalTest {
                 ).apply(schema, MapRoot::new)
         );
 
-        def.unit().updateValues(MapRoot::tags, s -> s.toUpperCase());
+        def.unit().updateValues(MapRoot::tags, String::toUpperCase);
         assertEquals("X", def.unit().get().tags().get("a"));
         assertEquals("Y", def.unit().get().tags().get("b"));
     }
@@ -386,6 +390,7 @@ class ConfigTraversalTest {
     void traverseNoSaveDoesNotPersist() {
         String id = UUID.randomUUID().toString().replace("-", "");
         var def = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 new ResourceLocation("oelibtest", id),
                 ListRoot.class,
                 meta -> meta.fileName(id).directory("unit-tests"),
@@ -412,6 +417,7 @@ class ConfigTraversalTest {
     void batchMutatorTraverseAppliesTransformation() {
         String id = UUID.randomUUID().toString().replace("-", "");
         var def = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 new ResourceLocation("oelibtest", id),
                 ListRoot.class,
                 meta -> meta.fileName(id).directory("unit-tests"),

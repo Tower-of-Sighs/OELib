@@ -1,6 +1,7 @@
 package cc.sighs.oelib.config.model;
 
 import cc.sighs.oelib.config.ui.ConfigUiHint;
+import com.google.gson.JsonElement;
 import com.mojang.serialization.Dynamic;
 
 import java.util.ArrayList;
@@ -27,6 +28,9 @@ public final class ConfigValueMeta {
     private final String translationKey;
     private final String tooltip;
     private final boolean hidden;
+    private final String visibleWhenPath;
+    private final String visibleWhenValue;
+    private final JsonElement defaultJsonValue;
     private final List<ConfigValueValidator> validators;
     private final List<FieldMigration> migrations;
 
@@ -37,6 +41,9 @@ public final class ConfigValueMeta {
         this.translationKey = builder.translationKey;
         this.tooltip = builder.tooltip;
         this.hidden = builder.hidden;
+        this.visibleWhenPath = builder.visibleWhenPath;
+        this.visibleWhenValue = builder.visibleWhenValue;
+        this.defaultJsonValue = builder.defaultJsonValue == null ? null : builder.defaultJsonValue.deepCopy();
         this.validators = List.copyOf(builder.validators);
         this.migrations = List.copyOf(builder.migrations);
     }
@@ -108,6 +115,34 @@ public final class ConfigValueMeta {
     }
 
     /**
+     * Returns the controlling path for conditional UI visibility.
+     *
+     * @return the controlling path, or {@link Optional#empty()} if always visible
+     */
+    public Optional<String> visibleWhenPath() {
+        return Optional.ofNullable(visibleWhenPath);
+    }
+
+    /**
+     * Returns the controlling value for conditional UI visibility.
+     *
+     * @return the controlling value, or {@link Optional#empty()} if always visible
+     */
+    public Optional<String> visibleWhenValue() {
+        return Optional.ofNullable(visibleWhenValue);
+    }
+
+    /**
+     * Returns the JSON default value used when this field becomes visible in
+     * the generated UI.
+     *
+     * @return the activation default value, or {@link Optional#empty()} if none is defined
+     */
+    public Optional<JsonElement> defaultJsonValue() {
+        return Optional.ofNullable(defaultJsonValue == null ? null : defaultJsonValue.deepCopy());
+    }
+
+    /**
      * Returns the validators attached to this field.
      *
      * @return an unmodifiable list of validators
@@ -151,6 +186,9 @@ public final class ConfigValueMeta {
         private String translationKey;
         private String tooltip;
         private boolean hidden;
+        private String visibleWhenPath;
+        private String visibleWhenValue;
+        private JsonElement defaultJsonValue;
         private final List<ConfigValueValidator> validators = new ArrayList<>();
         private final List<FieldMigration> migrations = new ArrayList<>();
 
@@ -210,6 +248,40 @@ public final class ConfigValueMeta {
          */
         public Builder hidden(boolean hidden) {
             this.hidden = hidden;
+            return this;
+        }
+
+        /**
+         * Sets the controlling path for conditional UI visibility.
+         *
+         * @param visibleWhenPath the controlling path, or {@code null} to clear
+         * @return this builder
+         */
+        public Builder visibleWhenPath(String visibleWhenPath) {
+            this.visibleWhenPath = visibleWhenPath;
+            return this;
+        }
+
+        /**
+         * Sets the controlling value for conditional UI visibility.
+         *
+         * @param visibleWhenValue the controlling value, or {@code null} to clear
+         * @return this builder
+         */
+        public Builder visibleWhenValue(String visibleWhenValue) {
+            this.visibleWhenValue = visibleWhenValue;
+            return this;
+        }
+
+        /**
+         * Sets the JSON default value used when this field becomes visible in
+         * the generated UI.
+         *
+         * @param defaultJsonValue the activation default value, or {@code null} to clear
+         * @return this builder
+         */
+        public Builder defaultJsonValue(JsonElement defaultJsonValue) {
+            this.defaultJsonValue = defaultJsonValue == null ? null : defaultJsonValue.deepCopy();
             return this;
         }
 

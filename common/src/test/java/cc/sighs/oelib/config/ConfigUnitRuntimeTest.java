@@ -1,10 +1,12 @@
 package cc.sighs.oelib.config;
 
+import cc.sighs.oelib.config.codecs.ConfigMetaCodec;
 import cc.sighs.oelib.config.field.ConfigField;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import cc.sighs.oelib.config.testsupport.TestFileUtil;
 import cc.sighs.oelib.config.testsupport.TestPlatform;
 import cc.sighs.oelib.config.util.ConfigIOUtil;
+import cc.sighs.oelib.config.util.ConfigSerializationUtil;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.Dynamic;
@@ -12,8 +14,11 @@ import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.invoke.MethodHandles;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -35,6 +40,7 @@ class ConfigUnitRuntimeTest {
     void updateSaveValidateAndMigrateWorkTogether() throws Exception {
         String fileName = "config_" + UUID.randomUUID().toString().replace("-", "");
         var definition = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 new ResourceLocation("oelibtest", "runtime"),
                 RuntimeConfig.class,
                 meta -> meta.fileName(fileName).directory("unit-tests").format(ConfigStorageFormat.JSON),
@@ -92,6 +98,7 @@ class ConfigUnitRuntimeTest {
     void noSaveUpdatesOnlyPersistAfterExplicitSave() throws Exception {
         String fileName = "nosave_" + UUID.randomUUID().toString().replace("-", "");
         var definition = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 new ResourceLocation("oelibtest", "nosave"),
                 RuntimeConfig.class,
                 meta -> meta.fileName(fileName).directory("unit-tests").format(ConfigStorageFormat.JSON),
@@ -118,6 +125,7 @@ class ConfigUnitRuntimeTest {
     void batchUpdatePersistsOnceAfterMultipleMutations() {
         String fileName = "batch_" + UUID.randomUUID().toString().replace("-", "");
         var definition = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 new ResourceLocation("oelibtest", "batch"),
                 RuntimeConfig.class,
                 meta -> meta.fileName(fileName).directory("unit-tests").format(ConfigStorageFormat.JSON),
@@ -152,6 +160,7 @@ class ConfigUnitRuntimeTest {
     void setAndGetPersistsAndReturnsUpdatedValue() throws Exception {
         String fileName = "setandget_" + UUID.randomUUID().toString().replace("-", "");
         var definition = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 new ResourceLocation("oelibtest", "setandget"),
                 RuntimeConfig.class,
                 meta -> meta.fileName(fileName).directory("unit-tests").format(ConfigStorageFormat.JSON),
@@ -176,6 +185,7 @@ class ConfigUnitRuntimeTest {
     void setAndGetNoSaveDefersPersistenceUntilExplicitSave() throws Exception {
         String fileName = "setandget_nosave_" + UUID.randomUUID().toString().replace("-", "");
         var definition = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 new ResourceLocation("oelibtest", "setandget_nosave"),
                 RuntimeConfig.class,
                 meta -> meta.fileName(fileName).directory("unit-tests").format(ConfigStorageFormat.JSON),
@@ -203,6 +213,7 @@ class ConfigUnitRuntimeTest {
     void batchSetAndGetWorksForNoSaveAndSaveModes() throws Exception {
         String fileName = "batch_setandget_" + UUID.randomUUID().toString().replace("-", "");
         var definition = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 new ResourceLocation("oelibtest", "batch_setandget"),
                 RuntimeConfig.class,
                 meta -> meta.fileName(fileName).directory("unit-tests").format(ConfigStorageFormat.JSON),
@@ -232,6 +243,46 @@ class ConfigUnitRuntimeTest {
         assertEquals(19, JsonParser.parseString(content).getAsJsonObject().get("count").getAsInt());
     }
 
+    @Test
+    void tomlEncodingSupportsListsAndMapsOfNestedRecords() {
+        var definition = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
+                new ResourceLocation("oelibtest", "toml_nested"),
+                TomlRoot.class,
+                meta -> meta.fileName("toml_nested").directory("unit-tests").format(ConfigStorageFormat.TOML),
+                schema -> schema.group(
+                        ConfigField.list("entries", TomlEntry.META_CODEC)
+                                .defaultValue(List.of(
+                                        new TomlEntry("alpha", 1, Optional.of(new TomlNested(true, 2))),
+                                        new TomlEntry("beta", 2, Optional.empty())
+                                ))
+                                .forGetter(TomlRoot::entries),
+                        ConfigField.map("entryMap", Codec.STRING, TomlEntry.META_CODEC)
+                                .defaultValue(Map.of(
+                                        "left", new TomlEntry("left", 3, Optional.empty()),
+                                        "right", new TomlEntry("right", 4, Optional.of(new TomlNested(false, 5)))
+                                ))
+                                .forGetter(TomlRoot::entryMap)
+                ).apply(schema, TomlRoot::new)
+        );
+
+        TomlRoot value = definition.unit().getDefaultValue();
+        String encoded = ConfigSerializationUtil.encodeToString(
+                value,
+                ConfigStorageFormat.TOML,
+                definition.unit().codec().codec(),
+                definition.unit().codec().fields()
+        ).orElseThrow();
+
+        TomlRoot decoded = ConfigSerializationUtil.parse(
+                encoded,
+                ConfigStorageFormat.TOML,
+                definition.unit().codec().codec()
+        ).result().orElseThrow();
+
+        assertEquals(value, decoded);
+    }
+
     private sealed interface Mode permits ModeA, ModeB {
     }
 
@@ -246,4 +297,29 @@ class ConfigUnitRuntimeTest {
 
     private record ModeHolder(Mode mode) {
     }
+
+    private record TomlRoot(List<TomlEntry> entries, Map<String, TomlEntry> entryMap) {
+    }
+
+    private record TomlNested(boolean enabled, int level) {
+    }
+
+    private record TomlEntry(String id, int weight, Optional<TomlNested> extra) {
+        private static final ConfigMetaCodec<TomlEntry> META_CODEC = ConfigSchema.metaCodec(
+                TomlEntry.class,
+                schema -> schema.group(
+                        ConfigField.string("id").defaultValue("entry").forGetter(TomlEntry::id),
+                        ConfigField.intRange("weight", 0, 100).defaultValue(0).forGetter(TomlEntry::weight),
+                        ConfigField.optional("extra", TOML_NESTED_CODEC).forGetter(TomlEntry::extra)
+                ).apply(schema, TomlEntry::new)
+        );
+    }
+
+    private static final ConfigMetaCodec<TomlNested> TOML_NESTED_CODEC = ConfigSchema.metaCodec(
+            TomlNested.class,
+            schema -> schema.group(
+                    ConfigField.bool("enabled").defaultValue(true).forGetter(TomlNested::enabled),
+                    ConfigField.intRange("level", 0, 10).defaultValue(0).forGetter(TomlNested::level)
+            ).apply(schema, TomlNested::new)
+    );
 }
