@@ -1,6 +1,8 @@
 package cc.sighs.oelib.config;
 
 import cc.sighs.oelib.config.api.IConfigPermissionChecker;
+import cc.sighs.oelib.config.codecs.ConfigMetaCodec;
+import cc.sighs.oelib.config.codecs.ConfigSealedCodec;
 import cc.sighs.oelib.config.field.ConfigField;
 import cc.sighs.oelib.config.model.ConfigMeta;
 import cc.sighs.oelib.config.model.ConfigSide;
@@ -16,40 +18,18 @@ import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.lang.invoke.MethodHandles;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
- * Primary entry point for defining configuration units from record codec schemas.
+ * Defines configuration units from record codec schemas.
  *
- * <p>An {@code ConfigSchema} definition produces a {@link Definition} that
- * bundles the registered {@link ConfigUnit} with the root record class,
- * enabling lens-based field access through {@link RecordLensBuilder}.
- *
- * <p>Nested records are declared with the static {@link #record(String, Class, Function, Function)}
- * method, which must be called inside an active {@link ConfigContext}.
- * Reusable nested declarations can be expressed through {@link ConfigMetaCodec}
- * and passed to {@link #record(String, Class, ConfigMetaCodec, Function)}.
- *
- * <p>Usage follows this pattern:
- * <pre>{@code
- * var def = ConfigSchema.defineClient(
- *     id, MyConfig.class,
- *     meta -> meta.fileName("my-config"),
- *     instance -> instance.group(
- *         ConfigField.intRange("port", 1, 65535).forGetter(MyConfig::port),
- *         ConfigSchema.record("db", DbConfig.class,
- *             sub -> sub.group(
- *                 ConfigField.string("url").forGetter(DbConfig::url)
- *             ),
- *             MyConfig::db
- *         )
- *     ).apply(instance, MyConfig::new)
- * );
- * }</pre>
+ * <p>Each definition produces a {@link Definition} that binds a
+ * {@link ConfigUnit}, the root record class, and the lookup used for
+ * record-component access. Nested records are declared through
+ * {@link #record(String, Class, Function, Function)} or through reusable
+ * {@link ConfigMetaCodec} instances.
  *
  * @see ConfigContext
  * @see ConfigField
@@ -62,7 +42,7 @@ public final class ConfigSchema {
     /**
      * Defines a client-side configuration.
      *
-     * @param configId       the configuration identifier
+     * @param configId       the configuration id
      * @param rootClass      the root record class
      * @param metaCustomizer optional customizer for {@link ConfigMeta}, or {@code null}
      * @param builder        the record codec builder function
@@ -71,18 +51,19 @@ public final class ConfigSchema {
      * @throws NullPointerException if {@code configId}, {@code rootClass}, or {@code builder} is {@code null}
      */
     public static <T> Definition<T> defineClient(
+            MethodHandles.Lookup lensLookup,
             Identifier configId,
             Class<T> rootClass,
             Consumer<ConfigMeta.Builder> metaCustomizer,
             Function<RecordCodecBuilder.Instance<T>, ? extends App<RecordCodecBuilder.Mu<T>, T>> builder
     ) {
-        return define(configId, rootClass, metaCustomizer, builder, ConfigSide.CLIENT);
+        return define(lensLookup, configId, rootClass, metaCustomizer, builder, ConfigSide.CLIENT);
     }
 
     /**
      * Defines a server-side configuration.
      *
-     * @param configId       the configuration identifier
+     * @param configId       the configuration id
      * @param rootClass      the root record class
      * @param metaCustomizer optional customizer for {@link ConfigMeta}, or {@code null}
      * @param builder        the record codec builder function
@@ -91,18 +72,20 @@ public final class ConfigSchema {
      * @throws NullPointerException if {@code configId}, {@code rootClass}, or {@code builder} is {@code null}
      */
     public static <T> Definition<T> defineServer(
+            MethodHandles.Lookup lensLookup,
             Identifier configId,
             Class<T> rootClass,
             Consumer<ConfigMeta.Builder> metaCustomizer,
             Function<RecordCodecBuilder.Instance<T>, ? extends App<RecordCodecBuilder.Mu<T>, T>> builder
     ) {
-        return define(configId, rootClass, metaCustomizer, builder, ConfigSide.SERVER);
+        return define(lensLookup, configId, rootClass, metaCustomizer, builder, ConfigSide.SERVER);
     }
 
     /**
      * Defines a configuration on the given side.
      *
-     * @param configId       the configuration identifier
+     * @param lensLookup     the lookup for lens-based record component access
+     * @param configId       the configuration id
      * @param rootClass      the root record class
      * @param metaCustomizer optional customizer for {@link ConfigMeta}, or {@code null}
      * @param builder        the record codec builder function
@@ -113,12 +96,14 @@ public final class ConfigSchema {
      *                              or {@code side} is {@code null}
      */
     public static <T> Definition<T> define(
+            MethodHandles.Lookup lensLookup,
             Identifier configId,
             Class<T> rootClass,
             Consumer<ConfigMeta.Builder> metaCustomizer,
             Function<RecordCodecBuilder.Instance<T>, ? extends App<RecordCodecBuilder.Mu<T>, T>> builder,
             ConfigSide side
     ) {
+        Objects.requireNonNull(lensLookup);
         Objects.requireNonNull(configId);
         Objects.requireNonNull(rootClass);
         Objects.requireNonNull(builder);
@@ -130,13 +115,14 @@ public final class ConfigSchema {
         ConfigCodec<T> configCodec = new ConfigCodec<>(codec, meta, List.copyOf(fields));
         T defaultValue = ConfigCodecUtil.deriveDefault(codec);
         ConfigUnit<T> unit = ConfigUnit.of(configCodec, defaultValue);
-        return new Definition<>(unit, rootClass);
+        unit.initLensData(rootClass, lensLookup);
+        return new Definition<>(unit, rootClass, lensLookup);
     }
 
     /**
      * Legacy code path that defines a unit without recording the root class.
      *
-     * @param configId       the configuration identifier
+     * @param configId       the configuration id
      * @param builder        the record codec builder function
      * @param metaCustomizer optional customizer for {@link ConfigMeta}, or {@code null}
      * @param side           the logical side
@@ -265,6 +251,42 @@ public final class ConfigSchema {
         return ConfigMetaCodec.of(recordClass, builder);
     }
 
+    /**
+     * Creates a reusable metadata codec for a discriminated sealed hierarchy.
+     *
+     * @param  baseClass the sealed base type
+     * @param  typeKey the discriminator field name
+     * @param  typeGetter the function that resolves the discriminator id
+     * @param  defaultValue the default value
+     * @param  variants the declared variants
+     * @param  <T> the sealed base type
+     * @return a sealed codec carrying variant metadata
+     */
+    @SafeVarargs
+    public static <T> ConfigSealedCodec<T> sealedCodec(
+            Class<T> baseClass,
+            String typeKey,
+            Function<? super T, String> typeGetter,
+            T defaultValue,
+            ConfigSealedCodec.Variant<? extends T>... variants
+    ) {
+        return ConfigSealedCodec.of(baseClass, typeKey, typeGetter, defaultValue, variants);
+    }
+
+    /**
+     * Creates a declared sealed variant.
+     *
+     * @param  id the discriminator id
+     * @param  variantClass the concrete variant class
+     * @param  codec the metadata codec for the concrete variant
+     * @param  <T> the sealed base type
+     * @param  <X> the concrete variant type
+     * @return a declared sealed variant
+     */
+    public static <T, X extends T> ConfigSealedCodec.Variant<X> sealedVariant(String id, Class<X> variantClass, ConfigMetaCodec<X> codec) {
+        return ConfigSealedCodec.variant(id, variantClass, codec);
+    }
+
     private static <C> void recordNestedMeta(String key, Class<C> recordClass, ConfigMetaCodec<C> metaCodec) {
         if (!ConfigContext.isActive()) {
             return;
@@ -272,32 +294,10 @@ public final class ConfigSchema {
         ConfigContext.withRecord(key, recordClass, () -> {
             Identifier configId = ConfigContext.currentConfigId();
             for (ConfigValueMeta localMeta : metaCodec.fields()) {
-                ConfigField.recordMeta(rewriteNestedMeta(localMeta, configId));
+                ConfigField.recordMeta(ConfigFieldMetaUtil.rewriteNestedMetaForContext(localMeta, configId));
             }
             return null;
         });
-    }
-
-    private static ConfigValueMeta rewriteNestedMeta(ConfigValueMeta meta, Identifier configId) {
-        ConfigValueMeta.Builder builder = ConfigValueMeta.builder(meta.key())
-                .comment(meta.comment().orElse(null))
-                .uiHint(meta.uiHint().orElse(null))
-                .hidden(meta.hidden())
-                .validators(meta.validators())
-                .migrations(meta.migrations());
-
-        if (configId != null) {
-            String autoKey = ConfigFieldMetaUtil.autoTranslationKey(configId, meta.key());
-            builder.translationKey(autoKey);
-            if (meta.tooltip().isPresent()) {
-                builder.tooltip(autoKey + ".tooltip");
-            }
-        } else {
-            builder.translationKey(meta.translationKey().orElse(null));
-            builder.tooltip(meta.tooltip().orElse(null));
-        }
-
-        return ConfigFieldMetaUtil.qualifyForContext(builder.build());
     }
 
     private static ConfigMeta buildMeta(Identifier configId, ConfigSide side, Consumer<ConfigMeta.Builder> metaCustomizer) {
@@ -319,10 +319,12 @@ public final class ConfigSchema {
     public static final class Definition<T> {
         private final ConfigUnit<T> unit;
         private final Class<T> rootClass;
+        private final MethodHandles.Lookup lensLookup;
 
-        private Definition(ConfigUnit<T> unit, Class<T> rootClass) {
+        private Definition(ConfigUnit<T> unit, Class<T> rootClass, MethodHandles.Lookup lensLookup) {
             this.unit = unit;
             this.rootClass = rootClass;
+            this.lensLookup = lensLookup;
         }
 
         /**
@@ -344,8 +346,104 @@ public final class ConfigSchema {
         }
 
         /**
+         * Returns the lookup used for lens-based record component access.
+         *
+         * @return the lookup
+         */
+        public MethodHandles.Lookup lensLookup() {
+            return lensLookup;
+        }
+
+        /**
+         * Returns a path selecting exactly one root component.
+         *
+         * @param  getter the root component accessor
+         * @param  <V> the component type
+         * @return a path selecting the given component
+         */
+        public <V> ConfigPath.One<T, V> path(RecordLensBuilder.LensGetter<T, V> getter) {
+            return ConfigPath.one(lensLookup, rootClass, getter);
+        }
+
+        /**
+         * Returns a path selecting the present value of an
+         * {@link java.util.Optional}-typed root component.
+         *
+         * @param  getter the optional root component accessor
+         * @param  <V> the optional element type
+         * @return a path selecting the present optional value
+         */
+        public <V> ConfigPath.Maybe<T, V> pathOptional(RecordLensBuilder.LensGetter<T, Optional<V>> getter) {
+            return ConfigPath.optional(lensLookup, rootClass, getter);
+        }
+
+        /**
+         * Returns a path selecting a root component when it is an instance of
+         * the given subtype.
+         *
+         * @param  getter the root component accessor
+         * @param  subtypeClass the required subtype
+         * @param  <V> the base type
+         * @param  <X> the subtype
+         * @return a path selecting the component when it is of the given subtype
+         */
+        public <V, X extends V> ConfigPath.Maybe<T, X> pathSubtype(RecordLensBuilder.LensGetter<T, V> getter, Class<X> subtypeClass) {
+            return ConfigPath.subtype(lensLookup, rootClass, getter, subtypeClass);
+        }
+
+        /**
+         * Returns a path selecting all elements of a list-valued root
+         * component.
+         *
+         * @param  getter the list root component accessor
+         * @param  <E> the list element type
+         * @return a path selecting all list elements
+         */
+        public <E> ConfigPath.Many<T, E> pathEach(RecordLensBuilder.LensGetter<T, List<E>> getter) {
+            return ConfigPath.each(lensLookup, rootClass, getter);
+        }
+
+        /**
+         * Returns a path selecting all values of a map-valued root component.
+         *
+         * @param  getter the map root component accessor
+         * @param  <K> the map key type
+         * @param  <V> the map value type
+         * @return a path selecting all map values
+         */
+        public <K, V> ConfigPath.Many<T, V> pathValues(RecordLensBuilder.LensGetter<T, Map<K, V>> getter) {
+            return ConfigPath.values(lensLookup, rootClass, getter);
+        }
+
+        /**
+         * Returns a path selecting all keys of a map-valued root component.
+         *
+         * @param  getter the map root component accessor
+         * @param  <K> the map key type
+         * @param  <V> the map value type
+         * @return a path selecting all map keys
+         */
+        public <K, V> ConfigPath.Many<T, K> pathKeys(RecordLensBuilder.LensGetter<T, Map<K, V>> getter) {
+            return ConfigPath.keys(lensLookup, rootClass, getter);
+        }
+
+        /**
+         * Returns a path selecting the value stored at the given key in a
+         * map-valued root component.
+         *
+         * @param  getter the map root component accessor
+         * @param  key the map key to resolve
+         * @param  <K> the map key type
+         * @param  <V> the map value type
+         * @return a path selecting the map value stored at {@code key}
+         */
+        public <K, V> ConfigPath.Maybe<T, V> pathValue(RecordLensBuilder.LensGetter<T, Map<K, V>> getter, K key) {
+            return ConfigPath.value(lensLookup, rootClass, getter, key);
+        }
+
+        /**
          * Creates a {@link ConfigLens} for the given record component accessor
-         * using the default lookup.
+         * using the stored lookup.
          *
          * @param getter a serializable method reference to a record component
          * @param <V>    the type of the component value
@@ -353,7 +451,7 @@ public final class ConfigSchema {
          */
         @ApiStatus.Internal
         public <V> ConfigLens<T, V> lens(RecordLensBuilder.LensGetter<T, V> getter) {
-            return RecordLensBuilder.lens(rootClass, getter);
+            return RecordLensBuilder.lens(lensLookup, rootClass, getter);
         }
 
         /**
@@ -380,7 +478,7 @@ public final class ConfigSchema {
          */
         @ApiStatus.Internal
         public <V> ConfigLens<T, V> lens(String componentName) {
-            return RecordLensBuilder.lens(rootClass, componentName);
+            return RecordLensBuilder.lens(lensLookup, rootClass, componentName);
         }
 
         /**
@@ -393,6 +491,7 @@ public final class ConfigSchema {
          * @return a lens targeting that component
          * @throws IllegalArgumentException if the component does not exist
          */
+        @ApiStatus.Internal
         public <V> ConfigLens<T, V> lens(MethodHandles.Lookup lookup, String componentName) {
             return RecordLensBuilder.lens(lookup, rootClass, componentName);
         }

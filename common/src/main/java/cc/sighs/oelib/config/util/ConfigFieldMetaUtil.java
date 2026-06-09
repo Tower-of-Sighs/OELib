@@ -51,8 +51,44 @@ public final class ConfigFieldMetaUtil {
                 .translationKey(meta.translationKey().orElse(null))
                 .tooltip(meta.tooltip().orElse(null))
                 .hidden(meta.hidden())
+                .visibleWhenPath(meta.visibleWhenPath().map(ConfigContext::qualifyKey).orElse(null))
+                .visibleWhenValue(meta.visibleWhenValue().orElse(null))
+                .defaultJsonValue(meta.defaultJsonValue().orElse(null))
                 .validators(meta.validators())
                 .migrations(meta.migrations())
                 .build();
+    }
+
+    /**
+     * Rewrites nested metadata for the current context and the given
+     * configuration id.
+     *
+     * @param  meta the nested metadata entry
+     * @param  configId the target configuration id, or {@code null}
+     * @return the rewritten metadata entry
+     */
+    public static ConfigValueMeta rewriteNestedMetaForContext(ConfigValueMeta meta, @Nullable ResourceLocation configId) {
+        ConfigValueMeta.Builder builder = ConfigValueMeta.builder(meta.key())
+                .comment(meta.comment().orElse(null))
+                .uiHint(meta.uiHint().orElse(null))
+                .hidden(meta.hidden())
+                .visibleWhenPath(meta.visibleWhenPath().orElse(null))
+                .visibleWhenValue(meta.visibleWhenValue().orElse(null))
+                .defaultJsonValue(meta.defaultJsonValue().orElse(null))
+                .validators(meta.validators())
+                .migrations(meta.migrations());
+
+        if (configId != null) {
+            String autoKey = autoTranslationKey(configId, meta.key());
+            builder.translationKey(autoKey);
+            if (meta.tooltip().isPresent()) {
+                builder.tooltip(autoKey + ".tooltip");
+            }
+        } else {
+            builder.translationKey(meta.translationKey().orElse(null));
+            builder.tooltip(meta.tooltip().orElse(null));
+        }
+
+        return qualifyForContext(builder.build());
     }
 }

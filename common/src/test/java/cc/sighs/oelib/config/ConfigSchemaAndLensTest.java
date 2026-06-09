@@ -1,5 +1,6 @@
 package cc.sighs.oelib.config;
 
+import cc.sighs.oelib.config.codecs.ConfigMetaCodec;
 import cc.sighs.oelib.config.field.ConfigField;
 import cc.sighs.oelib.config.model.ConfigValueMeta;
 import com.mojang.serialization.Codec;
@@ -12,14 +13,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.*;
 
 class ConfigSchemaAndLensTest {
 
     @Test
     void defineCollectsNestedMetaAndDerivesDefault() {
         var definition = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 Identifier.fromNamespaceAndPath("oelibtest", "schema_meta"),
                 RootConfig.class,
                 meta -> meta.fileName("schema_meta").directory("unit-tests"),
@@ -79,6 +80,7 @@ class ConfigSchemaAndLensTest {
     @Test
     void lookupOverloadBuildsAndComposesLenses() {
         var definition = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 Identifier.fromNamespaceAndPath("oelibtest", "lookup_lens"),
                 RootConfig.class,
                 meta -> meta.fileName("lookup_lens").directory("unit-tests"),
@@ -109,6 +111,7 @@ class ConfigSchemaAndLensTest {
         ).apply(builder, NestedCodecConfig::new));
 
         var definition = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 Identifier.fromNamespaceAndPath("oelibtest", "schema_prebuilt_codec"),
                 RootWithPrebuilt.class,
                 meta -> meta.fileName("schema_prebuilt_codec").directory("unit-tests"),
@@ -126,6 +129,7 @@ class ConfigSchemaAndLensTest {
     @Test
     void metaCodecRecordOverloadCollectsNestedMetaAndTranslationKeys() {
         var definition = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 Identifier.fromNamespaceAndPath("oelibtest", "schema_meta_codec"),
                 RootWithMetaCodec.class,
                 meta -> meta.fileName("schema_meta_codec").directory("unit-tests"),
@@ -149,6 +153,14 @@ class ConfigSchemaAndLensTest {
         assertEquals(
                 "config.oelibtest.schema_meta_codec.nested.depth",
                 byKey.get("nested.depth").translationKey().orElseThrow()
+        );
+    }
+
+    @Test
+    void optionalFieldRejectsPresentDefault() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> ConfigField.optional("threshold", Codec.INT).defaultValue(Optional.of(3))
         );
     }
 

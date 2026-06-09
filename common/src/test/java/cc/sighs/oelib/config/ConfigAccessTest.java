@@ -8,6 +8,7 @@ import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.invoke.MethodHandles;
 import java.nio.file.Files;
 import java.util.UUID;
 
@@ -25,6 +26,7 @@ class ConfigAccessTest {
     void accessorAndLensSetBothWork() {
         String fileName = "access_" + UUID.randomUUID().toString().replace("-", "");
         var def = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
                 Identifier.fromNamespaceAndPath("oelibtest", "access"),
                 AccessConfig.class,
                 meta -> meta.fileName(fileName).directory("unit-tests").format(ConfigStorageFormat.JSON),

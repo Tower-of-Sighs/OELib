@@ -1,6 +1,7 @@
 package cc.sighs.oelib.config.optics;
 
 import cc.sighs.oelib.config.ConfigMutation;
+import org.jetbrains.annotations.ApiStatus;
 
 import java.util.Objects;
 import java.util.function.DoubleUnaryOperator;
@@ -14,6 +15,7 @@ import java.util.function.DoubleUnaryOperator;
  *
  * @param <S> the source (record) type
  */
+@ApiStatus.Internal
 public final class ConfigDoubleLens<S> {
     private final ConfigLens<S, Double> lens;
 

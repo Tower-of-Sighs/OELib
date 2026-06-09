@@ -26,6 +26,7 @@ import java.util.function.*;
  * @param <S> the source (record) type
  * @param <A> the field (component) type
  */
+@ApiStatus.Internal
 public final class ConfigLens<S, A> {
     private final String path;
     private final Function<S, A> viewFn;

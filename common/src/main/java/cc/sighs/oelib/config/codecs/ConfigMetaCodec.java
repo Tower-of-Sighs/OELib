@@ -1,6 +1,8 @@
-package cc.sighs.oelib.config;
+package cc.sighs.oelib.config.codecs;
 
 import cc.sighs.oelib.OELib;
+import cc.sighs.oelib.config.ConfigContext;
+import cc.sighs.oelib.config.ConfigSchema;
 import cc.sighs.oelib.config.model.ConfigValueMeta;
 import cc.sighs.oelib.config.util.ConfigCodecUtil;
 import com.mojang.datafixers.kinds.App;

@@ -3,10 +3,8 @@ package cc.sighs.oelib.config;
 import cc.sighs.oelib.config.optics.ConfigLens;
 import org.jspecify.annotations.NonNull;
 
-import java.io.Serializable;
 import java.lang.invoke.MethodHandles;
 import java.util.Objects;
-import java.util.function.Function;
 
 /**
  * Convenience wrapper for reading and writing individual fields of a {@link ConfigUnit}
@@ -22,6 +20,7 @@ import java.util.function.Function;
  *
  * @param <T> the type of the configuration record
  */
+@Deprecated
 public class ConfigAccess<T> {
     private final ConfigUnit<T> unit;
 
@@ -48,7 +47,8 @@ public class ConfigAccess<T> {
      * @throws NullPointerException if {@code getter} or {@code value} is {@code null}
      */
     public <V> void set(@NonNull Accessor<T, V> getter, @NonNull V value) {
-        set(MethodHandles.lookup(), getter, value);
+        Objects.requireNonNull(value, "Config value cannot be null");
+        unit.update(unit.resolver().lens(getter), ignored -> value);
     }
 
     /**
@@ -66,7 +66,7 @@ public class ConfigAccess<T> {
         Objects.requireNonNull(lookup);
         @SuppressWarnings("unchecked")
         Class<T> recordClass = (Class<T>) unit.get().getClass();
-        ConfigLens<T, V> lens = RecordLensBuilder.lens(lookup, recordClass, getter);
+        var lens = new ConfigOpticResolver<>(lookup, recordClass).lens(getter);
         unit.update(lens, ignored -> value);
     }
 
@@ -94,7 +94,7 @@ public class ConfigAccess<T> {
      * @throws NullPointerException if {@code getter} is {@code null}
      */
     public <V> ConfigLens<T, V> lens(@NonNull Accessor<T, V> getter) {
-        return lens(MethodHandles.lookup(), getter);
+        return unit.resolver().lens(getter);
     }
 
     /**
@@ -111,7 +111,7 @@ public class ConfigAccess<T> {
         Objects.requireNonNull(lookup);
         @SuppressWarnings("unchecked")
         Class<T> recordClass = (Class<T>) unit.get().getClass();
-        return RecordLensBuilder.lens(lookup, recordClass, getter);
+        return new ConfigOpticResolver<>(lookup, recordClass).lens(getter);
     }
 
     /**
@@ -122,6 +122,6 @@ public class ConfigAccess<T> {
      * @param <R> the component type
      */
     @FunctionalInterface
-    public interface Accessor<T, R> extends RecordLensBuilder.LensGetter<T, R>, Function<T, R>, Serializable {
+    public interface Accessor<T, R> extends RecordLensBuilder.LensGetter<T, R> {
     }
 }

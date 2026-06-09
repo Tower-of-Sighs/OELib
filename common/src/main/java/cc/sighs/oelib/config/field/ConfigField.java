@@ -1,6 +1,7 @@
 package cc.sighs.oelib.config.field;
 
 import cc.sighs.oelib.config.ConfigContext;
+import cc.sighs.oelib.config.codecs.ConfigSealedCodec;
 import cc.sighs.oelib.config.model.ConfigValueMeta;
 import cc.sighs.oelib.config.ui.ConfigUiHint;
 import cc.sighs.oelib.config.util.ConfigFieldMetaUtil;
@@ -150,6 +151,18 @@ public final class ConfigField {
      */
     public static <T> OptionalBuilder<T> optional(String key, Codec<T> elementCodec) {
         return new OptionalBuilder<>(key, elementCodec);
+    }
+
+    /**
+     * Creates a builder for a discriminated sealed field.
+     *
+     * @param key the field key
+     * @param sealedCodec the sealed codec carrying variant metadata
+     * @param <T> the sealed base type
+     * @return a new sealed field builder
+     */
+    public static <T> SealedBuilder<T> sealed(String key, ConfigSealedCodec<T> sealedCodec) {
+        return new SealedBuilder<>(key, sealedCodec);
     }
 
     /**
@@ -354,6 +367,29 @@ public final class ConfigField {
             this.defaultValue = Optional.empty();
         }
 
+        /**
+         * Sets the default state for this optional field.
+         *
+         * <p>Only {@link Optional#empty()} is supported. A present default is
+         * rejected because an absent field and an empty optional share the
+         * same serialized representation in the supported config formats.
+         *
+         * @param  value the default optional state
+         * @return this builder
+         * @throws IllegalArgumentException if {@code value} is present
+         */
+        @Override
+        public OptionalBuilder<T> defaultValue(Optional<T> value) {
+            Objects.requireNonNull(value);
+            if (value.isPresent()) {
+                throw new IllegalArgumentException(
+                        "Optional fields do not support present defaults because absent input " +
+                                "and Optional.empty() share the same serialized representation."
+                );
+            }
+            return super.defaultValue(value);
+        }
+
         @Override
         public <O> RecordCodecBuilder<O, Optional<T>> forGetter(Function<O, Optional<T>> getter) {
             Objects.requireNonNull(getter);
@@ -378,6 +414,62 @@ public final class ConfigField {
                 afterMetaHook.accept(meta);
             }
             return mc.forGetter(getter);
+        }
+    }
+
+    /**
+     * Builder for discriminated sealed fields.
+     *
+     * @param <T> the sealed base type
+     */
+    public static final class SealedBuilder<T> extends BaseFieldBuilder<T, SealedBuilder<T>> {
+        private final ConfigSealedCodec<T> sealedCodec;
+
+        SealedBuilder(String key, ConfigSealedCodec<T> sealedCodec) {
+            super(key, sealedCodec);
+            this.sealedCodec = Objects.requireNonNull(sealedCodec);
+            this.defaultValue = sealedCodec.defaultValue();
+        }
+
+        @Override
+        public <O> RecordCodecBuilder<O, T> forGetter(Function<O, T> getter) {
+            Objects.requireNonNull(getter);
+            if (beforeMetaHook != null) {
+                beforeMetaHook.accept(metaBuilder);
+            }
+            var cfgId = ConfigContext.currentConfigId();
+            if (cfgId != null) {
+                String autoKey = ConfigFieldMetaUtil.autoTranslationKey(cfgId, key);
+                metaBuilder.translationKey(autoKey);
+                if (this.tooltipEnabled) {
+                    metaBuilder.tooltip(autoKey + ".tooltip");
+                }
+            }
+            // The sealed container itself is not directly editable in the UI.
+            // Keep its metadata for whole-value validation, migration, and
+            // serialization comments, but hide it from field rendering.
+            metaBuilder.hidden(true);
+            var meta = ConfigFieldMetaUtil.qualifyForContext(metaBuilder.build());
+            recordMeta(meta);
+            recordSealedMeta(key, sealedCodec);
+            var field = sealedCodec.fieldOf(key).orElse(defaultValue);
+            if (afterMetaHook != null) {
+                afterMetaHook.accept(meta);
+            }
+            return field.forGetter(getter);
+        }
+
+        private static <T> void recordSealedMeta(String key, ConfigSealedCodec<T> sealedCodec) {
+            if (!ConfigContext.isActive()) {
+                return;
+            }
+            ConfigContext.withRecord(key, sealedCodec.baseClass(), () -> {
+                var configId = ConfigContext.currentConfigId();
+                for (ConfigValueMeta localMeta : sealedCodec.fields()) {
+                    recordMeta(ConfigFieldMetaUtil.rewriteNestedMetaForContext(localMeta, configId));
+                }
+                return null;
+            });
         }
     }
 }

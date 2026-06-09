@@ -8,9 +8,11 @@ import cc.sighs.oelib.config.net.ConfigUpdateRequestPacket;
 import cc.sighs.oelib.config.ui.entries.*;
 import cc.sighs.oelib.config.ui.widget.DynamicEntryListWidget;
 import cc.sighs.oelib.config.util.ConfigGuiUtil;
+import cc.sighs.oelib.config.util.ConfigPathUtil;
 import cc.sighs.oelib.config.util.ConfigSerializationUtil;
 import cc.sighs.oelib.config.util.GsonUtil;
 import cc.sighs.oelib.network.api.NetworkManager;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.client.Minecraft;
@@ -47,7 +49,7 @@ public class ConfigScreen extends Screen {
     private static final int NESTED_INNER_GAP = 4;
     private static final int NESTED_OUTER_GAP = 4;
 
-    /** The identifier of the configuration being edited. */
+    /** The id of the configuration being edited. */
     public final Identifier configId;
     private final ConfigUnit<Object> unit;
     /** The codec for this configuration. */
@@ -76,12 +78,13 @@ public class ConfigScreen extends Screen {
     private EditBox searchBox;
     private int sideExpandLimit = 120;
     private List<Identifier> modConfigs = new ArrayList<>();
+    private final Map<Identifier, Map<String, JsonElement>> conditionalFieldStash = new HashMap<>();
 
     /**
      * Constructs a config screen for the given mod.
      *
      * @param parent the parent screen
-     * @param modid  the mod identifier whose configs to display
+     * @param modid  the mod id whose configs to display
      */
     public ConfigScreen(Screen parent, String modid) {
         super(Component.translatable("config." + modid + ".title"));
@@ -173,6 +176,7 @@ public class ConfigScreen extends Screen {
             initialScroll = Math.max(listWidget.getScrollOffset(), listWidget.getScrollTargetOffset());
         }
         Map<Identifier, JsonObject> preservedWorking = snapshotWorkingByConfig();
+        Map<Identifier, Map<String, JsonElement>> preservedConditionalStash = snapshotConditionalStashByConfig();
         contexts.clear();
         int sidebar = sidebarWidth();
         int labelWidth = 160;
@@ -218,13 +222,18 @@ public class ConfigScreen extends Screen {
             u.reload();
             var c = u.codec();
             var preserved = preservedWorking.get(id);
+            var preservedStash = preservedConditionalStash.get(id);
             var workingJson = preserved != null
                     ? preserved.deepCopy()
                     : ConfigGuiUtil.encodeToJsonObject(c.codec(), u.get());
             var defaultObj = c.codec().parse(JsonOps.INSTANCE, new JsonObject()).result().orElse(null);
             var defaultsJson = defaultObj != null ? ConfigGuiUtil.encodeToJsonObject(c.codec(), defaultObj) : new JsonObject();
             var flds = c.fields();
-            contexts.add(new ConfigCtx(id, u, c, flds, workingJson, defaultsJson));
+            Map<String, JsonElement> stash = preservedStash != null
+                    ? deepCopyStash(preservedStash)
+                    : deepCopyStash(conditionalFieldStash.get(id));
+            conditionalFieldStash.put(id, stash);
+            contexts.add(new ConfigCtx(id, u, c, flds, workingJson, defaultsJson, stash));
             items.add(new CategoryTextEntry(Component.translatable("config." + id.getNamespace() + "." + id.getPath() + ".title"), Component.empty()));
             items.add(new DividerEntry());
             items.add(new EmptyEntry(5));
@@ -390,6 +399,28 @@ public class ConfigScreen extends Screen {
      */
     public void markDirty() {
         this.dirty = true;
+    }
+
+    /**
+     * Applies conditional-field updates caused by a field change and marks the
+     * screen dirty.
+     *
+     * @param changedPath the dotted path that changed
+     */
+    public void onFieldChanged(String changedPath) {
+        boolean layoutChanged = false;
+        for (ConfigCtx ctx : contexts) {
+            layoutChanged |= reconcileConditionalFields(
+                    ctx.fields(),
+                    ctx.working(),
+                    ctx.conditionalFieldStash(),
+                    changedPath
+            );
+        }
+        markDirty();
+        if (layoutChanged) {
+            init();
+        }
     }
 
     @Override
@@ -591,8 +622,15 @@ public class ConfigScreen extends Screen {
         }
     }
 
-    private record ConfigCtx(Identifier id, ConfigUnit<Object> unit, ConfigCodec<Object> codec,
-                             List<ConfigValueMeta> fields, JsonObject working, JsonObject defaults) {
+    private record ConfigCtx(
+            Identifier id,
+            ConfigUnit<Object> unit,
+            ConfigCodec<Object> codec,
+            List<ConfigValueMeta> fields,
+            JsonObject working,
+            JsonObject defaults,
+            Map<String, JsonElement> conditionalFieldStash
+    ) {
     }
 
     /**
@@ -709,6 +747,14 @@ public class ConfigScreen extends Screen {
         return snapshot;
     }
 
+    private Map<Identifier, Map<String, JsonElement>> snapshotConditionalStashByConfig() {
+        Map<Identifier, Map<String, JsonElement>> snapshot = new HashMap<>();
+        for (ConfigCtx ctx : contexts) {
+            snapshot.put(ctx.id(), deepCopyStash(ctx.conditionalFieldStash()));
+        }
+        return snapshot;
+    }
+
     private void appendNestedFieldEntries(
             Identifier configId,
             List<AbstractConfigEntry<?>> items,
@@ -723,6 +769,7 @@ public class ConfigScreen extends Screen {
     ) {
         List<ConfigValueMeta> visible = fields.stream()
                 .filter(meta -> !meta.hidden())
+                .filter(meta -> isCurrentlyVisible(meta, workingJson))
                 .filter(meta -> {
                     if (searchLower.isEmpty()) {
                         return true;
@@ -829,5 +876,65 @@ public class ConfigScreen extends Screen {
     private void addDivider(List<AbstractConfigEntry<?>> items, int depth) {
         int inset = DIVIDER_BASE_INSET + Math.max(0, depth) * DIVIDER_NESTED_STEP;
         items.add(new DividerEntry(DIVIDER_HEIGHT, DIVIDER_COLOR, inset));
+    }
+
+    private static boolean isCurrentlyVisible(ConfigValueMeta meta, JsonObject workingJson) {
+        String visibleWhenPath = meta.visibleWhenPath().orElse(null);
+        String visibleWhenValue = meta.visibleWhenValue().orElse(null);
+        if (visibleWhenPath == null || visibleWhenValue == null) {
+            return true;
+        }
+        JsonElement current = ConfigGuiUtil.getPath(workingJson, visibleWhenPath);
+        return current != null && current.isJsonPrimitive() && visibleWhenValue.equals(current.getAsString());
+    }
+
+    private static boolean reconcileConditionalFields(
+            List<ConfigValueMeta> fields,
+            JsonObject workingJson,
+            Map<String, JsonElement> conditionalFieldStash,
+            String changedPath
+    ) {
+        boolean changed = false;
+        for (ConfigValueMeta meta : fields) {
+            String visibleWhenPath = meta.visibleWhenPath().orElse(null);
+            String visibleWhenValue = meta.visibleWhenValue().orElse(null);
+            if (!Objects.equals(visibleWhenPath, changedPath) || visibleWhenValue == null) {
+                continue;
+            }
+            JsonElement current = ConfigGuiUtil.getPath(workingJson, visibleWhenPath);
+            boolean shouldBeVisible = current != null && current.isJsonPrimitive() && visibleWhenValue.equals(current.getAsString());
+            JsonElement existing = ConfigGuiUtil.getPath(workingJson, meta.key());
+            if (shouldBeVisible) {
+                if (existing == null) {
+                    JsonElement restoredValue = conditionalFieldStash.get(meta.key());
+                    if (restoredValue != null) {
+                        ConfigGuiUtil.setPath(workingJson, meta.key(), restoredValue.deepCopy());
+                        changed = true;
+                    } else {
+                        JsonElement defaultValue = meta.defaultJsonValue().orElse(null);
+                        if (defaultValue != null) {
+                            ConfigGuiUtil.setPath(workingJson, meta.key(), defaultValue.deepCopy());
+                            changed = true;
+                        }
+                    }
+                }
+            } else if (existing != null) {
+                conditionalFieldStash.put(meta.key(), existing.deepCopy());
+                ConfigPathUtil.removeJsonByPath(workingJson, meta.key());
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    private static Map<String, JsonElement> deepCopyStash(Map<String, JsonElement> source) {
+        Map<String, JsonElement> copy = new HashMap<>();
+        if (source == null) {
+            return copy;
+        }
+        for (Map.Entry<String, JsonElement> entry : source.entrySet()) {
+            copy.put(entry.getKey(), entry.getValue() == null ? null : entry.getValue().deepCopy());
+        }
+        return copy;
     }
 }

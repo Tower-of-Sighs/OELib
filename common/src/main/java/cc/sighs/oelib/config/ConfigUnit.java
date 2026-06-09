@@ -6,12 +6,9 @@ import cc.sighs.oelib.config.datafix.ConfigFixRegistry;
 import cc.sighs.oelib.config.model.ConfigMeta;
 import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigValueMeta;
+import cc.sighs.oelib.config.optics.ConfigAffine;
 import cc.sighs.oelib.config.optics.ConfigLens;
-import cc.sighs.oelib.config.optics.ConfigPrism;
-import cc.sighs.oelib.config.optics.internal.ConfigFold;
-import cc.sighs.oelib.config.optics.internal.ConfigTraversal;
-import cc.sighs.oelib.config.optics.internal.Folds;
-import cc.sighs.oelib.config.optics.internal.Traversals;
+import cc.sighs.oelib.config.optics.ConfigTraversal;
 import cc.sighs.oelib.config.util.ConfigIOUtil;
 import cc.sighs.oelib.config.util.ConfigMigrationUtil;
 import cc.sighs.oelib.config.util.ConfigPathUtil;
@@ -20,6 +17,7 @@ import cc.sighs.oelib.platform.Platform;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.ApiStatus;
 
+import java.lang.invoke.MethodHandles;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
@@ -55,6 +53,7 @@ public class ConfigUnit<T> {
     private final AtomicBoolean loaded = new AtomicBoolean();
     private volatile T currentValue;
     private volatile T lastValidValue;
+    private ConfigOpticResolver<T> resolver;
 
     private ConfigUnit(ConfigCodec<T> configCodec, T defaultValue) {
         this.configCodec = configCodec;
@@ -214,9 +213,22 @@ public class ConfigUnit<T> {
      * @return the field value
      * @throws NullPointerException if {@code lens} is {@code null}
      */
+    @ApiStatus.Experimental
     public <V> V view(ConfigLens<T, V> lens) {
         Objects.requireNonNull(lens);
         return lens.view(get());
+    }
+
+    /**
+     * Reads a single value through the given path.
+     *
+     * @param  path the path selecting exactly one value
+     * @param  <V> the focused value type
+     * @return the focused value
+     */
+    public <V> V view(ConfigPath.One<T, V> path) {
+        Objects.requireNonNull(path);
+        return path.view(get());
     }
 
     /**
@@ -240,6 +252,22 @@ public class ConfigUnit<T> {
     }
 
     /**
+     * Updates a single value through the given path.
+     *
+     * @param  path the path selecting exactly one value
+     * @param  updater the function that transforms the focused value
+     * @param  <V> the focused value type
+     * @return the committed configuration value
+     */
+    public <V> T update(ConfigPath.One<T, V> path, UnaryOperator<V> updater) {
+        Objects.requireNonNull(path);
+        Objects.requireNonNull(updater);
+        T current = get();
+        T updated = path.update(current, updater);
+        return commitCandidate(current, updated, true);
+    }
+
+    /**
      * Updates the field identified by the given getter, validates the result,
      * persists it, and fires a change event.
      *
@@ -251,9 +279,7 @@ public class ConfigUnit<T> {
     public <V> T update(RecordLensBuilder.LensGetter<T, V> getter, UnaryOperator<V> modifier) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(modifier);
-        Class<T> rc = recordClass();
-        var lens = RecordLensBuilder.lens(rc, getter);
-        return update(lens, modifier);
+        return update(resolver().lens(getter), modifier);
     }
 
     /**
@@ -274,26 +300,61 @@ public class ConfigUnit<T> {
             if (mutation == null) {
                 continue;
             }
-            updated = mutation.apply(updated);
+            if (mutation instanceof ContextualMutation<T> contextual) {
+                updated = contextual.apply(updated, resolver());
+            } else {
+                updated = mutation.apply(updated);
+            }
         }
         return commitCandidate(current, updated, true);
     }
 
     /**
-     * Conditionally updates a value through a {@link ConfigPrism}, which may
-     * decline to apply the transformation if the value does not match the prism.
+     * Conditionally updates a value through a {@link ConfigAffine}, which may
+     * decline to apply the transformation if the value does not match the affine.
      *
-     * @param prism   the prism to match against
+     * @param affine   the affine to match against
      * @param updater a function transforming the matched value
      * @param <V>     the type of the matched value
      * @return the committed (or unchanged) configuration value
-     * @throws NullPointerException if {@code prism} or {@code updater} is {@code null}
+     * @throws NullPointerException if {@code affine} or {@code updater} is {@code null}
      */
-    public <V> T ifPresent(ConfigPrism<T, V> prism, UnaryOperator<V> updater) {
-        Objects.requireNonNull(prism);
+    @ApiStatus.Experimental
+    public <V> T ifPresent(ConfigAffine<T, V> affine, UnaryOperator<V> updater) {
+        Objects.requireNonNull(affine);
         Objects.requireNonNull(updater);
         T current = get();
-        T updated = prism.updateIfPresent(current, updater);
+        T updated = affine.updateIfPresent(current, updater);
+        return commitCandidate(current, updated, true);
+    }
+
+    /**
+     * Returns the focused value selected by the given zero-or-one path, if any.
+     *
+     * @param  path the path selecting zero or one value
+     * @param  <V> the focused value type
+     * @return an {@link Optional} containing the focused value, or
+     *         {@link Optional#empty()} if no value is focused
+     */
+    public <V> Optional<V> preview(ConfigPath.Maybe<T, V> path) {
+        Objects.requireNonNull(path);
+        return path.preview(get());
+    }
+
+    /**
+     * Updates the focused value selected by the given zero-or-one path when it
+     * is present.
+     *
+     * @param  path the path selecting zero or one value
+     * @param  updater the function that transforms the focused value
+     * @param  <V> the focused value type
+     * @return the committed configuration value
+     */
+    public <V> T ifPresent(ConfigPath.Maybe<T, V> path, UnaryOperator<V> updater) {
+        Objects.requireNonNull(path);
+        Objects.requireNonNull(updater);
+        T current = get();
+        T updated = path.updateIfPresent(current, updater);
         return commitCandidate(current, updated, true);
     }
 
@@ -309,8 +370,7 @@ public class ConfigUnit<T> {
     public <V> T ifPresent(RecordLensBuilder.LensGetter<T, Optional<V>> getter, UnaryOperator<V> modifier) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(modifier);
-        var prism = RecordLensBuilder.optional(RecordLensBuilder.lens(recordClass(), getter));
-        return ifPresent(prism, modifier);
+        return ifPresent(resolver().optional(getter), modifier);
     }
 
     /**
@@ -329,20 +389,32 @@ public class ConfigUnit<T> {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(subtype);
         Objects.requireNonNull(modifier);
-        var prism = RecordLensBuilder.subtype(RecordLensBuilder.lens(recordClass(), getter), subtype);
-        return ifPresent(prism, modifier);
+        return ifPresent(resolver().subtype(getter, subtype), modifier);
     }
 
     /**
-     * Alias for {@link #ifPresent(ConfigPrism, UnaryOperator)}.
+     * Alias for {@link #ifPresent(ConfigAffine, UnaryOperator)}.
      *
-     * @param prism   the prism to match against
+     * @param affine   the affine to match against
      * @param updater a function transforming the matched value
      * @param <V>     the type of the matched value
      * @return the committed (or unchanged) configuration value
      */
-    public <V> T whenSubtype(ConfigPrism<T, V> prism, UnaryOperator<V> updater) {
-        return ifPresent(prism, updater);
+    @ApiStatus.Experimental
+    public <V> T whenSubtype(ConfigAffine<T, V> affine, UnaryOperator<V> updater) {
+        return ifPresent(affine, updater);
+    }
+
+    /**
+     * Alias for {@link #ifPresent(ConfigPath.Maybe, UnaryOperator)}.
+     *
+     * @param  path the path selecting zero or one value
+     * @param  updater the function that transforms the focused value
+     * @param  <V> the focused value type
+     * @return the committed configuration value
+     */
+    public <V> T whenSubtype(ConfigPath.Maybe<T, V> path, UnaryOperator<V> updater) {
+        return ifPresent(path, updater);
     }
 
     /**
@@ -369,7 +441,7 @@ public class ConfigUnit<T> {
      * @param <V>       the element type
      * @return the committed configuration value
      */
-    @ApiStatus.Experimental
+    @ApiStatus.Internal
     public <V> T traverse(ConfigTraversal<T, V> traversal, UnaryOperator<V> modifier) {
         Objects.requireNonNull(traversal);
         Objects.requireNonNull(modifier);
@@ -379,17 +451,19 @@ public class ConfigUnit<T> {
     }
 
     /**
-     * Collects all focused values through the given fold from the current
-     * configuration value.
+     * Updates all values selected by the given path.
      *
-     * @param fold the fold that selects which values to collect
-     * @param <V>  the element type
-     * @return an immutable list of focused values
+     * @param  path the path selecting zero or more values
+     * @param  modifier the function that transforms each focused value
+     * @param  <V> the focused value type
+     * @return the committed configuration value
      */
-    @ApiStatus.Internal
-    public <V> List<V> getAll(ConfigFold<T, V> fold) {
-        Objects.requireNonNull(fold);
-        return fold.extract(get());
+    public <V> T updateEach(ConfigPath.Many<T, V> path, UnaryOperator<V> modifier) {
+        Objects.requireNonNull(path);
+        Objects.requireNonNull(modifier);
+        T current = get();
+        T updated = path.updateEach(current, modifier);
+        return commitCandidate(current, updated, true);
     }
 
     /**
@@ -404,9 +478,7 @@ public class ConfigUnit<T> {
     public <V> T updateElements(RecordLensBuilder.LensGetter<T, List<V>> getter, UnaryOperator<V> modifier) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(modifier);
-        Class<T> rc = recordClass();
-        var lens = RecordLensBuilder.lens(rc, getter);
-        return traverse(Traversals.onList(lens), modifier);
+        return traverse(resolver().listTraversal(getter), modifier);
     }
 
     /**
@@ -424,9 +496,7 @@ public class ConfigUnit<T> {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
         Objects.requireNonNull(modifier);
-        Class<T> rc = recordClass();
-        var lens = RecordLensBuilder.lens(rc, getter);
-        return traverse(Traversals.onList(lens).filter(predicate), modifier);
+        return traverse(resolver().listTraversal(getter).filter(predicate), modifier);
     }
 
     /**
@@ -439,9 +509,19 @@ public class ConfigUnit<T> {
      */
     public <V> List<V> getAll(RecordLensBuilder.LensGetter<T, List<V>> getter) {
         Objects.requireNonNull(getter);
-        Class<T> rc = recordClass();
-        var lens = RecordLensBuilder.lens(rc, getter);
-        return Traversals.onList(lens).extract(get());
+        return resolver().listTraversal(getter).extract(get());
+    }
+
+    /**
+     * Returns all values selected by the given path.
+     *
+     * @param  path the path selecting zero or more values
+     * @param  <V> the focused value type
+     * @return an immutable list of focused values
+     */
+    public <V> List<V> getAll(ConfigPath.Many<T, V> path) {
+        Objects.requireNonNull(path);
+        return path.getAll(get());
     }
 
     /**
@@ -456,9 +536,7 @@ public class ConfigUnit<T> {
     public <V> List<V> getAllWhere(RecordLensBuilder.LensGetter<T, List<V>> getter, Predicate<V> predicate) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
-        Class<T> rc = recordClass();
-        var lens = RecordLensBuilder.lens(rc, getter);
-        return Traversals.onList(lens).filter(predicate).extract(get());
+        return resolver().listTraversal(getter).filter(predicate).extract(get());
     }
 
     /**
@@ -471,9 +549,19 @@ public class ConfigUnit<T> {
      */
     public <V> long count(RecordLensBuilder.LensGetter<T, List<V>> getter) {
         Objects.requireNonNull(getter);
-        Class<T> rc = recordClass();
-        var lens = RecordLensBuilder.lens(rc, getter);
-        return Traversals.onList(lens).count(get());
+        return resolver().listTraversal(getter).count(get());
+    }
+
+    /**
+     * Returns the number of values selected by the given path.
+     *
+     * @param  path the path selecting zero or more values
+     * @param  <V> the focused value type
+     * @return the number of focused values
+     */
+    public <V> long count(ConfigPath.Many<T, V> path) {
+        Objects.requireNonNull(path);
+        return path.count(get());
     }
 
     /**
@@ -488,9 +576,38 @@ public class ConfigUnit<T> {
     public <V> boolean anyMatch(RecordLensBuilder.LensGetter<T, List<V>> getter, Predicate<V> predicate) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
-        Class<T> rc = recordClass();
-        var lens = RecordLensBuilder.lens(rc, getter);
-        return Traversals.onList(lens).anyMatch(get(), predicate);
+        return resolver().listTraversal(getter).anyMatch(get(), predicate);
+    }
+
+    /**
+     * Tests whether any value selected by the given path satisfies the given
+     * predicate.
+     *
+     * @param  path the path selecting zero or more values
+     * @param  predicate the predicate to test
+     * @param  <V> the focused value type
+     * @return {@code true} if any focused value satisfies {@code predicate}
+     */
+    public <V> boolean anyMatch(ConfigPath.Many<T, V> path, Predicate<V> predicate) {
+        Objects.requireNonNull(path);
+        Objects.requireNonNull(predicate);
+        return path.anyMatch(get(), predicate);
+    }
+
+    /**
+     * Returns the first value selected by the given path that satisfies the
+     * given predicate.
+     *
+     * @param  path the path selecting zero or more values
+     * @param  predicate the predicate to test
+     * @param  <V> the focused value type
+     * @return an {@link Optional} containing the first matching focused value,
+     *         or {@link Optional#empty()} if no focused value matches
+     */
+    public <V> Optional<V> findFirst(ConfigPath.Many<T, V> path, Predicate<V> predicate) {
+        Objects.requireNonNull(path);
+        Objects.requireNonNull(predicate);
+        return path.findFirst(get(), predicate);
     }
 
     /**
@@ -506,9 +623,23 @@ public class ConfigUnit<T> {
     public <V> boolean allMatch(RecordLensBuilder.LensGetter<T, List<V>> getter, Predicate<V> predicate) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
-        Class<T> rc = recordClass();
-        var lens = RecordLensBuilder.lens(rc, getter);
-        return Traversals.onList(lens).allMatch(get(), predicate);
+        return resolver().listTraversal(getter).allMatch(get(), predicate);
+    }
+
+    /**
+     * Tests whether all values selected by the given path satisfy the given
+     * predicate.
+     *
+     * @param  path the path selecting zero or more values
+     * @param  predicate the predicate to test
+     * @param  <V> the focused value type
+     * @return {@code true} if all focused values satisfy {@code predicate}, or
+     *         if no values are focused
+     */
+    public <V> boolean allMatch(ConfigPath.Many<T, V> path, Predicate<V> predicate) {
+        Objects.requireNonNull(path);
+        Objects.requireNonNull(predicate);
+        return path.allMatch(get(), predicate);
     }
 
     /**
@@ -524,9 +655,7 @@ public class ConfigUnit<T> {
     public <K, V> T updateValues(RecordLensBuilder.LensGetter<T, Map<K, V>> getter, UnaryOperator<V> modifier) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(modifier);
-        Class<T> rc = recordClass();
-        var lens = RecordLensBuilder.lens(rc, getter);
-        return traverse(Traversals.onMapValues(lens), modifier);
+        return traverse(resolver().mapValuesTraversal(getter), modifier);
     }
 
     /**
@@ -540,9 +669,7 @@ public class ConfigUnit<T> {
      */
     public <K, V> List<V> getValues(RecordLensBuilder.LensGetter<T, Map<K, V>> getter) {
         Objects.requireNonNull(getter);
-        Class<T> rc = recordClass();
-        var lens = RecordLensBuilder.lens(rc, getter);
-        return Traversals.onMapValues(lens).extract(get());
+        return resolver().mapValuesTraversal(getter).extract(get());
     }
 
     /**
@@ -556,14 +683,23 @@ public class ConfigUnit<T> {
      */
     public <K, V> List<K> getKeys(RecordLensBuilder.LensGetter<T, Map<K, V>> getter) {
         Objects.requireNonNull(getter);
-        Class<T> rc = recordClass();
-        var lens = RecordLensBuilder.lens(rc, getter);
-        return Folds.onMapKeys(lens).extract(get());
+        return resolver().mapKeysFold(getter).extract(get());
     }
 
-    @SuppressWarnings("unchecked")
-    Class<T> recordClass() {
-        return (Class<T>) get().getClass();
+    ConfigOpticResolver<T> resolver() {
+        if (resolver == null) {
+            throw new IllegalStateException(
+                    "This ConfigUnit was constructed without lens initialization. " +
+                            "Use ConfigSchema.define() with a MethodHandles.Lookup instead of " +
+                            "defineLegacy() or ConfigManager.register(ConfigCodec, T) to enable " +
+                            "getter-based API methods."
+            );
+        }
+        return resolver;
+    }
+
+    void initLensData(Class<T> rootClass, MethodHandles.Lookup lensLookup) {
+        this.resolver = new ConfigOpticResolver<>(lensLookup, rootClass);
     }
 
     /**
