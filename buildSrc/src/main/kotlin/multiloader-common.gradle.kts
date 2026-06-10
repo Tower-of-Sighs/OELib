@@ -21,6 +21,9 @@ val forgeLoaderVersionRange: String = property("forge_loader_version_range") as 
 val licenseVal: String = property("license") as String
 val creditsVal: String = findProperty("credits") as String? ?: ""
 
+project.group = mavenGroup
+project.version = modVersion
+
 base {
     archivesName = "${modName}-${project.name}-${mcVersion}-${modVersion}"
 }
@@ -156,17 +159,16 @@ extensions.configure<PublishingExtension> {
             }
         }
 
-        val modVersion = project.version.toString().ifBlank { "unknown" }
-        val isSnapshot = modVersion.contains("snapshot", ignoreCase = true)
-        val publishUrl = if (isSnapshot) {
-            "https://maven.sighs.cc/repository/maven-snapshots/"
-        } else {
-            "https://maven.sighs.cc/repository/maven-releases/"
-        }
-
         maven {
             name = "remoteRepo"
-            url = uri(publishUrl)
+            url = uri(provider {
+                val currentVersion = project.version.toString()
+                if (currentVersion.contains("snapshot", ignoreCase = true)) {
+                    "https://maven.sighs.cc/repository/maven-snapshots/"
+                } else {
+                    "https://maven.sighs.cc/repository/maven-releases/"
+                }
+            })
             credentials {
                 username = providers.environmentVariable("SIGHS_PUBLISH_USER").orNull
                 password = providers.environmentVariable("SIGHS_PUBLISH_PASSWORD").orNull
@@ -176,7 +178,7 @@ extensions.configure<PublishingExtension> {
 
     publications {
         register<MavenPublication>("mavenJava") {
-            artifactId = base.archivesName.get()
+            artifactId = "${modName}-${project.name}-${mcVersion}"
             from(components["java"])
 
             pom.withXml {
