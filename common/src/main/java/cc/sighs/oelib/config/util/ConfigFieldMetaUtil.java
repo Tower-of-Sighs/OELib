@@ -67,7 +67,7 @@ public final class ConfigFieldMetaUtil {
      * @param  configId the target configuration id, or {@code null}
      * @return the rewritten metadata entry
      */
-    public static ConfigValueMeta rewriteNestedMetaForContext(ConfigValueMeta meta, @Nullable ResourceLocation configId) {
+    public static ConfigValueMeta rewriteNestedMetaForContext(ConfigValueMeta meta, @Nullable Identifier configId) {
         ConfigValueMeta.Builder builder = ConfigValueMeta.builder(meta.key())
                 .comment(meta.comment().orElse(null))
                 .uiHint(meta.uiHint().orElse(null))

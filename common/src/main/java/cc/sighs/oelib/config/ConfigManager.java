@@ -27,7 +27,7 @@ import java.util.function.Supplier;
  */
 public final class ConfigManager {
 
-    private static final ThreadLocal<Boolean> UPDATING_FROM_SERVER = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private static final ScopedValue<Boolean> UPDATING_FROM_SERVER = ScopedValue.newInstance();
 
     private ConfigManager() {
     }
@@ -174,7 +174,7 @@ public final class ConfigManager {
      * @return {@code true} if a server update is in progress
      */
     public static boolean isUpdatingFromServer() {
-        return UPDATING_FROM_SERVER.get();
+        return UPDATING_FROM_SERVER.isBound() && Boolean.TRUE.equals(UPDATING_FROM_SERVER.get());
     }
 
     /**
@@ -183,13 +183,7 @@ public final class ConfigManager {
      * @param runnable the action to execute
      */
     public static void runWithServerUpdate(Runnable runnable) {
-        boolean previous = UPDATING_FROM_SERVER.get();
-        UPDATING_FROM_SERVER.set(Boolean.TRUE);
-        try {
-            runnable.run();
-        } finally {
-            UPDATING_FROM_SERVER.set(previous);
-        }
+        ScopedValue.where(UPDATING_FROM_SERVER, Boolean.TRUE).run(runnable);
     }
 
     /**
@@ -201,13 +195,7 @@ public final class ConfigManager {
      * @return the value returned by the supplier
      */
     public static <T> T callWithServerUpdate(Supplier<T> supplier) {
-        boolean previous = UPDATING_FROM_SERVER.get();
-        UPDATING_FROM_SERVER.set(Boolean.TRUE);
-        try {
-            return supplier.get();
-        } finally {
-            UPDATING_FROM_SERVER.set(previous);
-        }
+        return ScopedValue.where(UPDATING_FROM_SERVER, Boolean.TRUE).call(supplier::get);
     }
 
     /**

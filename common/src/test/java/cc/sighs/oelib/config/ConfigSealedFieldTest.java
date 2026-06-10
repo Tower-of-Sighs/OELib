@@ -5,7 +5,7 @@ import cc.sighs.oelib.config.codecs.ConfigSealedCodec;
 import cc.sighs.oelib.config.field.ConfigField;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import cc.sighs.oelib.config.model.ConfigValueMeta;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
 
 import java.lang.invoke.MethodHandles;
@@ -21,7 +21,7 @@ class ConfigSealedFieldTest {
     void sealedFieldDerivesDefaultAndCollectsNestedMeta() {
         var definition = ConfigSchema.defineClient(
                 MethodHandles.lookup(),
-                new ResourceLocation("oelibtest", "sealed_field"),
+                Identifier.fromNamespaceAndPath("oelibtest", "sealed_field"),
                 SealedRoot.class,
                 meta -> meta.fileName("sealed_field").directory("unit-tests").format(ConfigStorageFormat.JSON),
                 schema -> schema.group(
@@ -47,7 +47,7 @@ class ConfigSealedFieldTest {
     void pathSubtypeCanUpdateSealedField() {
         var definition = ConfigSchema.defineClient(
                 MethodHandles.lookup(),
-                new ResourceLocation("oelibtest", "sealed_path"),
+                Identifier.fromNamespaceAndPath("oelibtest", "sealed_path"),
                 SealedRoot.class,
                 meta -> meta.fileName("sealed_path").directory("unit-tests").format(ConfigStorageFormat.JSON),
                 schema -> schema.group(

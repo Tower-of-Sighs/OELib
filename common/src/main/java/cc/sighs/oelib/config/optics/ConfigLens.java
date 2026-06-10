@@ -2,6 +2,7 @@ package cc.sighs.oelib.config.optics;
 
 import cc.sighs.oelib.config.ConfigMutation;
 import cc.sighs.oelib.config.RecordLensBuilder;
+import org.jetbrains.annotations.ApiStatus;
 import org.jspecify.annotations.Nullable;
 
 import java.lang.invoke.MethodHandles;

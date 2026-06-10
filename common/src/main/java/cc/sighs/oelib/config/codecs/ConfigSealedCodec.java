@@ -3,7 +3,6 @@ package cc.sighs.oelib.config.codecs;
 import cc.sighs.oelib.config.model.ConfigValueMeta;
 import cc.sighs.oelib.config.ui.ConfigUiHint;
 import cc.sighs.oelib.config.util.ConfigPathUtil;
-import cc.sighs.oelib.util.CodecUtils;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.datafixers.util.Pair;
@@ -96,7 +95,7 @@ public final class ConfigSealedCodec<T> implements Codec<T> {
                     if (variant == null) {
                         return DataResult.error(() -> "Unknown sealed variant id: " + id);
                     }
-                    return DataResult.success(variant.mapCodec().codec());
+                    return DataResult.success(variant.mapCodec());
                 }
         );
 
@@ -230,7 +229,7 @@ public final class ConfigSealedCodec<T> implements Codec<T> {
         }
 
         MapCodec<T> mapCodec() {
-            return CodecUtils.assumeMapUnsafe(codec);
+            return MapCodec.assumeMapUnsafe(codec);
         }
     }
 }

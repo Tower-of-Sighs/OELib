@@ -2,6 +2,7 @@ package cc.sighs.oelib.network.api;
 
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
+import org.jspecify.annotations.NullMarked;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,11 +35,12 @@ public final class NetworkPacketTypes {
      * @return corresponding type descriptor
      * @throws IllegalArgumentException if the class is not annotated
      */
+    @NullMarked
     @SuppressWarnings("unchecked")
     public static <T extends INetworkPacket<T> & CustomPacketPayload> CustomPacketPayload.Type<T> typeOf(
             Class<T> packetClass
     ) {
-        CustomPacketPayload.Type<T> type = (CustomPacketPayload.Type<T>) CACHE.computeIfAbsent(packetClass, cls -> {
+        CustomPacketPayload.Type<T> type = (CustomPacketPayload.Type<T>) CACHE.computeIfAbsent(packetClass, _ -> {
             var meta = packetClass.getAnnotation(NetworkPacket.class);
             if (meta == null) {
                 throw new IllegalArgumentException("Packet class " + packetClass.getName() + " is missing @NetworkPacket");

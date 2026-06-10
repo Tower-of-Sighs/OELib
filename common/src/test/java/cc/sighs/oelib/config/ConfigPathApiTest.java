@@ -3,7 +3,7 @@ package cc.sighs.oelib.config;
 import cc.sighs.oelib.config.codecs.ConfigMetaCodec;
 import cc.sighs.oelib.config.field.ConfigField;
 import com.mojang.serialization.Codec;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
 
 import java.lang.invoke.MethodHandles;
@@ -122,7 +122,7 @@ class ConfigPathApiTest {
         );
         return ConfigSchema.defineClient(
                 MethodHandles.lookup(),
-                new ResourceLocation("oelibtest", "config_path_api"),
+                Identifier.fromNamespaceAndPath("oelibtest", "config_path_api"),
                 PathRoot.class,
                 meta -> meta.fileName("config_path_api_test_" + UUID.randomUUID().toString().replace("-", "")).directory("unit-tests"),
                 schema -> schema.group(
