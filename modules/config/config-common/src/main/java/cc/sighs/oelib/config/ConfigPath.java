@@ -1,13 +1,16 @@
 package cc.sighs.oelib.config;
 
-import cc.sighs.oelib.config.optics.ConfigAffine;
-import cc.sighs.oelib.config.optics.ConfigLens;
+import com.flechazo.optics.*;
+import com.flechazo.optics.generated.LensGetter;
+import com.flechazo.optics.util.Affines;
+import com.flechazo.optics.util.Prisms;
 import com.mojang.datafixers.util.Either;
 
 import java.lang.invoke.MethodHandles;
-import java.util.*;
-import java.util.function.BiFunction;
-import java.util.function.Function;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
@@ -22,10 +25,11 @@ import java.util.function.UnaryOperator;
  * @param <S> the root configuration type
  * @param <A> the focused value type
  *
- * @see ConfigSchema.Definition#path(RecordLensBuilder.LensGetter)
- * @see ConfigSchema.Definition#pathOptional(RecordLensBuilder.LensGetter)
- * @see ConfigSchema.Definition#pathEach(RecordLensBuilder.LensGetter)
+ * @see ConfigSchema.Definition#path(LensGetter)
+ * @see ConfigSchema.Definition#pathOptional(LensGetter)
+ * @see ConfigSchema.Definition#pathEach(LensGetter)
  */
+@SuppressWarnings("unchecked")
 public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath.Maybe, ConfigPath.Many {
     private final String path;
 
@@ -45,170 +49,114 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
     static <S, A> One<S, A> one(
             MethodHandles.Lookup lookup,
             Class<S> rootClass,
-            RecordLensBuilder.LensGetter<S, A> getter
+            LensGetter<S, A> getter
     ) {
         Objects.requireNonNull(lookup);
         Objects.requireNonNull(rootClass);
         Objects.requireNonNull(getter);
         String component = RecordLensBuilder.componentName(getter);
-        @SuppressWarnings("unchecked")
+
         Class<A> focusClass = (Class<A>) RecordLensBuilder.componentType(rootClass, component);
-        return new One<>(lookup, rootClass, focusClass, RecordLensBuilder.lens(lookup, rootClass, getter));
+        return new One<>(lookup, rootClass, focusClass, component, RecordLensBuilder.lens(lookup, rootClass, getter));
     }
 
     static <S, A> Maybe<S, A> optional(
             MethodHandles.Lookup lookup,
             Class<S> rootClass,
-            RecordLensBuilder.LensGetter<S, Optional<A>> getter
+            LensGetter<S, Optional<A>> getter
     ) {
         Objects.requireNonNull(lookup);
         Objects.requireNonNull(rootClass);
         Objects.requireNonNull(getter);
-        @SuppressWarnings("unchecked")
+
         Class<A> focusClass = (Class<A>) RecordLensBuilder.optionalElementType(getter);
+        String component = RecordLensBuilder.componentName(getter);
         var lens = RecordLensBuilder.lens(lookup, rootClass, getter);
-        return Maybe.writable(lookup, rootClass, focusClass, RecordLensBuilder.optional(lens));
+        return Maybe.writable(lookup, rootClass, focusClass, component, RecordLensBuilder.optional(lens));
     }
 
     static <S, A, X extends A> Maybe<S, X> subtype(
             MethodHandles.Lookup lookup,
             Class<S> rootClass,
-            RecordLensBuilder.LensGetter<S, A> getter,
+            LensGetter<S, A> getter,
             Class<X> subtypeClass
     ) {
         Objects.requireNonNull(lookup);
         Objects.requireNonNull(rootClass);
         Objects.requireNonNull(getter);
         Objects.requireNonNull(subtypeClass);
+        String component = RecordLensBuilder.componentName(getter);
         var lens = RecordLensBuilder.lens(lookup, rootClass, getter);
-        return Maybe.writable(lookup, rootClass, subtypeClass, RecordLensBuilder.subtype(lens, subtypeClass));
+        return Maybe.writable(lookup, rootClass, subtypeClass, component, RecordLensBuilder.subtype(lens, subtypeClass));
     }
 
     static <S, E> Many<S, E> each(
             MethodHandles.Lookup lookup,
             Class<S> rootClass,
-            RecordLensBuilder.LensGetter<S, List<E>> getter
+            LensGetter<S, List<E>> getter
     ) {
         Objects.requireNonNull(lookup);
         Objects.requireNonNull(rootClass);
         Objects.requireNonNull(getter);
-        @SuppressWarnings("unchecked")
+
         Class<E> focusClass = (Class<E>) RecordLensBuilder.listElementType(getter);
+        String component = RecordLensBuilder.componentName(getter);
         var lens = RecordLensBuilder.lens(lookup, rootClass, getter);
-        return Many.writable(
-                lookup,
-                rootClass,
-                focusClass,
-                lens.path(),
-                source -> snapshot(lens.view(source)),
-                (source, updater) -> lens.update(source, list -> mapList(list, updater))
-        );
+        return Many.writable(lookup, rootClass, focusClass, component, lens.andThen(Each.listTraversal()));
     }
 
     static <S, K, V> Many<S, V> values(
             MethodHandles.Lookup lookup,
             Class<S> rootClass,
-            RecordLensBuilder.LensGetter<S, Map<K, V>> getter
+            LensGetter<S, Map<K, V>> getter
     ) {
         Objects.requireNonNull(lookup);
         Objects.requireNonNull(rootClass);
         Objects.requireNonNull(getter);
-        @SuppressWarnings("unchecked")
+
         Class<V> focusClass = (Class<V>) RecordLensBuilder.mapValueType(getter);
+        String component = RecordLensBuilder.componentName(getter);
         var lens = RecordLensBuilder.lens(lookup, rootClass, getter);
-        return Many.writable(
-                lookup,
-                rootClass,
-                focusClass,
-                lens.path(),
-                source -> snapshot(new ArrayList<>(lens.view(source).values())),
-                (source, updater) -> lens.update(source, map -> mapValues(map, updater))
-        );
+        return Many.writable(lookup, rootClass, focusClass, component, lens.andThen(Traversal.mapValues()));
     }
 
     static <S, K, V> Many<S, K> keys(
             MethodHandles.Lookup lookup,
             Class<S> rootClass,
-            RecordLensBuilder.LensGetter<S, Map<K, V>> getter
+            LensGetter<S, Map<K, V>> getter
     ) {
         Objects.requireNonNull(lookup);
         Objects.requireNonNull(rootClass);
         Objects.requireNonNull(getter);
-        @SuppressWarnings("unchecked")
+
         Class<K> focusClass = (Class<K>) RecordLensBuilder.mapKeyType(getter);
+        String component = RecordLensBuilder.componentName(getter);
         var lens = RecordLensBuilder.lens(lookup, rootClass, getter);
-        return Many.readOnly(
-                lookup,
-                rootClass,
-                focusClass,
-                lens.path(),
-                source -> snapshot(new ArrayList<>(lens.view(source).keySet()))
-        );
+        return Many.readOnly(lookup, rootClass, focusClass, component, lens.andThen(Fold.mapKeys()));
     }
 
     static <S, K, V> Maybe<S, V> value(
             MethodHandles.Lookup lookup,
             Class<S> rootClass,
-            RecordLensBuilder.LensGetter<S, Map<K, V>> getter,
+            LensGetter<S, Map<K, V>> getter,
             K key
     ) {
         Objects.requireNonNull(lookup);
         Objects.requireNonNull(rootClass);
         Objects.requireNonNull(getter);
         Objects.requireNonNull(key);
-        @SuppressWarnings("unchecked")
+
         Class<V> focusClass = (Class<V>) RecordLensBuilder.mapValueType(getter);
+        String component = RecordLensBuilder.componentName(getter);
         var lens = RecordLensBuilder.lens(lookup, rootClass, getter);
-        return new Maybe<>(
-                lookup,
-                rootClass,
-                focusClass,
-                lens.path() + "[" + key + "]",
-                source -> getMapValue(lens.view(source), key),
-                (value, source) -> lens.update(source, map -> replaceMapValue(map, key, value))
-        );
+        return Maybe.writable(lookup, rootClass, focusClass, component + "[" + key + "]", lens.andThen(Affine.mapValue(key)));
     }
 
-    private static <E> List<E> snapshot(List<E> values) {
-        return Collections.unmodifiableList(new ArrayList<>(values));
-    }
-
-    private static <E> List<E> mapList(List<E> values, UnaryOperator<E> updater) {
-        List<E> result = new ArrayList<>(values.size());
-        for (E value : values) {
-            result.add(updater.apply(value));
-        }
-        return result;
-    }
-
-    private static <K, V> Map<K, V> mapValues(Map<K, V> values, UnaryOperator<V> updater) {
-        Map<K, V> result = new LinkedHashMap<>(Math.max(16, values.size()));
-        for (Map.Entry<K, V> entry : values.entrySet()) {
-            result.put(entry.getKey(), updater.apply(entry.getValue()));
-        }
-        return result;
-    }
-
-    private static <K, V> Optional<V> getMapValue(Map<K, V> values, K key) {
-        return values.containsKey(key) ? Optional.ofNullable(values.get(key)) : Optional.empty();
-    }
-
-    private static <K, V> Map<K, V> replaceMapValue(Map<K, V> values, K key, V replacement) {
-        if (!values.containsKey(key)) {
-            return values;
-        }
-        Map<K, V> result = new LinkedHashMap<>(Math.max(16, values.size()));
-        for (Map.Entry<K, V> entry : values.entrySet()) {
-            result.put(entry.getKey(), Objects.equals(entry.getKey(), key) ? replacement : entry.getValue());
-        }
-        return result;
-    }
-
-    private static <S, A> BiFunction<A, S, S> requireWritable(BiFunction<A, S, S> setter, String path) {
-        if (setter == null) {
+    private static <S, A> Traversal<S, A> requireTraversal(Traversal<S, A> traversal, String path) {
+        if (traversal == null) {
             throw new UnsupportedOperationException("Path '" + path + "' is read-only");
         }
-        return setter;
+        return traversal;
     }
 
     /**
@@ -221,10 +169,10 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
         private final MethodHandles.Lookup lookup;
         private final Class<S> rootClass;
         private final Class<A> focusClass;
-        private final ConfigLens<S, A> lens;
+        private final Lens<S, A> lens;
 
-        private One(MethodHandles.Lookup lookup, Class<S> rootClass, Class<A> focusClass, ConfigLens<S, A> lens) {
-            super(lens.path());
+        private One(MethodHandles.Lookup lookup, Class<S> rootClass, Class<A> focusClass, String path, Lens<S, A> lens) {
+            super(path);
             this.lookup = Objects.requireNonNull(lookup);
             this.rootClass = Objects.requireNonNull(rootClass);
             this.focusClass = Objects.requireNonNull(focusClass);
@@ -238,7 +186,7 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @return the focused value
          */
         public A view(S source) {
-            return lens.view(source);
+            return lens.get(source);
         }
 
         /**
@@ -249,7 +197,7 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @return a source value with the focus replaced
          */
         public S set(S source, A value) {
-            return lens.set(source, value);
+            return lens.set(value, source);
         }
 
         /**
@@ -261,7 +209,7 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          */
         public S update(S source, UnaryOperator<A> updater) {
             Objects.requireNonNull(updater);
-            return lens.update(source, updater);
+            return lens.modify(updater, source);
         }
 
         /**
@@ -271,12 +219,13 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <B> the child component type
          * @return a path selecting the child component
          */
-        public <B> One<S, B> then(RecordLensBuilder.LensGetter<A, B> getter) {
+        public <B> One<S, B> then(LensGetter<A, B> getter) {
             Objects.requireNonNull(getter);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<B> childClass = (Class<B>) RecordLensBuilder.componentType(focusClass, RecordLensBuilder.componentName(getter));
-            return new One<>(lookup, rootClass, childClass, lens.compose(child));
+            String component = RecordLensBuilder.componentName(getter);
+            return new One<>(lookup, rootClass, childClass, path() + "." + component, lens.andThen(child));
         }
 
         /**
@@ -287,12 +236,13 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <B> the optional element type
          * @return a path selecting the present child value
          */
-        public <B> Maybe<S, B> thenOptional(RecordLensBuilder.LensGetter<A, Optional<B>> getter) {
+        public <B> Maybe<S, B> thenOptional(LensGetter<A, Optional<B>> getter) {
             Objects.requireNonNull(getter);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<B> childClass = (Class<B>) RecordLensBuilder.optionalElementType(getter);
-            return Maybe.writable(lookup, rootClass, childClass, RecordLensBuilder.optional(lens.compose(child)));
+            String component = RecordLensBuilder.componentName(getter);
+            return Maybe.writable(lookup, rootClass, childClass, path() + "." + component, lens.andThen(RecordLensBuilder.optional(child)));
         }
 
         /**
@@ -305,11 +255,12 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <X> the subtype
          * @return a path selecting the child value when it is of the given subtype
          */
-        public <V, X extends V> Maybe<S, X> thenSubtype(RecordLensBuilder.LensGetter<A, V> getter, Class<X> subtypeClass) {
+        public <V, X extends V> Maybe<S, X> thenSubtype(LensGetter<A, V> getter, Class<X> subtypeClass) {
             Objects.requireNonNull(getter);
             Objects.requireNonNull(subtypeClass);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            return Maybe.writable(lookup, rootClass, subtypeClass, RecordLensBuilder.subtype(lens.compose(child), subtypeClass));
+            String component = RecordLensBuilder.componentName(getter);
+            return Maybe.writable(lookup, rootClass, subtypeClass, path() + "." + component, lens.andThen(RecordLensBuilder.subtype(child, subtypeClass)));
         }
 
         /**
@@ -322,7 +273,7 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          */
         public <X extends A> Maybe<S, X> as(Class<X> subtypeClass) {
             Objects.requireNonNull(subtypeClass);
-            return Maybe.writable(lookup, rootClass, subtypeClass, RecordLensBuilder.subtype(lens, subtypeClass));
+            return Maybe.writable(lookup, rootClass, subtypeClass, path(), RecordLensBuilder.subtype(lens, subtypeClass));
         }
 
         /**
@@ -333,19 +284,13 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <E> the list element type
          * @return a path selecting all child list elements
          */
-        public <E> Many<S, E> thenEach(RecordLensBuilder.LensGetter<A, List<E>> getter) {
+        public <E> Many<S, E> thenEach(LensGetter<A, List<E>> getter) {
             Objects.requireNonNull(getter);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<E> childClass = (Class<E>) RecordLensBuilder.listElementType(getter);
-            return Many.writable(
-                    lookup,
-                    rootClass,
-                    childClass,
-                    lens.path() + "." + child.path(),
-                    source -> snapshot(child.view(lens.view(source))),
-                    (source, updater) -> lens.update(source, parent -> child.set(parent, mapList(child.view(parent), updater)))
-            );
+            String component = RecordLensBuilder.componentName(getter);
+            return Many.writable(lookup, rootClass, childClass, path() + "." + component, lens.andThen(child).andThen(Each.listTraversal()));
         }
 
         /**
@@ -357,19 +302,13 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <V> the map value type
          * @return a path selecting all child map values
          */
-        public <K, V> Many<S, V> thenValues(RecordLensBuilder.LensGetter<A, Map<K, V>> getter) {
+        public <K, V> Many<S, V> thenValues(LensGetter<A, Map<K, V>> getter) {
             Objects.requireNonNull(getter);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<V> childClass = (Class<V>) RecordLensBuilder.mapValueType(getter);
-            return Many.writable(
-                    lookup,
-                    rootClass,
-                    childClass,
-                    lens.path() + "." + child.path(),
-                    source -> snapshot(new ArrayList<>(child.view(lens.view(source)).values())),
-                    (source, updater) -> lens.update(source, parent -> child.set(parent, mapValues(child.view(parent), updater)))
-            );
+            String component = RecordLensBuilder.componentName(getter);
+            return Many.writable(lookup, rootClass, childClass, path() + "." + component, lens.andThen(child).andThen(Traversal.mapValues()));
         }
 
         /**
@@ -381,18 +320,13 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <V> the map value type
          * @return a path selecting all child map keys
          */
-        public <K, V> Many<S, K> thenKeys(RecordLensBuilder.LensGetter<A, Map<K, V>> getter) {
+        public <K, V> Many<S, K> thenKeys(LensGetter<A, Map<K, V>> getter) {
             Objects.requireNonNull(getter);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<K> childClass = (Class<K>) RecordLensBuilder.mapKeyType(getter);
-            return Many.readOnly(
-                    lookup,
-                    rootClass,
-                    childClass,
-                    lens.path() + "." + child.path(),
-                    source -> snapshot(new ArrayList<>(child.view(lens.view(source)).keySet()))
-            );
+            String component = RecordLensBuilder.componentName(getter);
+            return Many.readOnly(lookup, rootClass, childClass, path() + "." + component, lens.andThen(child).andThen(Fold.mapKeys()));
         }
 
         /**
@@ -405,20 +339,14 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <V> the map value type
          * @return a path selecting the map value stored at {@code key}
          */
-        public <K, V> Maybe<S, V> thenValue(RecordLensBuilder.LensGetter<A, Map<K, V>> getter, K key) {
+        public <K, V> Maybe<S, V> thenValue(LensGetter<A, Map<K, V>> getter, K key) {
             Objects.requireNonNull(getter);
             Objects.requireNonNull(key);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<V> childClass = (Class<V>) RecordLensBuilder.mapValueType(getter);
-            return new Maybe<>(
-                    lookup,
-                    rootClass,
-                    childClass,
-                    path() + "." + child.path() + "[" + key + "]",
-                    source -> getMapValue(child.view(lens.view(source)), key),
-                    (value, source) -> lens.update(source, parent -> child.set(parent, replaceMapValue(child.view(parent), key, value)))
-            );
+            String component = RecordLensBuilder.componentName(getter);
+            return Maybe.writable(lookup, rootClass, childClass, path() + "." + component + "[" + key + "]", lens.andThen(child).andThen(Affine.mapValue(key)));
         }
     }
 
@@ -432,32 +360,33 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
         private final MethodHandles.Lookup lookup;
         private final Class<S> rootClass;
         private final Class<A> focusClass;
-        private final Function<S, Optional<A>> previewFn;
-        private final BiFunction<A, S, S> setter;
+        private final Affine<S, A> affine;
+        private final boolean writable;
 
         private Maybe(
                 MethodHandles.Lookup lookup,
                 Class<S> rootClass,
                 Class<A> focusClass,
                 String path,
-                Function<S, Optional<A>> previewFn,
-                BiFunction<A, S, S> setter
+                Affine<S, A> affine,
+                boolean writable
         ) {
             super(path);
             this.lookup = Objects.requireNonNull(lookup);
             this.rootClass = Objects.requireNonNull(rootClass);
             this.focusClass = Objects.requireNonNull(focusClass);
-            this.previewFn = Objects.requireNonNull(previewFn);
-            this.setter = setter;
+            this.affine = Objects.requireNonNull(affine);
+            this.writable = writable;
         }
 
         private static <S, A> Maybe<S, A> writable(
                 MethodHandles.Lookup lookup,
                 Class<S> rootClass,
                 Class<A> focusClass,
-                ConfigAffine<S, A> affine
+                String path,
+                Affine<S, A> affine
         ) {
-            return new Maybe<>(lookup, rootClass, focusClass, affine.path(), affine::preview, (value, source) -> affine.set(source, value));
+            return new Maybe<>(lookup, rootClass, focusClass, path, affine, true);
         }
 
         private static <S, A> Maybe<S, A> readOnly(
@@ -465,9 +394,9 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
                 Class<S> rootClass,
                 Class<A> focusClass,
                 String path,
-                Function<S, Optional<A>> previewFn
+                Affine<S, A> affine
         ) {
-            return new Maybe<>(lookup, rootClass, focusClass, path, previewFn, null);
+            return new Maybe<>(lookup, rootClass, focusClass, path, affine, false);
         }
 
         /**
@@ -478,7 +407,7 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          *         {@link Optional#empty()} if no value is focused
          */
         public Optional<A> preview(S source) {
-            return previewFn.apply(source);
+            return Affines.previewOptional(affine, source);
         }
 
         /**
@@ -490,7 +419,9 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          *         {@code Either.left(source)} otherwise
          */
         public Either<S, A> match(S source) {
-            return preview(source).<Either<S, A>>map(Either::right).orElseGet(() -> Either.left(source));
+            return affine.getMaybe(source).isDefined()
+                    ? Either.right(affine.getMaybe(source).get())
+                    : Either.left(source);
         }
 
         /**
@@ -504,7 +435,7 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @return a source value with the focused value replaced
          */
         public S set(S source, A value) {
-            return requireWritable(setter, path()).apply(value, source);
+            return affine.set(value, source);
         }
 
         /**
@@ -517,10 +448,22 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          */
         public S updateIfPresent(S source, UnaryOperator<A> updater) {
             Objects.requireNonNull(updater);
-            BiFunction<A, S, S> writable = requireWritable(setter, path());
-            return preview(source)
-                    .map(value -> writable.apply(updater.apply(value), source))
-                    .orElse(source);
+            return affine.modify(updater, source);
+        }
+
+        /**
+         * Returns a path that selects this value only when it satisfies the
+         * given predicate.
+         *
+         * @param  predicate the selection predicate
+         * @return a filtered path
+         */
+        public Maybe<S, A> where(Predicate<? super A> predicate) {
+            Objects.requireNonNull(predicate);
+            Affine<S, A> filtered = affine.filtered(predicate);
+            return writable
+                    ? Maybe.writable(lookup, rootClass, focusClass, path(), filtered)
+                    : Maybe.readOnly(lookup, rootClass, focusClass, path(), filtered);
         }
 
         /**
@@ -531,19 +474,14 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <B> the child component type
          * @return a path selecting the child component when this path focuses a value
          */
-        public <B> Maybe<S, B> then(RecordLensBuilder.LensGetter<A, B> getter) {
+        public <B> Maybe<S, B> then(LensGetter<A, B> getter) {
             Objects.requireNonNull(getter);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<B> childClass = (Class<B>) RecordLensBuilder.componentType(focusClass, RecordLensBuilder.componentName(getter));
-            return new Maybe<>(
-                    lookup,
-                    rootClass,
-                    childClass,
-                    path() + "." + child.path(),
-                    source -> preview(source).map(child::view),
-                    setter == null ? null : (value, source) -> updateIfPresent(source, parent -> child.set(parent, value))
-            );
+            return writable
+                    ? Maybe.writable(lookup, rootClass, childClass, path() + "." + RecordLensBuilder.componentName(getter), affine.andThen(child))
+                    : Maybe.readOnly(lookup, rootClass, childClass, path() + "." + RecordLensBuilder.componentName(getter), affine.andThen(child));
         }
 
         /**
@@ -554,19 +492,16 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <B> the optional element type
          * @return a path selecting the present child value when this path focuses a value
          */
-        public <B> Maybe<S, B> thenOptional(RecordLensBuilder.LensGetter<A, Optional<B>> getter) {
+        public <B> Maybe<S, B> thenOptional(LensGetter<A, Optional<B>> getter) {
             Objects.requireNonNull(getter);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<B> childClass = (Class<B>) RecordLensBuilder.optionalElementType(getter);
-            return new Maybe<>(
-                    lookup,
-                    rootClass,
-                    childClass,
-                    path() + "." + child.path(),
-                    source -> preview(source).flatMap(child::view),
-                    setter == null ? null : (value, source) -> updateIfPresent(source, parent -> child.set(parent, Optional.ofNullable(value)))
-            );
+            String component = RecordLensBuilder.componentName(getter);
+            var composed = affine.andThen(RecordLensBuilder.optional(child));
+            return writable
+                    ? Maybe.writable(lookup, rootClass, childClass, path() + "." + component, composed)
+                    : Maybe.readOnly(lookup, rootClass, childClass, path() + "." + component, composed);
         }
 
         /**
@@ -579,23 +514,15 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <X> the subtype
          * @return a path selecting the child value when it is of the given subtype
          */
-        public <V, X extends V> Maybe<S, X> thenSubtype(RecordLensBuilder.LensGetter<A, V> getter, Class<X> subtypeClass) {
+        public <V, X extends V> Maybe<S, X> thenSubtype(LensGetter<A, V> getter, Class<X> subtypeClass) {
             Objects.requireNonNull(getter);
             Objects.requireNonNull(subtypeClass);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            return new Maybe<>(
-                    lookup,
-                    rootClass,
-                    subtypeClass,
-                    path() + "." + child.path(),
-                    source -> preview(source).flatMap(value -> {
-                        V childValue = child.view(value);
-                        return subtypeClass.isInstance(childValue)
-                                ? Optional.of(subtypeClass.cast(childValue))
-                                : Optional.empty();
-                    }),
-                    setter == null ? null : (value, source) -> updateIfPresent(source, parent -> child.set(parent, value))
-            );
+            String component = RecordLensBuilder.componentName(getter);
+            var composed = affine.andThen(RecordLensBuilder.subtype(child, subtypeClass));
+            return writable
+                    ? Maybe.writable(lookup, rootClass, subtypeClass, path() + "." + component, composed)
+                    : Maybe.readOnly(lookup, rootClass, subtypeClass, path() + "." + component, composed);
         }
 
         /**
@@ -606,21 +533,16 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <E> the list element type
          * @return a path selecting all child list elements when this path focuses a value
          */
-        public <E> Many<S, E> thenEach(RecordLensBuilder.LensGetter<A, List<E>> getter) {
+        public <E> Many<S, E> thenEach(LensGetter<A, List<E>> getter) {
             Objects.requireNonNull(getter);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<E> childClass = (Class<E>) RecordLensBuilder.listElementType(getter);
-            return new Many<>(
-                    lookup,
-                    rootClass,
-                    childClass,
-                    path() + "." + child.path(),
-                    source -> preview(source)
-                            .map(value -> snapshot(child.view(value)))
-                            .orElseGet(List::of),
-                    setter == null ? null : (source, updater) -> updateIfPresent(source, parent -> child.set(parent, mapList(child.view(parent), updater)))
-            );
+            String component = RecordLensBuilder.componentName(getter);
+            var childTraversal = child.andThen(Each.listTraversal());
+            return writable
+                    ? Many.writable(lookup, rootClass, childClass, path() + "." + component, affine.andThen(childTraversal))
+                    : Many.readOnly(lookup, rootClass, childClass, path() + "." + component, affine.asFold().andThen(childTraversal.asFold()));
         }
 
         /**
@@ -632,21 +554,16 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <V> the map value type
          * @return a path selecting all child map values when this path focuses a value
          */
-        public <K, V> Many<S, V> thenValues(RecordLensBuilder.LensGetter<A, Map<K, V>> getter) {
+        public <K, V> Many<S, V> thenValues(LensGetter<A, Map<K, V>> getter) {
             Objects.requireNonNull(getter);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<V> childClass = (Class<V>) RecordLensBuilder.mapValueType(getter);
-            return new Many<>(
-                    lookup,
-                    rootClass,
-                    childClass,
-                    path() + "." + child.path(),
-                    source -> preview(source)
-                            .map(value -> snapshot(new ArrayList<>(child.view(value).values())))
-                            .orElseGet(List::of),
-                    setter == null ? null : (source, updater) -> updateIfPresent(source, parent -> child.set(parent, mapValues(child.view(parent), updater)))
-            );
+            String component = RecordLensBuilder.componentName(getter);
+            var childTraversal = child.andThen(Traversal.mapValues());
+            return writable
+                    ? Many.writable(lookup, rootClass, childClass, path() + "." + component, affine.andThen(childTraversal))
+                    : Many.readOnly(lookup, rootClass, childClass, path() + "." + component, affine.asFold().andThen(childTraversal.asFold()));
         }
 
         /**
@@ -658,20 +575,13 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <V> the map value type
          * @return a path selecting all child map keys when this path focuses a value
          */
-        public <K, V> Many<S, K> thenKeys(RecordLensBuilder.LensGetter<A, Map<K, V>> getter) {
+        public <K, V> Many<S, K> thenKeys(LensGetter<A, Map<K, V>> getter) {
             Objects.requireNonNull(getter);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<K> childClass = (Class<K>) RecordLensBuilder.mapKeyType(getter);
-            return Many.readOnly(
-                    lookup,
-                    rootClass,
-                    childClass,
-                    path() + "." + child.path(),
-                    source -> preview(source)
-                            .map(value -> snapshot(new ArrayList<>(child.view(value).keySet())))
-                            .orElseGet(List::of)
-            );
+            String component = RecordLensBuilder.componentName(getter);
+            return Many.readOnly(lookup, rootClass, childClass, path() + "." + component, affine.asFold().andThen(child).andThen(Fold.mapKeys()));
         }
 
         /**
@@ -685,23 +595,17 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @return a path selecting the map value stored at {@code key} when
          *         this path focuses a value
          */
-        public <K, V> Maybe<S, V> thenValue(RecordLensBuilder.LensGetter<A, Map<K, V>> getter, K key) {
+        public <K, V> Maybe<S, V> thenValue(LensGetter<A, Map<K, V>> getter, K key) {
             Objects.requireNonNull(getter);
             Objects.requireNonNull(key);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<V> childClass = (Class<V>) RecordLensBuilder.mapValueType(getter);
-            return new Maybe<>(
-                    lookup,
-                    rootClass,
-                    childClass,
-                    path() + "." + child.path() + "[" + key + "]",
-                    source -> preview(source).flatMap(value -> getMapValue(child.view(value), key)),
-                    setter == null ? null : (value, source) -> updateIfPresent(
-                            source,
-                            parent -> child.set(parent, replaceMapValue(child.view(parent), key, value))
-                    )
-            );
+            String component = RecordLensBuilder.componentName(getter);
+            var composed = affine.andThen(child).andThen(Affine.mapValue(key));
+            return writable
+                    ? Maybe.writable(lookup, rootClass, childClass, path() + "." + component + "[" + key + "]", composed)
+                    : Maybe.readOnly(lookup, rootClass, childClass, path() + "." + component + "[" + key + "]", composed);
         }
     }
 
@@ -715,23 +619,23 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
         private final MethodHandles.Lookup lookup;
         private final Class<S> rootClass;
         private final Class<A> focusClass;
-        private final Function<S, List<A>> extractFn;
-        private final BiFunction<S, UnaryOperator<A>, S> updateFn;
+        private final Fold<S, A> fold;
+        private final Traversal<S, A> traversal;
 
         private Many(
                 MethodHandles.Lookup lookup,
                 Class<S> rootClass,
                 Class<A> focusClass,
                 String path,
-                Function<S, List<A>> extractFn,
-                BiFunction<S, UnaryOperator<A>, S> updateFn
+                Fold<S, A> fold,
+                Traversal<S, A> traversal
         ) {
             super(path);
             this.lookup = Objects.requireNonNull(lookup);
             this.rootClass = Objects.requireNonNull(rootClass);
             this.focusClass = Objects.requireNonNull(focusClass);
-            this.extractFn = Objects.requireNonNull(extractFn);
-            this.updateFn = updateFn;
+            this.fold = Objects.requireNonNull(fold);
+            this.traversal = traversal;
         }
 
         private static <S, A> Many<S, A> writable(
@@ -739,10 +643,9 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
                 Class<S> rootClass,
                 Class<A> focusClass,
                 String path,
-                Function<S, List<A>> extractFn,
-                BiFunction<S, UnaryOperator<A>, S> updateFn
+                Traversal<S, A> traversal
         ) {
-            return new Many<>(lookup, rootClass, focusClass, path, extractFn, updateFn);
+            return new Many<>(lookup, rootClass, focusClass, path, traversal.asFold(), traversal);
         }
 
         private static <S, A> Many<S, A> readOnly(
@@ -750,9 +653,9 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
                 Class<S> rootClass,
                 Class<A> focusClass,
                 String path,
-                Function<S, List<A>> extractFn
+                Fold<S, A> fold
         ) {
-            return new Many<>(lookup, rootClass, focusClass, path, extractFn, null);
+            return new Many<>(lookup, rootClass, focusClass, path, fold, null);
         }
 
         /**
@@ -762,7 +665,7 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @return an immutable list of focused values
          */
         public List<A> getAll(S source) {
-            return snapshot(extractFn.apply(source));
+            return List.copyOf(fold.getAll(source));
         }
 
         /**
@@ -772,7 +675,7 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @return the number of focused values
          */
         public long count(S source) {
-            return extractFn.apply(source).size();
+            return fold.length(source);
         }
 
         /**
@@ -784,7 +687,7 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          */
         public boolean anyMatch(S source, Predicate<? super A> predicate) {
             Objects.requireNonNull(predicate);
-            return extractFn.apply(source).stream().anyMatch(predicate);
+            return fold.exists(predicate, source);
         }
 
         /**
@@ -797,7 +700,7 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          */
         public boolean allMatch(S source, Predicate<? super A> predicate) {
             Objects.requireNonNull(predicate);
-            return extractFn.apply(source).stream().allMatch(predicate);
+            return fold.all(predicate, source);
         }
 
         /**
@@ -811,12 +714,7 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          */
         public Optional<A> findFirst(S source, Predicate<? super A> predicate) {
             Objects.requireNonNull(predicate);
-            for (A value : extractFn.apply(source)) {
-                if (predicate.test(value)) {
-                    return Optional.ofNullable(value);
-                }
-            }
-            return Optional.empty();
+            return fold.findOptional(predicate, source);
         }
 
         /**
@@ -828,10 +726,7 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          */
         public S updateEach(S source, UnaryOperator<A> updater) {
             Objects.requireNonNull(updater);
-            if (updateFn == null) {
-                throw new UnsupportedOperationException("Path '" + path() + "' is read-only");
-            }
-            return updateFn.apply(source, updater);
+            return requireTraversal(traversal, path()).modify(updater, source);
         }
 
         /**
@@ -843,14 +738,9 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          */
         public Many<S, A> where(Predicate<? super A> predicate) {
             Objects.requireNonNull(predicate);
-            return new Many<>(
-                    lookup,
-                    rootClass,
-                    focusClass,
-                    path(),
-                    source -> extractFn.apply(source).stream().filter(predicate).toList(),
-                    updateFn == null ? null : (source, updater) -> updateFn.apply(source, value -> predicate.test(value) ? updater.apply(value) : value)
-            );
+            return traversal != null
+                    ? Many.writable(lookup, rootClass, focusClass, path(), traversal.filtered(predicate))
+                    : Many.readOnly(lookup, rootClass, focusClass, path(), fold.filtered(predicate));
         }
 
         /**
@@ -863,23 +753,9 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @return a path selecting the focused value at {@code index}
          */
         public Maybe<S, A> at(int index) {
-            if (index < 0) {
-                throw new IllegalArgumentException("index must be >= 0");
-            }
-            return new Maybe<>(
-                    lookup,
-                    rootClass,
-                    focusClass,
-                    path() + "[" + index + "]",
-                    source -> {
-                        List<A> values = extractFn.apply(source);
-                        return index < values.size() ? Optional.ofNullable(values.get(index)) : Optional.empty();
-                    },
-                    updateFn == null ? null : (value, source) -> {
-                        int[] current = {0};
-                        return updateFn.apply(source, focused -> current[0]++ == index ? value : focused);
-                    }
-            );
+            return traversal != null
+                    ? Maybe.writable(lookup, rootClass, focusClass, path() + "[" + index + "]", traversal.at(index))
+                    : Maybe.readOnly(lookup, rootClass, focusClass, path() + "[" + index + "]", fold.at(index));
         }
 
         /**
@@ -889,26 +765,14 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <B> the child component type
          * @return a path selecting each child component
          */
-        public <B> Many<S, B> then(RecordLensBuilder.LensGetter<A, B> getter) {
+        public <B> Many<S, B> then(LensGetter<A, B> getter) {
             Objects.requireNonNull(getter);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<B> childClass = (Class<B>) RecordLensBuilder.componentType(focusClass, RecordLensBuilder.componentName(getter));
-            return new Many<>(
-                    lookup,
-                    rootClass,
-                    childClass,
-                    path() + "." + child.path(),
-                    source -> {
-                        List<A> parents = extractFn.apply(source);
-                        List<B> result = new ArrayList<>(parents.size());
-                        for (A parent : parents) {
-                            result.add(child.view(parent));
-                        }
-                        return result;
-                    },
-                    updateFn == null ? null : (source, updater) -> updateFn.apply(source, parent -> child.set(parent, updater.apply(child.view(parent))))
-            );
+            return traversal != null
+                    ? Many.writable(lookup, rootClass, childClass, path() + "." + RecordLensBuilder.componentName(getter), traversal.andThen(child))
+                    : Many.readOnly(lookup, rootClass, childClass, path() + "." + RecordLensBuilder.componentName(getter), fold.andThen(child));
         }
 
         /**
@@ -919,30 +783,15 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <B> the optional element type
          * @return a path selecting all present child values
          */
-        public <B> Many<S, B> thenOptional(RecordLensBuilder.LensGetter<A, Optional<B>> getter) {
+        public <B> Many<S, B> thenOptional(LensGetter<A, Optional<B>> getter) {
             Objects.requireNonNull(getter);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<B> childClass = (Class<B>) RecordLensBuilder.optionalElementType(getter);
-            return new Many<>(
-                    lookup,
-                    rootClass,
-                    childClass,
-                    path() + "." + child.path(),
-                    source -> {
-                        List<B> result = new ArrayList<>();
-                        for (A parent : extractFn.apply(source)) {
-                            child.view(parent).ifPresent(result::add);
-                        }
-                        return snapshot(result);
-                    },
-                    updateFn == null ? null : (source, updater) -> updateFn.apply(source, parent -> {
-                        Optional<B> current = child.view(parent);
-                        return current.isPresent()
-                                ? child.set(parent, Optional.ofNullable(updater.apply(current.get())))
-                                : parent;
-                    })
-            );
+            var childAffine = RecordLensBuilder.optional(child);
+            return traversal != null
+                    ? Many.writable(lookup, rootClass, childClass, path() + "." + RecordLensBuilder.componentName(getter), traversal.andThen(childAffine.asTraversal()))
+                    : Many.readOnly(lookup, rootClass, childClass, path() + "." + RecordLensBuilder.componentName(getter), fold.andThen(childAffine.asFold()));
         }
 
         /**
@@ -955,27 +804,14 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <X> the subtype
          * @return a path selecting child values assignable to {@code subtypeClass}
          */
-        public <V, X extends V> Many<S, X> thenSubtype(RecordLensBuilder.LensGetter<A, V> getter, Class<X> subtypeClass) {
+        public <V, X extends V> Many<S, X> thenSubtype(LensGetter<A, V> getter, Class<X> subtypeClass) {
             Objects.requireNonNull(getter);
             Objects.requireNonNull(subtypeClass);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            return new Many<>(
-                    lookup,
-                    rootClass,
-                    subtypeClass,
-                    path() + "." + child.path(),
-                    source -> extractFn.apply(source).stream()
-                            .map(child::view)
-                            .filter(subtypeClass::isInstance)
-                            .map(subtypeClass::cast)
-                            .toList(),
-                    updateFn == null ? null : (source, updater) -> updateFn.apply(source, parent -> {
-                        V value = child.view(parent);
-                        return subtypeClass.isInstance(value)
-                                ? child.set(parent, updater.apply(subtypeClass.cast(value)))
-                                : parent;
-                    })
-            );
+            var childAffine = RecordLensBuilder.subtype(child, subtypeClass);
+            return traversal != null
+                    ? Many.writable(lookup, rootClass, subtypeClass, path() + "." + RecordLensBuilder.componentName(getter), traversal.andThen(childAffine.asTraversal()))
+                    : Many.readOnly(lookup, rootClass, subtypeClass, path() + "." + RecordLensBuilder.componentName(getter), fold.andThen(childAffine.asFold()));
         }
 
         /**
@@ -986,25 +822,16 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <B> the list element type
          * @return a path selecting all child list elements
          */
-        public <B> Many<S, B> thenEach(RecordLensBuilder.LensGetter<A, List<B>> getter) {
+        public <B> Many<S, B> thenEach(LensGetter<A, List<B>> getter) {
             Objects.requireNonNull(getter);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<B> childClass = (Class<B>) RecordLensBuilder.listElementType(getter);
-            return new Many<>(
-                    lookup,
-                    rootClass,
-                    childClass,
-                    path() + "." + child.path(),
-                    source -> {
-                        List<B> result = new ArrayList<>();
-                        for (A parent : extractFn.apply(source)) {
-                            result.addAll(child.view(parent));
-                        }
-                        return snapshot(result);
-                    },
-                    updateFn == null ? null : (source, updater) -> updateFn.apply(source, parent -> child.set(parent, mapList(child.view(parent), updater)))
-            );
+            String component = RecordLensBuilder.componentName(getter);
+            var childTraversal = child.andThen(Each.listTraversal());
+            return traversal != null
+                    ? Many.writable(lookup, rootClass, childClass, path() + "." + component, traversal.andThen(childTraversal))
+                    : Many.readOnly(lookup, rootClass, childClass, path() + "." + component, fold.andThen(childTraversal.asFold()));
         }
 
         /**
@@ -1016,25 +843,16 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <V> the map value type
          * @return a path selecting all child map values
          */
-        public <K, V> Many<S, V> thenValues(RecordLensBuilder.LensGetter<A, Map<K, V>> getter) {
+        public <K, V> Many<S, V> thenValues(LensGetter<A, Map<K, V>> getter) {
             Objects.requireNonNull(getter);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<V> childClass = (Class<V>) RecordLensBuilder.mapValueType(getter);
-            return new Many<>(
-                    lookup,
-                    rootClass,
-                    childClass,
-                    path() + "." + child.path(),
-                    source -> {
-                        List<V> result = new ArrayList<>();
-                        for (A parent : extractFn.apply(source)) {
-                            result.addAll(child.view(parent).values());
-                        }
-                        return snapshot(result);
-                    },
-                    updateFn == null ? null : (source, updater) -> updateFn.apply(source, parent -> child.set(parent, mapValues(child.view(parent), updater)))
-            );
+            String component = RecordLensBuilder.componentName(getter);
+            var childTraversal = child.andThen(Traversal.mapValues());
+            return traversal != null
+                    ? Many.writable(lookup, rootClass, childClass, path() + "." + component, traversal.andThen(childTraversal))
+                    : Many.readOnly(lookup, rootClass, childClass, path() + "." + component, fold.andThen(childTraversal.asFold()));
         }
 
         /**
@@ -1046,24 +864,15 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @param  <V> the map value type
          * @return a path selecting all child map keys
          */
-        public <K, V> Many<S, K> thenKeys(RecordLensBuilder.LensGetter<A, Map<K, V>> getter) {
+        public <K, V> Many<S, K> thenKeys(LensGetter<A, Map<K, V>> getter) {
             Objects.requireNonNull(getter);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<K> childClass = (Class<K>) RecordLensBuilder.mapKeyType(getter);
-            return Many.readOnly(
-                    lookup,
-                    rootClass,
-                    childClass,
-                    path() + "." + child.path(),
-                    source -> {
-                        List<K> result = new ArrayList<>();
-                        for (A parent : extractFn.apply(source)) {
-                            result.addAll(child.view(parent).keySet());
-                        }
-                        return snapshot(result);
-                    }
-            );
+            String component = RecordLensBuilder.componentName(getter);
+            return Many.readOnly(lookup, rootClass, childClass, path() + "." + component, (traversal != null)
+                    ? traversal.asFold().andThen(child).andThen(Fold.mapKeys())
+                    : fold.andThen(child).andThen(Fold.mapKeys()));
         }
 
         /**
@@ -1077,31 +886,17 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          * @return a path selecting the map value stored at {@code key} from
          *         each focused value
          */
-        public <K, V> Many<S, V> thenValue(RecordLensBuilder.LensGetter<A, Map<K, V>> getter, K key) {
+        public <K, V> Many<S, V> thenValue(LensGetter<A, Map<K, V>> getter, K key) {
             Objects.requireNonNull(getter);
             Objects.requireNonNull(key);
             var child = RecordLensBuilder.lens(lookup, focusClass, getter);
-            @SuppressWarnings("unchecked")
+    
             Class<V> childClass = (Class<V>) RecordLensBuilder.mapValueType(getter);
-            return new Many<>(
-                    lookup,
-                    rootClass,
-                    childClass,
-                    path() + "." + child.path() + "[" + key + "]",
-                    source -> {
-                        List<V> result = new ArrayList<>();
-                        for (A parent : extractFn.apply(source)) {
-                            getMapValue(child.view(parent), key).ifPresent(result::add);
-                        }
-                        return snapshot(result);
-                    },
-                    updateFn == null ? null : (source, updater) -> updateFn.apply(source, parent -> {
-                        Map<K, V> values = child.view(parent);
-                        return values.containsKey(key)
-                                ? child.set(parent, replaceMapValue(values, key, updater.apply(values.get(key))))
-                                : parent;
-                    })
-            );
+            String component = RecordLensBuilder.componentName(getter);
+            var childAffine = child.andThen(Affine.mapValue(key));
+            return traversal != null
+                    ? Many.writable(lookup, rootClass, childClass, path() + "." + component + "[" + key + "]", traversal.andThen(childAffine.asTraversal()))
+                    : Many.readOnly(lookup, rootClass, childClass, path() + "." + component + "[" + key + "]", fold.andThen(childAffine.asFold()));
         }
 
         /**
@@ -1114,18 +909,9 @@ public sealed abstract class ConfigPath<S, A> permits ConfigPath.One, ConfigPath
          */
         public <X extends A> Many<S, X> as(Class<X> subtypeClass) {
             Objects.requireNonNull(subtypeClass);
-            return new Many<>(
-                    lookup,
-                    rootClass,
-                    subtypeClass,
-                    path(),
-                    source -> extractFn.apply(source).stream()
-                            .filter(subtypeClass::isInstance)
-                            .map(subtypeClass::cast)
-                            .toList(),
-                    updateFn == null ? null : (source, updater) -> updateFn.apply(source, value -> subtypeClass.isInstance(value) ? updater.apply(subtypeClass.cast(value)) : value)
-            );
+            return traversal != null
+                    ? Many.writable(lookup, rootClass, subtypeClass, path(), traversal.andThen(Prisms.instanceOf(subtypeClass)))
+                    : Many.readOnly(lookup, rootClass, subtypeClass, path(), fold.andThen(Prisms.instanceOf(subtypeClass)));
         }
     }
-
 }

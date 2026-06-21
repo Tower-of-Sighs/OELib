@@ -1,6 +1,7 @@
 package cc.sighs.oelib.config;
 
-import cc.sighs.oelib.config.optics.*;
+import com.flechazo.optics.*;
+import com.flechazo.optics.generated.LensGetter;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.lang.invoke.MethodHandles;
@@ -10,11 +11,8 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Resolves optics (lens, affine, traversal, fold) from record component
- * accessor method references, bound to a specific record class and
- * {@link MethodHandles.Lookup}.
+ * Resolves generated record accessors for configuration operations.
  */
-
 @ApiStatus.Internal
 final class ConfigOpticResolver<T> {
     private final MethodHandles.Lookup lookup;
@@ -25,27 +23,27 @@ final class ConfigOpticResolver<T> {
         this.rootClass = Objects.requireNonNull(rootClass, "rootClass");
     }
 
-    <A> ConfigLens<T, A> lens(RecordLensBuilder.LensGetter<T, A> getter) {
+    <A> Lens<T, A> lens(LensGetter<T, A> getter) {
         return RecordLensBuilder.lens(lookup, rootClass, getter);
     }
 
-    <A> ConfigAffine<T, A> optional(RecordLensBuilder.LensGetter<T, Optional<A>> getter) {
+    <A> Affine<T, A> optional(LensGetter<T, Optional<A>> getter) {
         return RecordLensBuilder.optional(lens(getter));
     }
 
-    <A, X extends A> ConfigAffine<T, X> subtype(RecordLensBuilder.LensGetter<T, A> getter, Class<X> subtypeClass) {
+    <A, X extends A> Affine<T, X> subtype(LensGetter<T, A> getter, Class<X> subtypeClass) {
         return RecordLensBuilder.subtype(lens(getter), subtypeClass);
     }
 
-    <E> ConfigTraversal<T, E> listTraversal(RecordLensBuilder.LensGetter<T, List<E>> getter) {
-        return Traversals.onList(lens(getter));
+    <E> Traversal<T, E> listTraversal(LensGetter<T, List<E>> getter) {
+        return lens(getter).andThen(Each.listTraversal());
     }
 
-    <K, V> ConfigTraversal<T, V> mapValuesTraversal(RecordLensBuilder.LensGetter<T, Map<K, V>> getter) {
-        return Traversals.onMapValues(lens(getter));
+    <K, V> Traversal<T, V> mapValuesTraversal(LensGetter<T, Map<K, V>> getter) {
+        return lens(getter).andThen(Traversal.mapValues());
     }
 
-    <K, V> ConfigFold<T, K> mapKeysFold(RecordLensBuilder.LensGetter<T, Map<K, V>> getter) {
-        return Folds.onMapKeys(lens(getter));
+    <K, V> Fold<T, K> mapKeysFold(LensGetter<T, Map<K, V>> getter) {
+        return lens(getter).andThen(Fold.mapKeys());
     }
 }

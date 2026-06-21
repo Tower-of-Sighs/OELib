@@ -6,21 +6,19 @@ import com.mojang.datafixers.kinds.App;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.ResourceLocation;
 
+import java.lang.invoke.MethodHandles;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
  * Legacy entry point for defining record-based configurations.
  *
- * <p>This class delegates directly to {@link ConfigSchema#defineLegacy
- * ConfigSchema.defineLegacy}. New code should use {@link ConfigSchema}
+ * <p>This class delegates directly to {@link ConfigSchema#defineLegacy}. New code should use {@link ConfigSchema}
  * instead, which accepts an explicit root record class and returns a
  * {@link ConfigSchema.Definition} that provides lens helpers.
  *
- * @deprecated Use {@link ConfigSchema#defineClient(ResourceLocation, Class, Consumer, Function)
- *             ConfigSchema.defineClient} or
- *             {@link ConfigSchema#defineServer(ResourceLocation, Class, Consumer, Function)
- *             ConfigSchema.defineServer} instead.
+ * @deprecated Use {@link ConfigSchema#defineClient(MethodHandles.Lookup, ResourceLocation, Class, Consumer, Function)} or
+ *             {@link ConfigSchema#defineServer(MethodHandles.Lookup, ResourceLocation, Class, Consumer, Function)} instead.
  */
 @Deprecated(since = "0.2.4", forRemoval = true)
 public class ConfigRecordCodecBuilder {
@@ -36,9 +34,7 @@ public class ConfigRecordCodecBuilder {
      *                       or {@code null} to accept defaults
      * @param <T>            the type of the configuration record
      * @return the constructed configuration unit
-     * @throws NullPointerException if {@code configId} or {@code builder} is {@code null}
-     * @deprecated Use {@link ConfigSchema#defineClient(ResourceLocation, Class, Consumer, Function)
-     *             ConfigSchema.defineClient} instead.
+     * @deprecated Use {@link ConfigSchema#defineClient(MethodHandles.Lookup, ResourceLocation, Class, Consumer, Function)} instead.
      */
     @Deprecated(since = "0.2.4", forRemoval = true)
     public static <T> ConfigUnit<T> createClient(
@@ -58,9 +54,7 @@ public class ConfigRecordCodecBuilder {
      *                       or {@code null} to accept defaults
      * @param <T>            the type of the configuration record
      * @return the constructed configuration unit
-     * @throws NullPointerException if {@code configId} or {@code builder} is {@code null}
-     * @deprecated Use {@link ConfigSchema#defineServer(ResourceLocation, Class, Consumer, Function)
-     *             ConfigSchema.defineServer} instead.
+     * @deprecated Use {@link ConfigSchema#defineServer(MethodHandles.Lookup, ResourceLocation, Class, Consumer, Function)} instead.
      */
     @Deprecated(since = "0.2.4", forRemoval = true)
     public static <T> ConfigUnit<T> create(

@@ -121,6 +121,13 @@ if (apiDeps.isNotEmpty() || implDeps.isNotEmpty()) {
     }
 }
 
+// Make common resources visible at configuration time so Loom's
+// TransitiveAccessWidenerMappingsProcessor can find AW files.
+if (suffix == "fabric") {
+    val sourceSets = project.extensions.getByType(org.gradle.api.plugins.JavaPluginExtension::class.java).sourceSets
+    sourceSets.getByName("main").resources.srcDir(project(commonProjectPath).file("src/main/resources"))
+}
+
 tasks.named<JavaCompile>("compileJava") {
     dependsOn(configurations.getByName("commonJava"))
     source(configurations.getByName("commonJava"))

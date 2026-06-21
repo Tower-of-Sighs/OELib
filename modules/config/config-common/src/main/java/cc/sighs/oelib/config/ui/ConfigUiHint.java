@@ -63,7 +63,6 @@ public sealed interface ConfigUiHint permits ConfigUiHint.Slider, ConfigUiHint.T
      *
      * @param options the list of option strings
      * @return a dropdown hint
-     * @throws NullPointerException if {@code options} is {@code null}
      */
     static Dropdown dropdown(List<String> options) {
         Objects.requireNonNull(options);
@@ -86,7 +85,6 @@ public sealed interface ConfigUiHint permits ConfigUiHint.Slider, ConfigUiHint.T
      *                 {@link ConfigWidgetRegistry}
      * @param args     optional arguments for the widget, or {@code null}
      * @return a custom hint
-     * @throws NullPointerException if {@code widgetId} is {@code null}
      */
     static Custom custom(ResourceLocation widgetId, JsonObject args) {
         Objects.requireNonNull(widgetId);

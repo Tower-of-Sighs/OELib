@@ -182,6 +182,7 @@ public record DevConfig(
         var enabledPath = DEFINITION.path(DevConfig::enableExampleContent);
         var testStringPath = DEFINITION.path(DevConfig::testString);
         var testDoublePath = DEFINITION.path(DevConfig::testDouble);
+        var demoModePath = DEFINITION.path(DevConfig::demoMode);
         var levelModePath = DEFINITION.pathSubtype(DevConfig::demoMode, LevelMode.class);
         var levelModeLevelPath = levelModePath.then(LevelMode::level);
         var nestedLevelPath = DEFINITION.path(DevConfig::nestedDemo).then(NestedDemo::level);
@@ -229,76 +230,82 @@ public record DevConfig(
         List<String> getterFeatureKeys = UNIT.getKeys(DevConfig::featureConfigMap);
 
         // path API：适合局部字段更新，也能表达子类型、集合筛选和按 key 直达。
-        boolean enabled = UNIT.view(enabledPath);
-        Optional<LevelMode> levelMode = UNIT.preview(levelModePath);
-        int nestedLevel = UNIT.view(nestedLevelPath);
-        Optional<NestedDemo> optionalChild = UNIT.preview(optionalChildPath);
-        Optional<Boolean> optionalChildEnabled = UNIT.preview(optionalChildEnabledPath);
+        var paths = UNIT.paths();
+        boolean enabled = paths.view(enabledPath);
+        Optional<LevelMode> levelMode = paths.preview(levelModePath);
+        int nestedLevel = paths.view(nestedLevelPath);
+        Optional<NestedDemo> optionalChild = paths.preview(optionalChildPath);
+        Optional<Boolean> optionalChildEnabled = paths.preview(optionalChildEnabledPath);
 
-        UNIT.update(enabledPath, value -> !value);
-        UNIT.update(testStringPath, value -> value + "_path");
-        UNIT.update(testDoublePath, value -> value + 0.25);
-        UNIT.ifPresent(levelModeLevelPath, value -> value + 1);
-        UNIT.whenSubtype(levelModePath, value -> new LevelMode(value.level() + 1));
-        UNIT.update(nestedLevelPath, value -> value + 1);
-        UNIT.ifPresent(optionalChildEnabledPath, value -> !value);
-        UNIT.ifPresent(optionalChildLevelPath, value -> value + 2);
+        paths.update(enabledPath, value -> !value);
+        paths.update(testStringPath, value -> value + "_path");
+        paths.update(testDoublePath, value -> value + 0.25);
+        paths.ifPresent(levelModeLevelPath, value -> value + 1);
+        paths.ifPresent(levelModePath, value -> new LevelMode(value.level() + 1));
+        paths.whenSubtype(demoModePath, LevelMode.class, value -> new LevelMode(value.level() + 1));
+        paths.update(nestedLevelPath, value -> value + 1);
+        paths.ifPresent(optionalChildEnabledPath, value -> !value);
+        paths.ifPresent(optionalChildLevelPath, value -> value + 2);
 
         // List 路径既能替换整元素，也能只改元素内部的某个字段。
-        UNIT.updateEach(
+        paths.updateEach(
                 resettableFeaturePath,
                 feature -> new FeatureConfig(feature.id(), 1, feature.extraConfig())
         );
-        UNIT.updateEach(featureWeightPath, weight -> weight + 5);
-        UNIT.ifPresent(firstFeatureWeightPath, weight -> weight * 2);
-        UNIT.updateEach(featureExtraLevelPath, level -> level + 1);
-        UNIT.updateEach(heavyFeatureWeightPath, weight -> weight / 2);
+        paths.updateEach(featureWeightPath, weight -> weight + 5);
+        paths.ifPresent(firstFeatureWeightPath, weight -> weight * 2);
+        paths.updateEach(featureExtraLevelPath, level -> level + 1);
+        paths.updateEach(heavyFeatureWeightPath, weight -> weight / 2);
 
-        long featureCount = UNIT.count(featureWeightPath);
-        boolean anyHeavyFeature = UNIT.anyMatch(featureWeightPath, weight -> weight > 50);
-        boolean allWeightsNonNegative = UNIT.allMatch(featureWeightPath, weight -> weight >= 0);
-        Optional<Integer> firstHeavyWeight = UNIT.findFirst(featureWeightPath, weight -> weight > 10);
-        List<Integer> allFeatureWeights = UNIT.getAll(featureWeightPath);
+        long featureCount = paths.count(featureWeightPath);
+        boolean anyHeavyFeature = paths.anyMatch(featureWeightPath, weight -> weight > 50);
+        boolean allWeightsNonNegative = paths.allMatch(featureWeightPath, weight -> weight >= 0);
+        Optional<Integer> firstHeavyWeight = paths.findFirst(featureWeightPath, weight -> weight > 10);
+        List<Integer> allFeatureWeights = paths.getAll(featureWeightPath);
 
         // Map 路径同理：wholeMapValuePath 是 updateValues 的 path 等价物，
         // mapWeightPath / mapBetaWeightPath 则是局部字段版本。
-        UNIT.updateEach(
+        paths.updateEach(
                 wholeMapValuePath,
                 feature -> new FeatureConfig(feature.id(), feature.weight() + 1, feature.extraConfig())
         );
-        UNIT.updateEach(mapWeightPath, weight -> weight + 10);
-        UNIT.ifPresent(mapBetaWeightPath, weight -> weight + 99);
-        UNIT.ifPresent(mapExtraEnabledPath, value -> !value);
+        paths.updateEach(mapWeightPath, weight -> weight + 10);
+        paths.ifPresent(mapBetaWeightPath, weight -> weight + 99);
+        paths.ifPresent(mapExtraEnabledPath, value -> !value);
 
-        List<Integer> allMappedWeights = UNIT.getAll(mapWeightPath);
-        List<String> allFeatureKeys = UNIT.getAll(mapKeysPath);
-        Optional<FeatureConfig> betaFeature = UNIT.preview(mapValuePath);
+        List<Integer> allMappedWeights = paths.getAll(mapWeightPath);
+        List<String> allFeatureKeys = paths.getAll(mapKeysPath);
+        Optional<FeatureConfig> betaFeature = paths.preview(mapValuePath);
 
         // ConfigUnitOps 提供 no-save 和批量修改入口。
-        DevConfig draftValue = ConfigUnitOps.updateNoSave(UNIT, testStringPath, value -> value + "_draft");
-        String draftString = ConfigUnitOps.setAndGetNoSave(UNIT, testStringPath, "draft");
-        ConfigUnitOps.whenSubtypeNoSave(UNIT, levelModePath, value -> new LevelMode(value.level() + 1));
-        ConfigUnitOps.ifPresentNoSave(UNIT, optionalChildEnabledPath, value -> !value);
-        ConfigUnitOps.updateEachNoSave(UNIT, featureWeightPath, weight -> weight + 3);
+        var noSavePaths = ConfigUnitOps.paths(UNIT);
+        DevConfig draftValue = noSavePaths.updateNoSave(testStringPath, value -> value + "_draft");
+        String draftString = noSavePaths.setAndGetNoSave(testStringPath, "draft");
+        noSavePaths.ifPresentNoSave(levelModePath, value -> new LevelMode(value.level() + 1));
+        noSavePaths.whenSubtypeNoSave(demoModePath, LevelMode.class, value -> new LevelMode(value.level() + 1));
+        noSavePaths.ifPresentNoSave(optionalChildEnabledPath, value -> !value);
+        noSavePaths.updateEachNoSave(featureWeightPath, weight -> weight + 3);
         ConfigUnitOps.withBatchNoSave(UNIT, batch -> {
             batch.update(DevConfig::testInt, value -> value + 1);
             batch.updateInt(DevConfig::testInt, value -> value + 1);
             batch.updateDouble(DevConfig::testDouble, value -> value + 1.0);
             batch.updateBoolean(DevConfig::enableExampleContent, value -> !value);
-            batch.update(enabledPath, value -> !value);
+            batch.paths().update(enabledPath, value -> !value);
             batch.setAndGet(DevConfig::testString, "getter-batched");
-            batch.setAndGet(testStringPath, "batched");
-            batch.ifPresent(levelModePath, value -> new LevelMode(value.level() + 1));
-            batch.ifPresent(mapExtraEnabledPath, value -> !value);
-            batch.updateEach(featureWeightPath, weight -> weight + 1);
+            batch.paths().setAndGet(testStringPath, "batched");
+            batch.paths().ifPresent(levelModePath, value -> new LevelMode(value.level() + 1));
+            batch.paths().whenSubtype(demoModePath, LevelMode.class, value -> new LevelMode(value.level() + 1));
+            batch.paths().ifPresent(mapExtraEnabledPath, value -> !value);
+            batch.paths().updateEach(featureWeightPath, weight -> weight + 1);
         });
-        ConfigUnitOps.withBatch(UNIT, batch -> batch.update(testStringPath, value -> value + "_saved"));
+        ConfigUnitOps.withBatch(UNIT, batch -> batch.paths().update(testStringPath, value -> value + "_saved"));
 
         // ConfigMutation 同时支持 getter 风格和 path 风格。
         UNIT.updateAll(
                 ConfigMutation.map(DevConfig::testString, value -> value + "_getter"),
                 ConfigMutation.ifPresent(DevConfig::optionalChild, child -> new NestedDemo(child.enabled(), child.level() + 1)),
-                ConfigMutation.ifPresent(DevConfig::demoMode, LevelMode.class, mode -> new LevelMode(mode.level() + 1)),
+                ConfigMutation.whenSubtype(DevConfig::demoMode, LevelMode.class, mode -> new LevelMode(mode.level() + 1)),
+                ConfigMutation.paths().whenSubtype(demoModePath, LevelMode.class, mode -> new LevelMode(mode.level() + 1)),
                 ConfigMutation.updateWhere(
                         DevConfig::featureConfigs,
                         feature -> feature.weight() > 10,
@@ -308,10 +315,10 @@ public record DevConfig(
                         DevConfig::featureConfigMap,
                         feature -> new FeatureConfig(feature.id(), feature.weight() + 1, feature.extraConfig())
                 ),
-                ConfigMutation.set(testStringPath, "frozen"),
-                ConfigMutation.map(testDoublePath, value -> value * 1.1),
-                ConfigMutation.ifPresent(optionalChildLevelPath, value -> value + 1),
-                ConfigMutation.updateEach(featureWeightPath, ignored -> 0)
+                ConfigMutation.paths().set(testStringPath, "frozen"),
+                ConfigMutation.paths().map(testDoublePath, value -> value * 1.1),
+                ConfigMutation.paths().ifPresent(optionalChildLevelPath, value -> value + 1),
+                ConfigMutation.paths().updateEach(featureWeightPath, ignored -> 0)
         );
     }
 }

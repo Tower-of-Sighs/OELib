@@ -35,7 +35,6 @@ public final class ConfigManager {
      * Registers a client-side configuration unit.
      *
      * @param unit the configuration unit to register
-     * @throws NullPointerException if {@code unit} is {@code null}
      */
     public static void registerClient(ConfigUnit<?> unit) {
         registerUnit(unit);
@@ -46,7 +45,6 @@ public final class ConfigManager {
      *
      * @param unit              the configuration unit to register
      * @param permissionChecker the permission checker, or {@code null} to reject all client updates
-     * @throws NullPointerException if {@code unit} is {@code null}
      */
     public static void registerServer(ConfigUnit<?> unit, IConfigPermissionChecker permissionChecker) {
         registerUnitServer(unit, permissionChecker);
@@ -60,7 +58,6 @@ public final class ConfigManager {
      * @param defaultValue the default value used when no file exists
      * @param <T>          the type of the configuration value
      * @return the registered configuration unit
-     * @throws NullPointerException if {@code codec} or {@code defaultValue} is {@code null}
      */
     public static <T> ConfigUnit<T> register(ConfigCodec<T> codec, T defaultValue) {
         var unit = ConfigUnit.of(codec, defaultValue);
@@ -76,7 +73,6 @@ public final class ConfigManager {
      * an error is logged but registration still proceeds.
      *
      * @param unit the configuration unit to register
-     * @throws NullPointerException if {@code unit} is {@code null}
      */
     public static void registerUnit(ConfigUnit<?> unit) {
         var meta = unit.meta();

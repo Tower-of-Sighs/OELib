@@ -2,8 +2,6 @@ package cc.sighs.oelib.config;
 
 import cc.sighs.oelib.config.field.ConfigField;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
-import cc.sighs.oelib.config.optics.ConfigAffine;
-import cc.sighs.oelib.config.optics.ConfigLens;
 import cc.sighs.oelib.config.testsupport.TestFileUtil;
 import cc.sighs.oelib.config.testsupport.TestPlatform;
 import com.mojang.serialization.Codec;
@@ -41,21 +39,20 @@ class ConfigUnitStressTest {
         );
 
         ConfigUnit<UnitStressConfig> unit = definition.unit();
-        ConfigLens<UnitStressConfig, Integer> countLens = definition.lens(UnitStressConfig::count);
-        ConfigLens<UnitStressConfig, Optional<Integer>> optLens = definition.lens(UnitStressConfig::opt);
-        ConfigAffine<UnitStressConfig, Integer> optPrism = RecordLensBuilder.optional(optLens);
-
-        unit.updateAll(countLens.setTo(1), optLens.setTo(Optional.of(2)));
+        unit.updateAll(
+                ConfigMutation.set(UnitStressConfig::count, 1),
+                ConfigMutation.set(UnitStressConfig::opt, Optional.of(2))
+        );
         for (int i = 0; i < 2_000; i++) {
             unit.updateAll(
-                    countLens.map(v -> v + 1),
-                    optLens.map(v -> v.map(x -> x + 1))
+                    ConfigMutation.map(UnitStressConfig::count, v -> v + 1),
+                    ConfigMutation.map(UnitStressConfig::opt, v -> v.map(x -> x + 1))
             );
-            unit.ifPresent(optPrism, v -> v + 1);
+            unit.ifPresent(UnitStressConfig::opt, v -> v + 1);
         }
 
-        assertEquals(2_001, unit.view(countLens));
-        assertEquals(Optional.of(4_002), unit.view(optLens));
+        assertEquals(2_001, unit.view(UnitStressConfig::count));
+        assertEquals(Optional.of(4_002), unit.view(UnitStressConfig::opt));
     }
 
     private record UnitStressConfig(int count, Optional<Integer> opt) {

@@ -17,7 +17,7 @@ import java.util.function.UnaryOperator;
  * Instead, it is consumed by the UI layer (to render the correct widget
  * for each field) and by the serialization layer (to inject TOML comments
  * and JSON5 comments). Validators and migrations attached here are applied
- * at commit time by {@link cc.sighs.oelib.config.ConfigUnit ConfigUnit}.
+ * at commit time by {@link cc.sighs.oelib.config.ConfigUnit}.
  *
  * <p>Instances are created through the {@link Builder}.
  */
@@ -53,7 +53,6 @@ public final class ConfigValueMeta {
      *
      * @param key the field key
      * @return a new builder
-     * @throws NullPointerException if {@code key} is {@code null}
      */
     public static Builder builder(String key) {
         Objects.requireNonNull(key);
@@ -290,7 +289,6 @@ public final class ConfigValueMeta {
          *
          * @param validator the validator to add
          * @return this builder
-         * @throws NullPointerException if {@code validator} is {@code null}
          */
         public Builder validator(ConfigValueValidator validator) {
             this.validators.add(validator);
@@ -314,7 +312,6 @@ public final class ConfigValueMeta {
          * @param version   the version this migration targets
          * @param migration the migration operator
          * @return this builder
-         * @throws NullPointerException if {@code migration} is {@code null}
          */
         public Builder migration(int version, UnaryOperator<Dynamic<?>> migration) {
             this.migrations.add(new FieldMigration(version, migration));

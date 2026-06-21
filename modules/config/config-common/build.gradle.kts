@@ -15,12 +15,13 @@ neoForge {
     }
 }
 
-extra["mavenDependencyWhitelist"] = listOf("de.marhali:json5-java", "com.electronwill.night-config:toml", "io.smallrye.classfile:jdk-classfile-backport")
+extra["mavenDependencyWhitelist"] = listOf("de.marhali:json5-java", "com.electronwill.night-config:toml", "io.smallrye.classfile:jdk-classfile-backport", "com.flechazo:optics-java")
 dependencies {
 
     implementation("de.marhali:json5-java:3.0.0")
     implementation("com.electronwill.night-config:toml:3.8.3")
     implementation("io.smallrye.classfile:jdk-classfile-backport:26")
+    api("com.flechazo:optics-java:1.0-20260621.110319-4")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testRuntimeOnly ("org.junit.platform:junit-platform-launcher:1.11.4")

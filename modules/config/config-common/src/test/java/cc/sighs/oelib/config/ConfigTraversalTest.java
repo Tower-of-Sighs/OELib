@@ -1,9 +1,12 @@
 package cc.sighs.oelib.config;
 
 import cc.sighs.oelib.config.field.ConfigField;
-import cc.sighs.oelib.config.optics.*;
 import cc.sighs.oelib.config.testsupport.TestFileUtil;
 import cc.sighs.oelib.config.testsupport.TestPlatform;
+import com.flechazo.optics.Each;
+import com.flechazo.optics.Fold;
+import com.flechazo.optics.Lens;
+import com.flechazo.optics.Traversal;
 import com.mojang.serialization.Codec;
 import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,29 +46,29 @@ class ConfigTraversalTest {
 
     @Test
     void listTraversalGetAllReturnsAllElements() {
-        ConfigLens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
-        ConfigTraversal<ListRoot, Integer> traversal = Traversals.onList(lens);
+        Lens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
+        Traversal<ListRoot, Integer> traversal = lens.andThen(Each.listTraversal());
 
         ListRoot root = new ListRoot(List.of(1, 2, 3), "x");
-        assertEquals(List.of(1, 2, 3), traversal.extract(root));
+        assertEquals(List.of(1, 2, 3), traversal.getAll(root));
     }
 
     @Test
     void listTraversalGetAllReturnsEmptyListForEmptyField() {
-        ConfigLens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
-        ConfigTraversal<ListRoot, Integer> traversal = Traversals.onList(lens);
+        Lens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
+        Traversal<ListRoot, Integer> traversal = lens.andThen(Each.listTraversal());
 
         ListRoot root = new ListRoot(List.of(), "x");
-        assertTrue(traversal.extract(root).isEmpty());
+        assertTrue(traversal.getAll(root).isEmpty());
     }
 
     @Test
     void listTraversalUpdateTransformsAllElements() {
-        ConfigLens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
-        ConfigTraversal<ListRoot, Integer> traversal = Traversals.onList(lens);
+        Lens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
+        Traversal<ListRoot, Integer> traversal = lens.andThen(Each.listTraversal());
 
         ListRoot root = new ListRoot(List.of(1, 2, 3), "x");
-        ListRoot updated = traversal.update(root, v -> v * 10);
+        ListRoot updated = traversal.modify(v -> v * 10, root);
 
         assertEquals(List.of(10, 20, 30), updated.values());
         assertEquals("x", updated.name());
@@ -73,85 +76,85 @@ class ConfigTraversalTest {
 
     @Test
     void listTraversalUpdateOnEmptyListIsNoOp() {
-        ConfigLens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
-        ConfigTraversal<ListRoot, Integer> traversal = Traversals.onList(lens);
+        Lens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
+        Traversal<ListRoot, Integer> traversal = lens.andThen(Each.listTraversal());
 
         ListRoot root = new ListRoot(List.of(), "x");
-        ListRoot updated = traversal.update(root, v -> v + 1);
+        ListRoot updated = traversal.modify(v -> v + 1, root);
 
         assertTrue(updated.values().isEmpty());
     }
 
     @Test
     void listTraversalCountReturnsCorrectSize() {
-        ConfigLens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
-        ConfigTraversal<ListRoot, Integer> traversal = Traversals.onList(lens);
+        Lens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
+        Traversal<ListRoot, Integer> traversal = lens.andThen(Each.listTraversal());
 
-        assertEquals(3, traversal.count(new ListRoot(List.of(1, 2, 3), "x")));
-        assertEquals(0, traversal.count(new ListRoot(List.of(), "x")));
+        assertEquals(3, traversal.length(new ListRoot(List.of(1, 2, 3), "x")));
+        assertEquals(0, traversal.length(new ListRoot(List.of(), "x")));
     }
 
     @Test
     void listTraversalAnyMatchAndAllMatch() {
-        ConfigLens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
-        ConfigTraversal<ListRoot, Integer> traversal = Traversals.onList(lens);
+        Lens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
+        Traversal<ListRoot, Integer> traversal = lens.andThen(Each.listTraversal());
 
         ListRoot root = new ListRoot(List.of(2, 4, 6), "x");
 
-        assertTrue(traversal.anyMatch(root, v -> v > 4));
-        assertFalse(traversal.anyMatch(root, v -> v < 0));
-        assertTrue(traversal.allMatch(root, v -> v % 2 == 0));
-        assertFalse(traversal.allMatch(root, v -> v > 3));
+        assertTrue(traversal.exists(v -> v > 4, root));
+        assertFalse(traversal.exists(v -> v < 0, root));
+        assertTrue(traversal.all(v -> v % 2 == 0, root));
+        assertFalse(traversal.all(v -> v > 3, root));
     }
 
     @Test
     void listTraversalAllMatchReturnsTrueForEmptyList() {
-        ConfigLens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
-        ConfigTraversal<ListRoot, Integer> traversal = Traversals.onList(lens);
+        Lens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
+        Traversal<ListRoot, Integer> traversal = lens.andThen(Each.listTraversal());
 
-        assertTrue(traversal.allMatch(new ListRoot(List.of(), "x"), v -> false));
+        assertTrue(traversal.all(v -> false, new ListRoot(List.of(), "x")));
     }
 
     @Test
     void listTraversalFindFirstReturnsFirstMatch() {
-        ConfigLens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
-        ConfigTraversal<ListRoot, Integer> traversal = Traversals.onList(lens);
+        Lens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
+        Traversal<ListRoot, Integer> traversal = lens.andThen(Each.listTraversal());
 
         ListRoot root = new ListRoot(List.of(1, 2, 3, 4, 5), "x");
 
-        assertEquals(Optional.of(3), traversal.findFirst(root, v -> v > 2));
-        assertEquals(Optional.empty(), traversal.findFirst(root, v -> v > 10));
+        assertEquals(Optional.of(3), traversal.asFold().findOptional(v -> v > 2, root));
+        assertEquals(Optional.empty(), traversal.asFold().findOptional(v -> v > 10, root));
     }
 
     // -- ConfigTraversal.onList filter --
 
     @Test
     void listTraversalFilterSelectivelyUpdatesElements() {
-        ConfigLens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
-        ConfigTraversal<ListRoot, Integer> traversal = Traversals.onList(lens).filter(v -> v % 2 == 0);
+        Lens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
+        Traversal<ListRoot, Integer> traversal = lens.andThen(Each.listTraversal()).filtered(v -> v % 2 == 0);
 
         ListRoot root = new ListRoot(List.of(1, 2, 3, 4), "x");
-        ListRoot updated = traversal.update(root, v -> v * 100);
+        ListRoot updated = traversal.modify(v -> v * 100, root);
 
         assertEquals(List.of(1, 200, 3, 400), updated.values());
     }
 
     @Test
     void listTraversalFilterGetAllOnlyReturnsMatching() {
-        ConfigLens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
-        ConfigTraversal<ListRoot, Integer> traversal = Traversals.onList(lens).filter(v -> v > 2);
+        Lens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
+        Traversal<ListRoot, Integer> traversal = lens.andThen(Each.listTraversal()).filtered(v -> v > 2);
 
         ListRoot root = new ListRoot(List.of(1, 2, 3, 4, 5), "x");
-        assertEquals(List.of(3, 4, 5), traversal.extract(root));
+        assertEquals(List.of(3, 4, 5), traversal.getAll(root));
     }
 
     // -- ConfigTraversal compose with lens --
 
     @Test
     void listTraversalComposeWithLensFocusesNestedField() {
-        ConfigLens<Cluster, List<Server>> listLens = RecordLensBuilder.lens(Cluster.class, Cluster::servers);
-        ConfigLens<Server, Integer> portLens = RecordLensBuilder.lens(Server.class, Server::port);
-        ConfigTraversal<Cluster, Integer> portTraversal = Traversals.onList(listLens).compose(portLens);
+        Lens<Cluster, List<Server>> listLens = RecordLensBuilder.lens(Cluster.class, Cluster::servers);
+        Lens<Server, Integer> portLens = RecordLensBuilder.lens(Server.class, Server::port);
+        Traversal<Cluster, Integer> portTraversal = listLens.andThen(Each.listTraversal()).andThen(portLens);
 
         Cluster cluster = new Cluster(
                 List.of(new Server("a", 80), new Server("b", 443)),
@@ -159,20 +162,20 @@ class ConfigTraversalTest {
                 "test"
         );
 
-        List<Integer> ports = portTraversal.extract(cluster);
+        List<Integer> ports = portTraversal.getAll(cluster);
         assertEquals(List.of(80, 443), ports);
 
-        Cluster updated = portTraversal.update(cluster, p -> p + 1);
+        Cluster updated = portTraversal.modify(p -> p + 1, cluster);
         assertEquals(81, updated.servers().get(0).port());
         assertEquals(444, updated.servers().get(1).port());
     }
 
     @Test
     void listTraversalToMutationProducesWorkingMutation() {
-        ConfigLens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
-        ConfigTraversal<ListRoot, Integer> traversal = Traversals.onList(lens);
+        Lens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
+        Traversal<ListRoot, Integer> traversal = lens.andThen(Each.listTraversal());
 
-        ConfigMutation<ListRoot> mutation = traversal.toMutation(v -> v * 3);
+        ConfigMutation<ListRoot> mutation = source -> traversal.modify(v -> v * 3, source);
         ListRoot root = new ListRoot(List.of(1, 2, 3), "x");
 
         ListRoot result = mutation.apply(root);
@@ -183,51 +186,51 @@ class ConfigTraversalTest {
 
     @Test
     void foldGetAllReturnsAllElements() {
-        ConfigLens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
-        ConfigFold<ListRoot, Integer> fold = Traversals.onList(lens);
+        Lens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
+        Fold<ListRoot, Integer> fold = lens.andThen(Each.listTraversal()).asFold();
 
         ListRoot root = new ListRoot(List.of(10, 20, 30), "x");
-        assertEquals(List.of(10, 20, 30), fold.extract(root));
+        assertEquals(List.of(10, 20, 30), fold.getAll(root));
     }
 
     @Test
     void foldAggregatesWithAccumulator() {
-        ConfigLens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
-        ConfigFold<ListRoot, Integer> fold = Traversals.onList(lens);
+        Lens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
+        Fold<ListRoot, Integer> fold = lens.andThen(Each.listTraversal()).asFold();
 
         ListRoot root = new ListRoot(List.of(1, 2, 3, 4, 5), "x");
-        int sum = fold.fold(root, 0, Integer::sum);
+        int sum = fold.getAll(root).stream().reduce(0, Integer::sum);
 
         assertEquals(15, sum);
     }
 
     @Test
     void foldFiltersCorrectly() {
-        ConfigLens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
-        ConfigFold<ListRoot, Integer> fold = Traversals.onList(lens).filter(v -> v > 2);
+        Lens<ListRoot, List<Integer>> lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
+        Fold<ListRoot, Integer> fold = lens.andThen(Each.listTraversal()).filtered(v -> v > 2).asFold();
 
         ListRoot root = new ListRoot(List.of(1, 2, 3, 4, 5), "x");
-        assertEquals(List.of(3, 4, 5), fold.extract(root));
+        assertEquals(List.of(3, 4, 5), fold.getAll(root));
     }
 
     // -- ConfigTraversal.onMapValues --
 
     @Test
     void mapValuesTraversalGetAllReturnsAllValues() {
-        ConfigLens<MapRoot, Map<String, String>> lens = RecordLensBuilder.lens(MapRoot.class, MapRoot::tags);
-        ConfigTraversal<MapRoot, String> traversal = Traversals.onMapValues(lens);
+        Lens<MapRoot, Map<String, String>> lens = RecordLensBuilder.lens(MapRoot.class, MapRoot::tags);
+        Traversal<MapRoot, String> traversal = lens.andThen(Traversal.mapValues());
 
         MapRoot root = new MapRoot(Map.of("a", "x", "b", "y"), "n");
-        assertTrue(traversal.extract(root).containsAll(List.of("x", "y")));
+        assertTrue(traversal.getAll(root).containsAll(List.of("x", "y")));
     }
 
     @Test
     void mapValuesTraversalUpdateTransformsAllValues() {
-        ConfigLens<MapRoot, Map<String, String>> lens = RecordLensBuilder.lens(MapRoot.class, MapRoot::tags);
-        ConfigTraversal<MapRoot, String> traversal = Traversals.onMapValues(lens);
+        Lens<MapRoot, Map<String, String>> lens = RecordLensBuilder.lens(MapRoot.class, MapRoot::tags);
+        Traversal<MapRoot, String> traversal = lens.andThen(Traversal.mapValues());
 
         MapRoot root = new MapRoot(Map.of("k1", "hello", "k2", "world"), "n");
-        MapRoot updated = traversal.update(root, String::toUpperCase);
+        MapRoot updated = traversal.modify(String::toUpperCase, root);
 
         assertEquals("HELLO", updated.tags().get("k1"));
         assertEquals("WORLD", updated.tags().get("k2"));
@@ -236,22 +239,22 @@ class ConfigTraversalTest {
 
     @Test
     void mapValuesCountReturnsCorrectSize() {
-        ConfigLens<MapRoot, Map<String, String>> lens = RecordLensBuilder.lens(MapRoot.class, MapRoot::tags);
-        ConfigTraversal<MapRoot, String> traversal = Traversals.onMapValues(lens);
+        Lens<MapRoot, Map<String, String>> lens = RecordLensBuilder.lens(MapRoot.class, MapRoot::tags);
+        Traversal<MapRoot, String> traversal = lens.andThen(Traversal.mapValues());
 
         MapRoot root = new MapRoot(Map.of("a", "1", "b", "2"), "n");
-        assertEquals(2, traversal.count(root));
+        assertEquals(2, traversal.length(root));
     }
 
     // -- ConfigFold.onMapKeys --
 
     @Test
     void mapKeysFoldGetAllReturnsAllKeys() {
-        ConfigLens<MapRoot, Map<String, String>> lens = RecordLensBuilder.lens(MapRoot.class, MapRoot::tags);
-        ConfigFold<MapRoot, String> fold = Folds.onMapKeys(lens);
+        Lens<MapRoot, Map<String, String>> lens = RecordLensBuilder.lens(MapRoot.class, MapRoot::tags);
+        Fold<MapRoot, String> fold = lens.andThen(Fold.mapKeys());
 
         MapRoot root = new MapRoot(Map.of("x", "1", "y", "2"), "n");
-        assertTrue(fold.extract(root).containsAll(List.of("x", "y")));
+        assertTrue(fold.getAll(root).containsAll(List.of("x", "y")));
     }
 
     // -- ConfigUnit semantic API (read-only, no persistence dependency) --
@@ -325,6 +328,15 @@ class ConfigTraversalTest {
         ConfigUnit<MapRoot> unit = def.unit();
         assertTrue(unit.getKeys(MapRoot::tags).containsAll(List.of("ka", "kb")));
         assertTrue(unit.getValues(MapRoot::tags).containsAll(List.of("va", "vb")));
+        assertEquals(2, unit.countKeys(MapRoot::tags));
+        assertEquals(2, unit.countValues(MapRoot::tags));
+        assertTrue(unit.anyKeyMatch(MapRoot::tags, key -> key.equals("ka")));
+        assertTrue(unit.allKeyMatch(MapRoot::tags, key -> key.startsWith("k")));
+        assertEquals(Optional.of("kb"), unit.findKey(MapRoot::tags, key -> key.endsWith("b")));
+        assertTrue(unit.anyValueMatch(MapRoot::tags, value -> value.equals("va")));
+        assertTrue(unit.allValueMatch(MapRoot::tags, value -> value.startsWith("v")));
+        assertEquals(Optional.of("vb"), unit.findValue(MapRoot::tags, value -> value.endsWith("b")));
+        assertEquals(List.of("vb"), unit.getValuesWhere(MapRoot::tags, value -> value.endsWith("b")));
     }
 
     // -- ConfigUnit semantic API (write, requires isolated filenames) --
@@ -382,12 +394,90 @@ class ConfigTraversalTest {
         def.unit().updateValues(MapRoot::tags, String::toUpperCase);
         assertEquals("X", def.unit().get().tags().get("a"));
         assertEquals("Y", def.unit().get().tags().get("b"));
+
+        def.unit().updateValuesWhere(MapRoot::tags, value -> value.equals("X"), value -> value + "!");
+        assertEquals("X!", def.unit().get().tags().get("a"));
+        assertEquals("Y", def.unit().get().tags().get("b"));
+    }
+
+    @Test
+    void configMutationUpdateValuesWhereSupportsGetterAndPath() {
+        String id = UUID.randomUUID().toString().replace("-", "");
+        var def = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
+                ResourceLocation.fromNamespaceAndPath("oelibtest", id),
+                MapRoot.class,
+                meta -> meta.fileName(id).directory("unit-tests"),
+                schema -> schema.group(
+                        ConfigField.map("tags", Codec.STRING, Codec.STRING).defaultValue(Map.of("a", "x", "b", "y")).forGetter(MapRoot::tags),
+                        ConfigField.string("name").defaultValue("n").forGetter(MapRoot::name)
+                ).apply(schema, MapRoot::new)
+        );
+
+        ConfigUnit<MapRoot> unit = def.unit();
+        ConfigPath.Many<MapRoot, String> values = def.pathValues(MapRoot::tags);
+
+        unit.updateAll(
+                ConfigMutation.updateValuesWhere(MapRoot::tags, value -> value.equals("x"), String::toUpperCase),
+                ConfigMutation.paths().updateWhere(values, value -> value.equals("y"), String::toUpperCase)
+        );
+
+        assertEquals("X", unit.get().tags().get("a"));
+        assertEquals("Y", unit.get().tags().get("b"));
     }
 
     // -- ConfigUnitOps --
 
     @Test
-    void traverseNoSaveDoesNotPersist() {
+    void updateValuesWhereNoSaveOnlyTransformsMatchingMapValues() {
+        String id = UUID.randomUUID().toString().replace("-", "");
+        var def = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
+                ResourceLocation.fromNamespaceAndPath("oelibtest", id),
+                MapRoot.class,
+                meta -> meta.fileName(id).directory("unit-tests"),
+                schema -> schema.group(
+                        ConfigField.map("tags", Codec.STRING, Codec.STRING).defaultValue(Map.of("a", "x", "b", "y")).forGetter(MapRoot::tags),
+                        ConfigField.string("name").defaultValue("n").forGetter(MapRoot::name)
+                ).apply(schema, MapRoot::new)
+        );
+
+        ConfigUnit<MapRoot> unit = def.unit();
+        unit.get();
+        ConfigUnitOps.updateValuesWhereNoSave(unit, MapRoot::tags, value -> value.equals("x"), String::toUpperCase);
+
+        assertEquals("X", unit.get().tags().get("a"));
+        assertEquals("y", unit.get().tags().get("b"));
+        Path savePath = Path.of("build", "test-config", "unit-tests", id + ".json5");
+        assertFalse(Files.exists(savePath));
+    }
+
+    @Test
+    void updateValuesWhereNoSaveAcceptsPath() {
+        String id = UUID.randomUUID().toString().replace("-", "");
+        var def = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
+                ResourceLocation.fromNamespaceAndPath("oelibtest", id),
+                MapRoot.class,
+                meta -> meta.fileName(id).directory("unit-tests"),
+                schema -> schema.group(
+                        ConfigField.map("tags", Codec.STRING, Codec.STRING).defaultValue(Map.of("a", "x", "b", "y")).forGetter(MapRoot::tags),
+                        ConfigField.string("name").defaultValue("n").forGetter(MapRoot::name)
+                ).apply(schema, MapRoot::new)
+        );
+
+        ConfigUnit<MapRoot> unit = def.unit();
+        ConfigPath.Many<MapRoot, String> values = def.pathValues(MapRoot::tags);
+
+        unit.get();
+        ConfigUnitOps.paths(unit).updateWhereNoSave(values, value -> value.equals("y"), String::toUpperCase);
+
+        assertEquals("x", unit.get().tags().get("a"));
+        assertEquals("Y", unit.get().tags().get("b"));
+    }
+
+    @Test
+    void updateElementsNoSaveDoesNotPersist() {
         String id = UUID.randomUUID().toString().replace("-", "");
         var def = ConfigSchema.defineClient(
                 MethodHandles.lookup(),
@@ -401,11 +491,9 @@ class ConfigTraversalTest {
         );
 
         ConfigUnit<ListRoot> unit = def.unit();
-        var lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
-        var traversal = Traversals.onList(lens);
 
         unit.get();
-        ConfigUnitOps.traverseNoSave(unit, traversal, v -> v * 10);
+        ConfigUnitOps.updateElementsNoSave(unit, ListRoot::values, v -> v * 10);
 
         assertEquals(List.of(10, 20, 30), unit.getAll(ListRoot::values));
 
@@ -414,7 +502,7 @@ class ConfigTraversalTest {
     }
 
     @Test
-    void batchMutatorTraverseAppliesTransformation() {
+    void batchMutatorUpdateElementsAppliesTransformation() {
         String id = UUID.randomUUID().toString().replace("-", "");
         var def = ConfigSchema.defineClient(
                 MethodHandles.lookup(),
@@ -428,12 +516,57 @@ class ConfigTraversalTest {
         );
 
         ConfigUnit<ListRoot> unit = def.unit();
-        var lens = RecordLensBuilder.lens(ListRoot.class, ListRoot::values);
-        var traversal = Traversals.onList(lens);
 
         unit.get();
-        ConfigUnitOps.withBatchNoSave(unit, batch -> batch.traverse(traversal, v -> v * 10));
+        ConfigUnitOps.withBatchNoSave(unit, batch -> batch.updateElements(ListRoot::values, v -> v * 10));
 
         assertEquals(List.of(10, 20, 30), unit.getAll(ListRoot::values));
+    }
+
+    @Test
+    void batchMutatorUpdateValuesWhereAppliesTransformation() {
+        String id = UUID.randomUUID().toString().replace("-", "");
+        var def = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
+                ResourceLocation.fromNamespaceAndPath("oelibtest", id),
+                MapRoot.class,
+                meta -> meta.fileName(id).directory("unit-tests"),
+                schema -> schema.group(
+                        ConfigField.map("tags", Codec.STRING, Codec.STRING).defaultValue(Map.of("a", "x", "b", "y")).forGetter(MapRoot::tags),
+                        ConfigField.string("name").defaultValue("n").forGetter(MapRoot::name)
+                ).apply(schema, MapRoot::new)
+        );
+
+        ConfigUnit<MapRoot> unit = def.unit();
+
+        unit.get();
+        ConfigUnitOps.withBatchNoSave(unit, batch -> batch.updateValuesWhere(MapRoot::tags, value -> value.equals("y"), String::toUpperCase));
+
+        assertEquals("x", unit.get().tags().get("a"));
+        assertEquals("Y", unit.get().tags().get("b"));
+    }
+
+    @Test
+    void batchMutatorUpdateValuesWhereAcceptsPath() {
+        String id = UUID.randomUUID().toString().replace("-", "");
+        var def = ConfigSchema.defineClient(
+                MethodHandles.lookup(),
+                ResourceLocation.fromNamespaceAndPath("oelibtest", id),
+                MapRoot.class,
+                meta -> meta.fileName(id).directory("unit-tests"),
+                schema -> schema.group(
+                        ConfigField.map("tags", Codec.STRING, Codec.STRING).defaultValue(Map.of("a", "x", "b", "y")).forGetter(MapRoot::tags),
+                        ConfigField.string("name").defaultValue("n").forGetter(MapRoot::name)
+                ).apply(schema, MapRoot::new)
+        );
+
+        ConfigUnit<MapRoot> unit = def.unit();
+        ConfigPath.Many<MapRoot, String> values = def.pathValues(MapRoot::tags);
+
+        unit.get();
+        ConfigUnitOps.withBatchNoSave(unit, batch -> batch.paths().updateWhere(values, value -> value.equals("x"), String::toUpperCase));
+
+        assertEquals("X", unit.get().tags().get("a"));
+        assertEquals("y", unit.get().tags().get("b"));
     }
 }

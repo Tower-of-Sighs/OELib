@@ -8,14 +8,13 @@ import cc.sighs.oelib.config.model.ConfigMeta;
 import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import cc.sighs.oelib.config.model.ConfigValueMeta;
-import cc.sighs.oelib.config.optics.ConfigLens;
 import cc.sighs.oelib.config.util.ConfigCodecUtil;
 import cc.sighs.oelib.config.util.ConfigFieldMetaUtil;
+import com.flechazo.optics.generated.LensGetter;
 import com.mojang.datafixers.kinds.App;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.ResourceLocation;
-import org.jetbrains.annotations.ApiStatus;
 
 import java.lang.invoke.MethodHandles;
 import java.util.*;
@@ -48,7 +47,6 @@ public final class ConfigSchema {
      * @param builder        the record codec builder function
      * @param <T>            the type of the configuration record
      * @return a definition holding the unit and root class
-     * @throws NullPointerException if {@code configId}, {@code rootClass}, or {@code builder} is {@code null}
      */
     public static <T> Definition<T> defineClient(
             MethodHandles.Lookup lensLookup,
@@ -70,7 +68,6 @@ public final class ConfigSchema {
      * @param builder        the record codec builder function
      * @param <T>            the type of the configuration record
      * @return a definition holding the unit and root class
-     * @throws NullPointerException if {@code configId}, {@code rootClass}, or {@code builder} is {@code null}
      */
     public static <T> Definition<T> defineServer(
             MethodHandles.Lookup lensLookup,
@@ -93,7 +90,6 @@ public final class ConfigSchema {
      * @param side           the logical side
      * @param <T>            the type of the configuration record
      * @return a definition holding the unit and root class
-     * @throws NullPointerException if {@code configId}, {@code rootClass}, {@code builder},
      *                              or {@code side} is {@code null}
      */
     public static <T> Definition<T> define(
@@ -161,7 +157,6 @@ public final class ConfigSchema {
      * @param <P>         the parent record type
      * @param <C>         the child record type
      * @return a record codec builder for the nested field
-     * @throws NullPointerException  if any argument is {@code null}
      * @throws IllegalStateException if no {@link ConfigContext} is active
      */
     public static <P, C> RecordCodecBuilder<P, C> record(
@@ -189,7 +184,6 @@ public final class ConfigSchema {
      * @param <P>          the parent record type
      * @param <C>          the child record type
      * @return a record codec builder for the nested field
-     * @throws NullPointerException if any argument is {@code null}
      */
     public static <P, C> RecordCodecBuilder<P, C> record(
             String key,
@@ -219,7 +213,6 @@ public final class ConfigSchema {
      * @param <P>         the parent record type
      * @param <C>         the child record type
      * @return a record codec builder for the nested field
-     * @throws NullPointerException if any argument is {@code null}
      */
     public static <P, C> RecordCodecBuilder<P, C> record(
             String key,
@@ -243,7 +236,6 @@ public final class ConfigSchema {
      * @param builder     the record codec builder function
      * @param <T>         the record type
      * @return a metadata codec that can be embedded with {@link #record(String, Class, ConfigMetaCodec, Function)}
-     * @throws NullPointerException if {@code recordClass} or {@code builder} is {@code null}
      */
     public static <T> ConfigMetaCodec<T> metaCodec(
             Class<T> recordClass,
@@ -362,7 +354,7 @@ public final class ConfigSchema {
          * @param  <V> the component type
          * @return a path selecting the given component
          */
-        public <V> ConfigPath.One<T, V> path(RecordLensBuilder.LensGetter<T, V> getter) {
+        public <V> ConfigPath.One<T, V> path(LensGetter<T, V> getter) {
             return ConfigPath.one(lensLookup, rootClass, getter);
         }
 
@@ -374,7 +366,7 @@ public final class ConfigSchema {
          * @param  <V> the optional element type
          * @return a path selecting the present optional value
          */
-        public <V> ConfigPath.Maybe<T, V> pathOptional(RecordLensBuilder.LensGetter<T, Optional<V>> getter) {
+        public <V> ConfigPath.Maybe<T, V> pathOptional(LensGetter<T, Optional<V>> getter) {
             return ConfigPath.optional(lensLookup, rootClass, getter);
         }
 
@@ -388,7 +380,7 @@ public final class ConfigSchema {
          * @param  <X> the subtype
          * @return a path selecting the component when it is of the given subtype
          */
-        public <V, X extends V> ConfigPath.Maybe<T, X> pathSubtype(RecordLensBuilder.LensGetter<T, V> getter, Class<X> subtypeClass) {
+        public <V, X extends V> ConfigPath.Maybe<T, X> pathSubtype(LensGetter<T, V> getter, Class<X> subtypeClass) {
             return ConfigPath.subtype(lensLookup, rootClass, getter, subtypeClass);
         }
 
@@ -400,7 +392,7 @@ public final class ConfigSchema {
          * @param  <E> the list element type
          * @return a path selecting all list elements
          */
-        public <E> ConfigPath.Many<T, E> pathEach(RecordLensBuilder.LensGetter<T, List<E>> getter) {
+        public <E> ConfigPath.Many<T, E> pathEach(LensGetter<T, List<E>> getter) {
             return ConfigPath.each(lensLookup, rootClass, getter);
         }
 
@@ -412,7 +404,7 @@ public final class ConfigSchema {
          * @param  <V> the map value type
          * @return a path selecting all map values
          */
-        public <K, V> ConfigPath.Many<T, V> pathValues(RecordLensBuilder.LensGetter<T, Map<K, V>> getter) {
+        public <K, V> ConfigPath.Many<T, V> pathValues(LensGetter<T, Map<K, V>> getter) {
             return ConfigPath.values(lensLookup, rootClass, getter);
         }
 
@@ -424,7 +416,7 @@ public final class ConfigSchema {
          * @param  <V> the map value type
          * @return a path selecting all map keys
          */
-        public <K, V> ConfigPath.Many<T, K> pathKeys(RecordLensBuilder.LensGetter<T, Map<K, V>> getter) {
+        public <K, V> ConfigPath.Many<T, K> pathKeys(LensGetter<T, Map<K, V>> getter) {
             return ConfigPath.keys(lensLookup, rootClass, getter);
         }
 
@@ -438,63 +430,8 @@ public final class ConfigSchema {
          * @param  <V> the map value type
          * @return a path selecting the map value stored at {@code key}
          */
-        public <K, V> ConfigPath.Maybe<T, V> pathValue(RecordLensBuilder.LensGetter<T, Map<K, V>> getter, K key) {
+        public <K, V> ConfigPath.Maybe<T, V> pathValue(LensGetter<T, Map<K, V>> getter, K key) {
             return ConfigPath.value(lensLookup, rootClass, getter, key);
-        }
-
-        /**
-         * Creates a {@link ConfigLens} for the given record component accessor
-         * using the stored lookup.
-         *
-         * @param getter a serializable method reference to a record component
-         * @param <V>    the type of the component value
-         * @return a lens targeting that component
-         */
-        @ApiStatus.Internal
-        public <V> ConfigLens<T, V> lens(RecordLensBuilder.LensGetter<T, V> getter) {
-            return RecordLensBuilder.lens(lensLookup, rootClass, getter);
-        }
-
-        /**
-         * Creates a {@link ConfigLens} for the given record component accessor
-         * using an explicit lookup.
-         *
-         * @param lookup the lookup for access control
-         * @param getter a serializable method reference to a record component
-         * @param <V>    the type of the component value
-         * @return a lens targeting that component
-         */
-        @ApiStatus.Internal
-        public <V> ConfigLens<T, V> lens(MethodHandles.Lookup lookup, RecordLensBuilder.LensGetter<T, V> getter) {
-            return RecordLensBuilder.lens(lookup, rootClass, getter);
-        }
-
-        /**
-         * Creates a {@link ConfigLens} for a component identified by name.
-         *
-         * @param componentName the name of the record component
-         * @param <V>           the type of the component value
-         * @return a lens targeting that component
-         * @throws IllegalArgumentException if the component does not exist
-         */
-        @ApiStatus.Internal
-        public <V> ConfigLens<T, V> lens(String componentName) {
-            return RecordLensBuilder.lens(lensLookup, rootClass, componentName);
-        }
-
-        /**
-         * Creates a {@link ConfigLens} for a component identified by name
-         * using an explicit lookup.
-         *
-         * @param lookup        the lookup for access control
-         * @param componentName the name of the record component
-         * @param <V>           the type of the component value
-         * @return a lens targeting that component
-         * @throws IllegalArgumentException if the component does not exist
-         */
-        @ApiStatus.Internal
-        public <V> ConfigLens<T, V> lens(MethodHandles.Lookup lookup, String componentName) {
-            return RecordLensBuilder.lens(lookup, rootClass, componentName);
         }
 
         /**

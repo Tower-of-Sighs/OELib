@@ -23,7 +23,7 @@ class ConfigPathApiTest {
         ConfigPath.One<PathRoot, Integer> path = definition.path(PathRoot::nested).then(Child::count);
 
         unit.setValue(withOptionalChild(unit.get(), new Child(1, true)));
-        PathRoot updated = ConfigUnitOps.updateNoSave(unit, path, value -> value + 1);
+        PathRoot updated = ConfigUnitOps.paths(unit).updateNoSave(path, value -> value + 1);
 
         assertEquals(2, updated.nested().count());
         assertEquals(1, updated.optionalChild().orElseThrow().count());
@@ -36,10 +36,43 @@ class ConfigPathApiTest {
         ConfigPath.Maybe<PathRoot, Boolean> path = definition.pathOptional(PathRoot::optionalChild).then(Child::enabled);
 
         unit.setValue(withOptionalChild(unit.get(), new Child(1, true)));
-        PathRoot updated = ConfigUnitOps.ifPresentNoSave(unit, path, value -> !value);
+        PathRoot updated = ConfigUnitOps.paths(unit).ifPresentNoSave(path, value -> !value);
 
         assertFalse(updated.optionalChild().orElseThrow().enabled());
         assertTrue(updated.nested().enabled());
+    }
+
+    @Test
+    void maybePathWhereOnlySelectsMatchingValue() {
+        var definition = definition();
+        ConfigUnit<PathRoot> unit = definition.unit();
+        ConfigPath.Maybe<PathRoot, Integer> path = definition.pathOptional(PathRoot::optionalChild)
+                .where(Child::enabled)
+                .then(Child::count);
+
+        unit.setValue(withOptionalChild(unit.get(), new Child(1, true)));
+        PathRoot updated = ConfigUnitOps.paths(unit).ifPresentNoSave(path, value -> value + 5);
+        assertEquals(6, updated.optionalChild().orElseThrow().count());
+
+        unit.setValue(withOptionalChild(updated, new Child(2, false)));
+        PathRoot unchanged = ConfigUnitOps.paths(unit).ifPresentNoSave(path, value -> value + 5);
+        assertEquals(2, unchanged.optionalChild().orElseThrow().count());
+        assertEquals(Optional.empty(), path.preview(unchanged));
+    }
+
+    @Test
+    void whenSubtypePathRequiresExplicitClass() {
+        var definition = definition();
+        ConfigUnit<PathRoot> unit = definition.unit();
+        ConfigPath.One<PathRoot, Child> path = definition.path(PathRoot::nested);
+
+        unit.get();
+        PathRoot updated = unit.paths().whenSubtype(path, Child.class, child -> new Child(child.count() + 3, child.enabled()));
+
+        assertEquals(4, updated.nested().count());
+
+        PathRoot noSaveUpdated = ConfigUnitOps.paths(unit).whenSubtypeNoSave(path, Child.class, child -> new Child(child.count() + 4, child.enabled()));
+        assertEquals(8, noSaveUpdated.nested().count());
     }
 
     @Test
@@ -49,7 +82,7 @@ class ConfigPathApiTest {
         ConfigPath.Maybe<PathRoot, Integer> path = definition.pathEach(PathRoot::entries).then(Entry::weight).at(1);
 
         unit.get();
-        PathRoot updated = ConfigUnitOps.ifPresentNoSave(unit, path, value -> value + 7);
+        PathRoot updated = ConfigUnitOps.paths(unit).ifPresentNoSave(path, value -> value + 7);
 
         assertEquals(List.of(
                 new Entry("a", 10, Optional.of(new Child(3, true))),
@@ -66,7 +99,7 @@ class ConfigPathApiTest {
                 .then(Child::count);
 
         unit.get();
-        PathRoot updated = ConfigUnitOps.updateEachNoSave(unit, path, value -> value + 2);
+        PathRoot updated = ConfigUnitOps.paths(unit).updateEachNoSave(path, value -> value + 2);
 
         assertEquals(5, updated.entries().get(0).child().orElseThrow().count());
         assertTrue(updated.entries().get(1).child().isEmpty());
@@ -80,13 +113,13 @@ class ConfigPathApiTest {
         ConfigPath.Many<PathRoot, String> keys = definition.pathKeys(PathRoot::entryMap);
 
         unit.get();
-        PathRoot updated = ConfigUnitOps.updateAllNoSave(unit, ConfigMutation.updateEach(weights, value -> value + 5));
+        PathRoot updated = ConfigUnitOps.updateAllNoSave(unit, ConfigMutation.paths().updateEach(weights, value -> value + 5));
 
         assertEquals(List.of(15, 25), weights.getAll(updated).stream().sorted().toList());
         assertEquals(List.of("left", "right"), keys.getAll(updated).stream().sorted().toList());
-        assertEquals(2, unit.count(weights));
-        assertTrue(unit.anyMatch(weights, value -> value >= 20));
-        assertEquals(Optional.of(25), unit.findFirst(weights, value -> value >= 20));
+        assertEquals(2, unit.paths().count(weights));
+        assertTrue(unit.paths().anyMatch(weights, value -> value >= 20));
+        assertEquals(Optional.of(25), unit.paths().findFirst(weights, value -> value >= 20));
     }
 
     @Test
@@ -98,7 +131,7 @@ class ConfigPathApiTest {
                 .then(Child::enabled);
 
         unit.get();
-        PathRoot updated = ConfigUnitOps.ifPresentNoSave(unit, path, value -> !value);
+        PathRoot updated = ConfigUnitOps.paths(unit).ifPresentNoSave(path, value -> !value);
 
         assertFalse(updated.entryMap().get("right").child().orElseThrow().enabled());
         assertEquals(10, updated.entryMap().get("left").weight());

@@ -1,4 +1,4 @@
-import com.example.gradle.CreateModuleTask
+import cc.sighs.gradle.CreateModuleTask
 
 plugins {
     id("fabric-loom") version "1.9-SNAPSHOT" apply false

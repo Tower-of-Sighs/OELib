@@ -63,6 +63,7 @@ class ConfigUnitRuntimeTest {
         RuntimeConfig loaded = unit.get();
         assertEquals(4, loaded.count());
         assertEquals(Optional.of(5), loaded.opt());
+        assertEquals(Optional.of(5), unit.preview(RuntimeConfig::opt));
 
         unit.update(RuntimeConfig::count, value -> value + 1);
         unit.ifPresent(RuntimeConfig::opt, value -> value + 2);
@@ -87,8 +88,8 @@ class ConfigUnitRuntimeTest {
         ModeHolder aSource = new ModeHolder(new ModeA(2));
         ModeHolder bSource = new ModeHolder(new ModeB("x"));
 
-        ModeHolder aUpdated = aPrism.updateIfPresent(aSource, mode -> new ModeA(mode.value() + 1));
-        ModeHolder bUpdated = aPrism.updateIfPresent(bSource, mode -> new ModeA(mode.value() + 1));
+        ModeHolder aUpdated = aPrism.modify(mode -> new ModeA(mode.value() + 1), aSource);
+        ModeHolder bUpdated = aPrism.modify(mode -> new ModeA(mode.value() + 1), bSource);
 
         assertEquals(3, ((ModeA) aUpdated.mode()).value());
         assertSame(bSource.mode(), bUpdated.mode());
@@ -136,19 +137,18 @@ class ConfigUnitRuntimeTest {
         );
 
         ConfigUnit<RuntimeConfig> unit = definition.unit();
-        var optPrism = RecordLensBuilder.optional(definition.lens(RuntimeConfig::opt));
         var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
 
         unit.get();
         ConfigUnitOps.withBatchNoSave(unit, batch -> {
             batch.updateInt(RuntimeConfig::count, value -> value + 3);
-            batch.ifPresent(optPrism, value -> value + 1);
+            batch.ifPresent(RuntimeConfig::opt, value -> value + 1);
         });
         assertFalse(Files.exists(savePath));
 
         ConfigUnitOps.withBatch(unit, batch -> {
             batch.updateInt(RuntimeConfig::count, value -> value + 2);
-            batch.ifPresent(optPrism, value -> value + 1);
+            batch.ifPresent(RuntimeConfig::opt, value -> value + 1);
         });
 
         assertTrue(Files.exists(savePath));

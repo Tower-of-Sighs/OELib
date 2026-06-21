@@ -60,7 +60,7 @@ class ConfigSealedFieldTest {
         var path = definition.pathSubtype(SealedRoot::mode, LevelMode.class).then(LevelMode::level);
 
         unit.get();
-        SealedRoot updated = ConfigUnitOps.ifPresentNoSave(unit, path, value -> value + 3);
+        SealedRoot updated = ConfigUnitOps.paths(unit).ifPresentNoSave(path, value -> value + 3);
         assertEquals(new LevelMode(5), updated.mode());
     }
 

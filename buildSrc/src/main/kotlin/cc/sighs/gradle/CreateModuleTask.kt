@@ -1,4 +1,4 @@
-package com.example.gradle
+package cc.sighs.gradle
 
 import org.gradle.api.DefaultTask
 import org.gradle.api.tasks.Input
@@ -166,14 +166,14 @@ open class CreateModuleTask : DefaultTask() {
             placeholderDir.deleteRecursively()
         }
 
-        val relPath = "modules/${moduleName}"
+        val relPath = "modules/$moduleName"
         println("")
         println("Module '${moduleName}' created successfully!")
-        println("  Directory:    ${relPath}/")
-        println("  Package:      ${rootPackage}")
-        println("  Main class:   ${classNamePrefix}")
-        println("  Mod ID:       ${fullModId}")
-        println("  Mod Name:     ${fullModName}")
+        println("  Directory:    $relPath/")
+        println("  Package:      $rootPackage")
+        println("  Main class:   $classNamePrefix")
+        println("  Mod ID:       $fullModId")
+        println("  Mod Name:     $fullModName")
         println("")
         println("Created subprojects:")
         println("  :${relPath.replace('/', ':')}:${moduleName}-common")

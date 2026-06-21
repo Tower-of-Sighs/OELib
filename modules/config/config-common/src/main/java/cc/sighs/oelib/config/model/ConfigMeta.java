@@ -35,7 +35,6 @@ public final class ConfigMeta {
      *
      * @param id the configuration id
      * @return a new builder
-     * @throws NullPointerException if {@code id} is {@code null}
      */
     public static Builder builder(ResourceLocation id) {
         Objects.requireNonNull(id);
@@ -91,8 +90,8 @@ public final class ConfigMeta {
     /**
      * Mutable builder for {@link ConfigMeta}.
      *
-     * <p>Defaults: format is {@link ConfigStorageFormat#TOML TOML}, side is
-     * {@link ConfigSide#SERVER SERVER}, filename is derived from the
+     * <p>Defaults: format is {@link ConfigStorageFormat#TOML}, side is
+     * {@link ConfigSide#SERVER}, filename is derived from the
      * ResourceLocation's path component.
      */
     public static final class Builder {

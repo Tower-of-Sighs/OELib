@@ -69,6 +69,12 @@ repositories {
         name = "Terraformers"
         url = uri("https://maven.terraformersmc.com/")
     }
+    maven {
+        url = uri("https://maven.sighs.cc/repository/maven-releases/")
+    }
+    maven {
+        url = uri("https://maven.sighs.cc/repository/maven-snapshots/")
+    }
 }
 
 listOf("apiElements", "runtimeElements", "sourcesElements").forEach { variant ->

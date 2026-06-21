@@ -37,7 +37,6 @@ public final class ConfigContext {
      * @param supplier the code block to run under this context
      * @param <T>      the type returned by the supplier
      * @return the value returned by the supplier
-     * @throws NullPointerException if any argument is {@code null}
      */
     public static <T> T withRoot(ResourceLocation configId, List<ConfigValueMeta> fields, Supplier<T> supplier) {
         return withRoot(configId, null, fields, supplier);
@@ -53,7 +52,6 @@ public final class ConfigContext {
      * @param supplier       the code block to run under this context
      * @param <T>            the type returned by the supplier
      * @return the value returned by the supplier
-     * @throws NullPointerException if {@code configId}, {@code fields}, or {@code supplier} is {@code null}
      */
     public static <T> T withRoot(ResourceLocation configId, @Nullable Class<?> rootRecordClass, List<ConfigValueMeta> fields, Supplier<T> supplier) {
         Objects.requireNonNull(configId);
@@ -78,7 +76,6 @@ public final class ConfigContext {
      * @param supplier    the code block to run under the nested context
      * @param <T>         the type returned by the supplier
      * @return the value returned by the supplier
-     * @throws NullPointerException  if any argument is {@code null}
      * @throws IllegalStateException if no context is currently active
      */
     public static <T> T withRecord(String key, Class<?> recordClass, Supplier<T> supplier) {
@@ -144,7 +141,6 @@ public final class ConfigContext {
      *
      * @param key the local field key
      * @return the fully qualified key (for example {@code "parent.child"})
-     * @throws NullPointerException if {@code key} is {@code null}
      */
     public static String qualifyKey(String key) {
         Objects.requireNonNull(key);
@@ -157,7 +153,6 @@ public final class ConfigContext {
      * <p>This is a no-op if no context is active.
      *
      * @param meta the field metadata to record
-     * @throws NullPointerException if {@code meta} is {@code null}
      */
     public static void recordMeta(ConfigValueMeta meta) {
         Objects.requireNonNull(meta);

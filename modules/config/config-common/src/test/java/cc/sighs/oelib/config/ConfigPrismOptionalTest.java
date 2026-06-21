@@ -1,7 +1,8 @@
 package cc.sighs.oelib.config;
 
-import cc.sighs.oelib.config.optics.ConfigAffine;
-import cc.sighs.oelib.config.optics.ConfigLens;
+import com.flechazo.optics.Affine;
+import com.flechazo.optics.Lens;
+import com.flechazo.optics.util.Affines;
 import com.mojang.datafixers.util.Either;
 import org.junit.jupiter.api.Test;
 
@@ -14,14 +15,14 @@ class ConfigPrismOptionalTest {
 
     @Test
     void optionalPrismUpdatesOnlyWhenPresent() {
-        ConfigLens<OptionalRoot, Optional<Integer>> lens = RecordLensBuilder.lens(OptionalRoot.class, OptionalRoot::value);
-        ConfigAffine<OptionalRoot, Integer> affine = RecordLensBuilder.optional(lens);
+        Lens<OptionalRoot, Optional<Integer>> lens = RecordLensBuilder.lens(OptionalRoot.class, OptionalRoot::value);
+        Affine<OptionalRoot, Integer> affine = RecordLensBuilder.optional(lens);
 
         OptionalRoot present = new OptionalRoot(Optional.of(5), 9);
         OptionalRoot absent = new OptionalRoot(Optional.empty(), 9);
 
-        OptionalRoot presentUpdated = affine.updateIfPresent(present, value -> value + 3);
-        OptionalRoot absentUpdated = affine.updateIfPresent(absent, value -> value + 3);
+        OptionalRoot presentUpdated = affine.modify(value -> value + 3, present);
+        OptionalRoot absentUpdated = affine.modify(value -> value + 3, absent);
 
         assertEquals(Optional.of(8), presentUpdated.value());
         assertEquals(9, presentUpdated.marker());
@@ -31,12 +32,12 @@ class ConfigPrismOptionalTest {
 
     @Test
     void optionalPrismStressLoopKeepsCorrectValue() {
-        ConfigLens<OptionalRoot, Optional<Integer>> lens = RecordLensBuilder.lens(OptionalRoot.class, OptionalRoot::value);
-        ConfigAffine<OptionalRoot, Integer> affine = RecordLensBuilder.optional(lens);
+        Lens<OptionalRoot, Optional<Integer>> lens = RecordLensBuilder.lens(OptionalRoot.class, OptionalRoot::value);
+        Affine<OptionalRoot, Integer> affine = RecordLensBuilder.optional(lens);
 
         OptionalRoot current = new OptionalRoot(Optional.of(1), 1);
         for (int i = 0; i < 50_000; i++) {
-            current = affine.updateIfPresent(current, value -> value + 1);
+            current = affine.modify(value -> value + 1, current);
         }
 
         assertEquals(Optional.of(50_001), current.value());
@@ -44,21 +45,26 @@ class ConfigPrismOptionalTest {
 
     @Test
     void optionalPrismPreviewReflectsPresence() {
-        ConfigLens<OptionalRoot, Optional<Integer>> lens = RecordLensBuilder.lens(OptionalRoot.class, OptionalRoot::value);
-        ConfigAffine<OptionalRoot, Integer> affine = RecordLensBuilder.optional(lens);
+        Lens<OptionalRoot, Optional<Integer>> lens = RecordLensBuilder.lens(OptionalRoot.class, OptionalRoot::value);
+        Affine<OptionalRoot, Integer> affine = RecordLensBuilder.optional(lens);
 
-        assertTrue(affine.preview(new OptionalRoot(Optional.of(2), 0)).isPresent());
-        assertTrue(affine.preview(new OptionalRoot(Optional.empty(), 0)).isEmpty());
+        assertTrue(Affines.previewOptional(affine, new OptionalRoot(Optional.of(2), 0)).isPresent());
+        assertTrue(Affines.previewOptional(affine, new OptionalRoot(Optional.empty(), 0)).isEmpty());
     }
 
     @Test
     void optionalPrismMatchBridgesToEither() {
-        ConfigLens<OptionalRoot, Optional<Integer>> lens = RecordLensBuilder.lens(OptionalRoot.class, OptionalRoot::value);
-        ConfigAffine<OptionalRoot, Integer> affine = RecordLensBuilder.optional(lens);
+        Lens<OptionalRoot, Optional<Integer>> lens = RecordLensBuilder.lens(OptionalRoot.class, OptionalRoot::value);
+        Affine<OptionalRoot, Integer> affine = RecordLensBuilder.optional(lens);
         OptionalRoot source = new OptionalRoot(Optional.empty(), 4);
 
-        assertEquals(Either.right(2), affine.match(new OptionalRoot(Optional.of(2), 4)));
-        assertEquals(Either.left(source), affine.match(source));
+        assertEquals(Either.right(2), match(affine, new OptionalRoot(Optional.of(2), 4)));
+        assertEquals(Either.left(source), match(affine, source));
+    }
+
+    private static Either<OptionalRoot, Integer> match(Affine<OptionalRoot, Integer> affine, OptionalRoot source) {
+        var value = affine.getMaybe(source);
+        return value.isDefined() ? Either.right(value.get()) : Either.left(source);
     }
 
     private record OptionalRoot(Optional<Integer> value, int marker) {

@@ -14,11 +14,11 @@ class ConfigStressTest {
         var l3 = RecordLensBuilder.lens(Level2.class, Level2::level3);
         var l4 = RecordLensBuilder.lens(Level3.class, Level3::level4);
         var valueLens = RecordLensBuilder.lens(Level4.class, Level4::value);
-        var deepValueLens = l1.compose(l2).compose(l3).compose(l4).compose(valueLens);
+        var deepValueLens = l1.andThen(l2).andThen(l3).andThen(l4).andThen(valueLens);
 
         StressRoot current = new StressRoot(new Level1(new Level2(new Level3(new Level4(0, false), 9), 1.0), "a"), "meta");
         for (int i = 0; i < 20_000; i++) {
-            current = deepValueLens.update(current, value -> value + 1);
+            current = deepValueLens.modify(value -> value + 1, current);
         }
 
         assertEquals(20_000, current.level1().level2().level3().level4().value());
@@ -32,17 +32,17 @@ class ConfigStressTest {
         var l3 = RecordLensBuilder.lens(Level2.class, Level2::level3);
         var l4 = RecordLensBuilder.lens(Level3.class, Level3::level4);
 
-        var valueLens = l1.compose(l2).compose(l3).compose(l4).compose(RecordLensBuilder.lens(Level4.class, Level4::value));
-        var flagLens = l1.compose(l2).compose(l3).compose(l4).compose(RecordLensBuilder.lens(Level4.class, Level4::flag));
-        var ratioLens = l1.compose(l2).compose(RecordLensBuilder.lens(Level2.class, Level2::ratio));
-        var noteLens = l1.compose(RecordLensBuilder.lens(Level1.class, Level1::note));
+        var valueLens = l1.andThen(l2).andThen(l3).andThen(l4).andThen(RecordLensBuilder.lens(Level4.class, Level4::value));
+        var flagLens = l1.andThen(l2).andThen(l3).andThen(l4).andThen(RecordLensBuilder.lens(Level4.class, Level4::flag));
+        var ratioLens = l1.andThen(l2).andThen(RecordLensBuilder.lens(Level2.class, Level2::ratio));
+        var noteLens = l1.andThen(RecordLensBuilder.lens(Level1.class, Level1::note));
 
         StressRoot current = new StressRoot(new Level1(new Level2(new Level3(new Level4(5, false), 7), 1.5), "note"), "m");
         for (int i = 0; i < 5_000; i++) {
-            current = valueLens.update(current, value -> value + 2);
-            current = flagLens.update(current, value -> !value);
-            current = ratioLens.update(current, value -> value + 0.01);
-            current = noteLens.update(current, value -> value + ".");
+            current = valueLens.modify(value -> value + 2, current);
+            current = flagLens.modify(value -> !value, current);
+            current = ratioLens.modify(value -> value + 0.01, current);
+            current = noteLens.modify(value -> value + ".", current);
         }
 
         assertEquals(10_005, current.level1().level2().level3().level4().value());

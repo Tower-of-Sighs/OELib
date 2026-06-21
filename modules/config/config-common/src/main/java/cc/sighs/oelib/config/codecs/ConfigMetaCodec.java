@@ -55,7 +55,6 @@ public final class ConfigMetaCodec<T> implements Codec<T> {
      * @param builder     the record codec builder function
      * @param <T>         the record type
      * @return a metadata codec that delegates to the built codec
-     * @throws NullPointerException if {@code recordClass} or {@code builder} is {@code null}
      */
     public static <T> ConfigMetaCodec<T> of(
             Class<T> recordClass,

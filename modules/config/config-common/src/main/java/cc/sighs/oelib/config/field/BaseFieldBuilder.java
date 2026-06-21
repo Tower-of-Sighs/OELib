@@ -20,8 +20,7 @@ import java.util.function.UnaryOperator;
  * and codec wiring.
  *
  * <p>Subclasses are created via the static factory methods on
- * {@link ConfigField} (for example {@link ConfigField#intRange
- * ConfigField.intRange}). Each subclass overrides {@link #forGetter(Function)}
+ * {@link ConfigField} (for example {@link ConfigField#intRange}). Each subclass overrides {@link #forGetter(Function)}
  * to finalize the field and return a {@link RecordCodecBuilder} entry.
  *
  * @param <T> the type of the field value
@@ -142,7 +141,6 @@ public abstract class BaseFieldBuilder<T, B extends BaseFieldBuilder<T, B>> impl
      * @param getter the accessor function on the parent record
      * @param <O>    the parent record type
      * @return a record codec builder for this field
-     * @throws NullPointerException if {@code getter} is {@code null}
      */
     public <O> RecordCodecBuilder<O, T> forGetter(Function<O, T> getter) {
         Objects.requireNonNull(getter);

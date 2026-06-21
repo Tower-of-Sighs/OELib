@@ -14,7 +14,7 @@ import java.util.function.Function;
 
 /**
  * Static factory for field builders used inside
- * {@link cc.sighs.oelib.config.ConfigSchema ConfigSchema} definitions.
+ * {@link cc.sighs.oelib.config.ConfigSchema} definitions.
  *
  * <p>Each factory method returns a specialized builder that accumulates
  * metadata and finally produces a {@link RecordCodecBuilder} entry via
@@ -37,7 +37,6 @@ public final class ConfigField {
      *
      * @param meta the field metadata to record
      * @throws IllegalStateException if no {@link ConfigContext} is active
-     * @throws NullPointerException  if {@code meta} is {@code null}
      */
     public static void recordMeta(ConfigValueMeta meta) {
         if (!ConfigContext.isActive()) {
@@ -97,7 +96,6 @@ public final class ConfigField {
      * @param enumClass the enum class
      * @param <E>       the enum type
      * @return a new enum field builder
-     * @throws NullPointerException if {@code enumClass} is {@code null}
      */
     public static <E extends Enum<E>> EnumBuilder<E> enumValue(String key, Class<E> enumClass) {
         Objects.requireNonNull(enumClass);

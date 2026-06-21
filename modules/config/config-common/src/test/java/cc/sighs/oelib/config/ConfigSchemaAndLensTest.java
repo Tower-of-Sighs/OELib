@@ -52,26 +52,24 @@ class ConfigSchemaAndLensTest {
         var retriesLens = RecordLensBuilder.lens(General.class, General::retries);
 
         RootConfig source = new RootConfig(new General(true, 1), Optional.empty(), "x");
-        RootConfig toggled = innerLens.compose(enabledLens).update(source, value -> !value);
-        RootConfig retried = innerLens.compose(retriesLens).update(source, value -> value + 2);
+        RootConfig toggled = innerLens.andThen(enabledLens).modify(value -> !value, source);
+        RootConfig retried = innerLens.andThen(retriesLens).modify(value -> value + 2, source);
 
         assertFalse(toggled.general().enabled());
         assertEquals(3, retried.general().retries());
     }
 
     @Test
-    void primitiveUpdateApisWorkOnTypedLenses() {
+    void generatedAccessorsUpdatePrimitiveComponents() {
         var innerLens = RecordLensBuilder.lens(RootConfig.class, RootConfig::general);
         var enabledLens = RecordLensBuilder.lens(General.class, General::enabled);
         var retriesLens = RecordLensBuilder.lens(General.class, General::retries);
-        var deepRetriesLens = innerLens.compose(retriesLens);
-        var deepEnabledLens = innerLens.compose(enabledLens);
-        var intLens = deepRetriesLens.asInt();
-        var boolLens = deepEnabledLens.asBoolean();
+        var deepRetriesLens = innerLens.andThen(retriesLens);
+        var deepEnabledLens = innerLens.andThen(enabledLens);
 
         RootConfig source = new RootConfig(new General(true, 2), Optional.empty(), "x");
-        RootConfig retried = intLens.update(source, value -> value + 5);
-        RootConfig toggled = boolLens.update(source, value -> !value);
+        RootConfig retried = deepRetriesLens.modify(value -> value + 5, source);
+        RootConfig toggled = deepEnabledLens.modify(value -> !value, source);
 
         assertEquals(7, retried.general().retries());
         assertFalse(toggled.general().enabled());
@@ -94,12 +92,12 @@ class ConfigSchemaAndLensTest {
                 ).apply(schema, RootConfig::new)
         );
 
-        var rootLens = definition.lens(MethodHandles.lookup(), RootConfig::general);
+        var rootLens = RecordLensBuilder.lens(MethodHandles.lookup(), RootConfig.class, RootConfig::general);
         var retriesLens = RecordLensBuilder.lens(MethodHandles.lookup(), General.class, General::retries);
-        var composed = rootLens.compose(retriesLens);
+        var composed = rootLens.andThen(retriesLens);
         RootConfig source = new RootConfig(new General(true, 2), Optional.empty(), "x");
 
-        RootConfig updated = composed.update(source, value -> value + 4);
+        RootConfig updated = composed.modify(value -> value + 4, source);
         assertEquals(6, updated.general().retries());
     }
 
