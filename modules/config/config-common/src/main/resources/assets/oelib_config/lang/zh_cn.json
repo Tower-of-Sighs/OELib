@@ -1,0 +1,8 @@
+{
+  "config.oelib.title": "OELib 配置",
+  "config.oelib.reset": "重置",
+  "config.oelib.search": "搜索...",
+  "config.oelib.done": "保存并退出",
+  "config.oelib.unsaved.title": "存在未保存更改",
+  "config.oelib.unsaved.message": "你有未保存的配置更改，是否保存后退出？"
+}

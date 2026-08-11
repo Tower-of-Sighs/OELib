@@ -1,5 +1,4 @@
-import groovy.util.Node
-import groovy.util.NodeList
+import cc.sighs.gradle.ModuleDependenciesExtension
 
 plugins {
     `java-library`
@@ -9,28 +8,24 @@ plugins {
 val modId: String = property("mod_id") as String
 val modName: String = property("mod_name") as String
 val modAuthor: String = property("mod_author") as String
-val modVersion: String = property("mod_version") as String
 val mcVersion: String = property("minecraft_version") as String
 val mcVersionRange: String = property("minecraft_version_range") as String
-val mavenGroup: String = property("maven_group") as String
 val javaVersion: String = property("java_version") as String
-val fabricVersion: String = property("fabric_api_version") as String
+val fabricVersion: String = property("fabric_version") as String
 val fabricLoaderVersion: String = property("fabric_loader_version") as String
-val forgeVersion: String = property("forge_version") as String
-val forgeLoaderVersionRange: String = property("forge_loader_version_range") as String
+val forge_version: String by project
+val forge_loader_version_range: String by project
 val licenseVal: String = property("license") as String
 val creditsVal: String = findProperty("credits") as String? ?: ""
 
-project.group = mavenGroup
-project.version = modVersion
-
 base {
-    archivesName = "${modName}-${project.name}-${mcVersion}-${modVersion}"
+    archivesName = "${modId}-${project.name}-${mcVersion}"
 }
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(javaVersion)
     withSourcesJar()
+//    withJavadocJar()
 }
 
 repositories {
@@ -61,14 +56,20 @@ repositories {
         name = "BlameJared"
         url = uri("https://maven.blamejared.com")
     }
+    maven {
+        url = uri("https://maven.sighs.cc/repository/maven-releases/")
+    }
+    maven {
+        url = uri("https://maven.sighs.cc/repository/maven-snapshots/")
+    }
 }
 
 listOf("apiElements", "runtimeElements", "sourcesElements").forEach { variant ->
     configurations.getByName(variant).outgoing {
-        capability("${mavenGroup}:${project.name}:${modVersion}")
-        capability("${mavenGroup}:${base.archivesName.get()}:${modVersion}")
-        capability("${mavenGroup}:${modId}-${project.name}-${mcVersion}:${modVersion}")
-        capability("${mavenGroup}:${modId}:${modVersion}")
+        capability("${project.group}:${project.name}:${project.version}")
+        capability("${project.group}:${base.archivesName.get()}:${project.version}")
+        capability("${project.group}:${modId}-${project.name}-${mcVersion}:${project.version}")
+        capability("${project.group}:${modId}:${project.version}")
     }
 }
 
@@ -99,7 +100,7 @@ tasks.named<Jar>("jar") {
 
 tasks.named<ProcessResources>("processResources") {
     val expandProps = mapOf(
-        "version" to modVersion,
+        "version" to project.version,
         "group" to project.group,
         "minecraft_version" to mcVersion,
         "minecraft_version_range" to mcVersionRange,
@@ -110,8 +111,8 @@ tasks.named<ProcessResources>("processResources") {
         "mod_id" to modId,
         "license" to licenseVal,
         "description" to (project.description ?: ""),
-        "forge_version" to forgeVersion,
-        "forge_loader_version_range" to forgeLoaderVersionRange,
+        "forge_version" to forge_version,
+        "forge_loader_version_range" to forge_loader_version_range,
         "credits" to creditsVal,
         "java_version" to javaVersion
     )
@@ -131,11 +132,10 @@ tasks.named<ProcessResources>("processResources") {
     inputs.properties(expandProps)
 }
 
-extra["mavenDependencyWhitelist"] = emptySet<String>()
-
-fun childText(node: Node, name: String): String {
+// Extract text from a POM node's child element, handling namespace prefixes
+fun childText(node: groovy.util.Node, name: String): String {
     for (child in node.children()) {
-        if (child is Node) {
+        if (child is groovy.util.Node) {
             val cn = child.name().toString()
             if (cn.endsWith("}$name") || cn == name) {
                 val v = child.value()
@@ -150,92 +150,55 @@ fun childText(node: Node, name: String): String {
     return ""
 }
 
-extensions.configure<PublishingExtension> {
-    repositories {
-        val localMavenUrl = providers.environmentVariable("local_maven_url").orNull
-        if (!localMavenUrl.isNullOrBlank()) {
-            maven {
-                url = uri(localMavenUrl)
-            }
-        }
+// Maven dependency whitelist for POM filtering
+extra["mavenDependencyWhitelist"] = emptyList<String>()
 
-        maven {
-            name = "remoteRepo"
-            url = uri(provider {
-                val currentVersion = project.version.toString()
-                if (currentVersion.contains("snapshot", ignoreCase = true)) {
-                    "https://maven.sighs.cc/repository/maven-snapshots/"
-                } else {
-                    "https://maven.sighs.cc/repository/maven-releases/"
-                }
-            })
-            credentials {
-                username = providers.environmentVariable("SIGHS_PUBLISH_USER").orNull
-                password = providers.environmentVariable("SIGHS_PUBLISH_PASSWORD").orNull
-            }
-        }
-    }
-
+publishing {
     publications {
         register<MavenPublication>("mavenJava") {
-            artifactId = "${modName}-${project.name}-${mcVersion}"
+            artifactId = base.archivesName.get()
             from(components["java"])
 
             pom.withXml {
+                val xml = asNode()
+                val depsNode = xml.children().filterIsInstance<groovy.util.Node>()
+                    .find { it.name().toString().endsWith("}dependencies") || it.name().toString() == "dependencies" }
+                    ?: (xml.appendNode("dependencies") as groovy.util.Node)
+
+                // 1) Whitelist filtering (only when non-empty)
                 @Suppress("UNCHECKED_CAST")
                 val raw = project.extra["mavenDependencyWhitelist"] as? Iterable<*> ?: emptyList<Any>()
                 val whitelist = raw.map { it.toString().trim() }.filter { it.isNotEmpty() }.toSet()
-                if (whitelist.isEmpty()) return@withXml
+                if (whitelist.isNotEmpty()) {
+                    fun match(g: String, a: String) =
+                        whitelist.contains(g) || whitelist.contains(a) || whitelist.contains("$g:$a")
 
-                fun match(g: String, a: String) =
-                    whitelist.contains(g) || whitelist.contains(a) || whitelist.contains("$g:$a")
-
-                val xml = asNode()
-                val depsRaw = xml.get("dependencies")
-                val depsNode = when (depsRaw) {
-                    is Node -> depsRaw
-                    is NodeList -> depsRaw.find { it is Node } as? Node
-                    else -> null
-                }
-
-                if (depsNode != null) {
-                    val toRemove = depsNode.children()
-                        .filterIsInstance<Node>()
+                    val toRemove = depsNode.children().filterIsInstance<groovy.util.Node>()
                         .filterNot { match(childText(it, "groupId"), childText(it, "artifactId")) }
                     toRemove.forEach { depsNode.remove(it) }
-                }
 
-                val declared = linkedMapOf<String, Triple<String, String, String>>()
-                for ((cfgName, scope) in listOf(
-                    "api" to "compile", "implementation" to "runtime",
-                    "runtimeOnly" to "runtime", "compileOnly" to "compile"
-                )) {
-                    project.configurations.findByName(cfgName)?.dependencies
-                        ?.withType(ExternalModuleDependency::class.java)
-                        ?.forEach { dep ->
-                            val g = dep.group?.trim().orEmpty()
-                            val a = dep.name?.trim().orEmpty()
-                            val v = dep.version?.trim().orEmpty()
-                            if (g.isEmpty() || a.isEmpty() || v.isEmpty() || !match(g, a)) return@forEach
-                            val key = "$g:$a"
-                            if (!declared.containsKey(key) || scope == "compile") {
-                                declared[key] = Triple(g, a, v)
+                    val declared = linkedMapOf<String, Triple<String, String, String>>()
+                    for ((cfgName, scope) in listOf(
+                        "api" to "compile", "implementation" to "runtime",
+                        "runtimeOnly" to "runtime", "compileOnly" to "compile"
+                    )) {
+                        project.configurations.findByName(cfgName)?.dependencies
+                            ?.withType(ExternalModuleDependency::class.java)
+                            ?.forEach { dep ->
+                                val g = dep.group?.trim() ?: ""
+                                val a = dep.name?.trim() ?: ""
+                                val v = dep.version?.toString()?.trim() ?: ""
+                                if (g.isEmpty() || a.isEmpty() || v.isEmpty() || !match(g, a)) return@forEach
+                                val key = "$g:$a"
+                                if (!declared.containsKey(key) || scope == "compile") {
+                                    declared[key] = Triple(g, a, v)
+                                }
                             }
-                        }
-                }
+                    }
 
-                if (declared.isEmpty()) return@withXml
-
-                val depNode = depsNode ?: (xml.appendNode("dependencies") as Node)
-                val existingKeys = depNode.children()
-                    .filterIsInstance<Node>()
-                    .map { "${childText(it, "groupId")}:${childText(it, "artifactId")}" }
-                    .toSet()
-
-                for (info in declared.values) {
-                    val key = "${info.first}:${info.second}"
-                    if (!existingKeys.contains(key)) {
-                        depNode.appendNode("dependency").apply {
+                    for (info in declared.values) {
+                        val key = "${info.first}:${info.second}"
+                        depsNode.appendNode("dependency").apply {
                             appendNode("groupId", info.first)
                             appendNode("artifactId", info.second)
                             appendNode("version", info.third)
@@ -244,7 +207,53 @@ extensions.configure<PublishingExtension> {
                     }
                 }
 
-                if (depNode.children().isEmpty()) xml.remove(depNode)
+                // 2) Always add moduleDependencies (no filtering, skip duplicates)
+                @Suppress("UNCHECKED_CAST")
+                val moduleApiDeps = project.extra.properties["_moduleDepsApi"] as? List<String> ?: emptyList()
+                if (moduleApiDeps.isNotEmpty()) {
+                    val suffix = ModuleDependenciesExtension.getSuffix(project.name)
+                    val existingArtifacts = depsNode.children().filterIsInstance<groovy.util.Node>()
+                        .map { "${childText(it, "groupId")}:${childText(it, "artifactId")}" }.toSet()
+                    for (dep in moduleApiDeps) {
+                        val depProj = project(":modules:$dep:$dep-$suffix")
+                        val coord = "${depProj.group}:${depProj.name}"
+                        if (!existingArtifacts.contains(coord)) {
+                            depsNode.appendNode("dependency").apply {
+                                appendNode("groupId", depProj.group)
+                                appendNode("artifactId", depProj.name)
+                                appendNode("version", depProj.version)
+                                appendNode("scope", "compile")
+                            }
+                        }
+                    }
+                }
+
+                if (depsNode.children().isEmpty()) xml.remove(depsNode)
+            }
+        }
+    }
+    repositories {
+        val localMavenUrl = providers.environmentVariable("local_maven_url").orNull
+        if (!localMavenUrl.isNullOrBlank()) {
+            maven {
+                url = uri(localMavenUrl)
+            }
+        }
+
+        val modVersion = project.version.toString().ifBlank { "unknown" }
+        val isSnapshot = modVersion.contains("snapshot", ignoreCase = true)
+        val publishUrl = if (isSnapshot) {
+            "https://maven.sighs.cc/repository/maven-snapshots/"
+        } else {
+            "https://maven.sighs.cc/repository/maven-releases/"
+        }
+
+        maven {
+            name = "remoteRepo"
+            url = uri(publishUrl)
+            credentials {
+                username = providers.environmentVariable("SIGHS_PUBLISH_USER").orNull
+                password = providers.environmentVariable("SIGHS_PUBLISH_PASSWORD").orNull
             }
         }
     }

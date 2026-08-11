@@ -25,3 +25,8 @@ mandatory = true
 versionRange = "[1.20.1,)"
 ordering = "NONE"
 side = "BOTH"
+
+[[mixins]]
+config = "oelib.mixins.json"
+[[mixins]]
+config = "oelib.forge.mixins.json"

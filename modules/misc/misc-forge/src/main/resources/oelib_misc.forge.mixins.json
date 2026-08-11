@@ -1,0 +1,15 @@
+{
+    "required": true,
+    "minVersion": "0.8",
+    "package": "cc.sighs.oelib.misc.forge.mixin",
+    "compatibilityLevel": "JAVA_21",
+    "refmap": "${mod_id}.refmap.json",
+    "mixins": [],
+    "client": [
+        "ForgeIconHandlerMixin"
+    ],
+    "server": [],
+    "injectors": {
+        "defaultRequire": 1
+    }
+}

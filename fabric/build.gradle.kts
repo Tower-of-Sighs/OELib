@@ -6,10 +6,10 @@ plugins {
 val modId: String = property("mod_id") as String
 val mcVersion: String = property("minecraft_version") as String
 val fabricLoaderVer: String = property("fabric_loader_version") as String
-val fabricApiVer: String = property("fabric_api_version") as String
-val modmenuVer: String = property("modmenu_version") as String
-val parchmentMC: String = property("parchment_minecraft") as String
+val fabricApiVer: String = property("fabric_version") as String
+val parchmentMc: String = property("parchment_minecraft") as String
 val parchmentVer: String = property("parchment_version") as String
+val modmenuVer: String = property("modmenu_version") as String
 val jeiVer: String = property("jei_version") as String
 
 repositories {
@@ -23,38 +23,40 @@ dependencies {
     minecraft("com.mojang:minecraft:${mcVersion}")
     mappings(loom.layered {
         officialMojangMappings()
-        parchment("org.parchmentmc.data:parchment-${parchmentMC}:${parchmentVer}@zip")
+        parchment("org.parchmentmc.data:parchment-${parchmentMc}:${parchmentVer}@zip")
     })
     modImplementation("net.fabricmc:fabric-loader:${fabricLoaderVer}")
     modImplementation("net.fabricmc.fabric-api:fabric-api:${fabricApiVer}")
-    modImplementation("com.terraformersmc:modmenu:${modmenuVer}")
 //    modImplementation("mezz.jei:jei-${mcVersion}-fabric:${jeiVer}")
 
-    implementation("cn.6tail:lunar:1.7.3")
-    implementation("com.electronwill.night-config:toml:3.8.3")
-    implementation("de.marhali:json5-java:3.0.0")
-    implementation("org.mvel:mvel2:2.5.0.Final")
-    implementation("io.smallrye.classfile:jdk-classfile-backport:26")
+    // The final JiJ stays self-contained, while these module dependencies remain
+    // available transitively for Loom's development-time remapping and compilation.
+    // Platform dependencies such as Fabric Loader/API are intentionally omitted.
+    extra["mavenDependencyWhitelist"] = listOf("cc.sighs.oelib")
 
-    annotationProcessor(project(":common"))
+    // Jar-in-Jar: embed all module Fabric subprojects
+    @Suppress("UNCHECKED_CAST")
+    val discoveredModules = rootProject.extra["discoveredModules"] as? Map<String, File> ?: emptyMap()
+    for ((name, _) in discoveredModules) {
+        val path = ":modules:${name}:${name}-fabric"
+        try {
+            val targetProject = project(path)
 
-    include("cn.6tail:lunar:1.7.3")
-    include("com.electronwill.night-config:core:3.8.3")
-    include("com.electronwill.night-config:toml:3.8.3")
-    include("de.marhali:json5-java:3.0.0")
-    include("io.smallrye.classfile:jdk-classfile-backport:26")
+            include(targetProject)
+            // compileOnly keeps embedded module jars off the development runtime
+            // classpath (their remapped AWs would otherwise clash with the named
+            // dev environment); dev runtime classes come from loom.mods source sets.
+            compileOnly(targetProject)
+        } catch (_: UnknownProjectException) {
+        }
+    }
 }
 
-extra["mavenDependencyWhitelist"] = listOf(
-    "cn.6tail",
-    "de.marhali",
-    "com.electronwill.night-config",
-    "org.mvel",
-    "io.smallrye.classfile"
-)
-
 loom {
-    accessWidenerPath = project(":common").file("src/main/resources/oelib.accesswidener")
+    val aw = project(":common").file("src/main/resources/${modId}.accesswidener")
+    if (aw.exists()) {
+        accessWidenerPath = aw
+    }
     mixin {
         defaultRefmapName = "${modId}.refmap.json"
     }
@@ -71,5 +73,21 @@ loom {
             ideConfigGenerated(true)
             runDir("run")
         }
+    }
+}
+
+// Register each module fabric source set as a mod so AW/mixin are processed in dev
+// (registered at configuration time; afterEvaluate is too late for Loom's run setup)
+@Suppress("UNCHECKED_CAST")
+val discoveredModulesForMods = rootProject.extra["discoveredModules"] as? Map<String, File> ?: emptyMap()
+discoveredModulesForMods.forEach { (name, _) ->
+    try {
+        val proj = project(":modules:$name:${name}-fabric")
+        project.evaluationDependsOn(proj.path)
+        loom.mods.register("oelib_$name") {
+            sourceSet(proj.sourceSets.main.get())
+        }
+    } catch (_: Exception) {
+        // Skip if module not available or not fabric
     }
 }

@@ -1,0 +1,9 @@
+package cc.sighs.oelib.dev.fabric;
+
+import net.fabricmc.api.ClientModInitializer;
+
+public class OELibDevFabricClient implements ClientModInitializer {
+    @Override
+    public void onInitializeClient() {
+    }
+}

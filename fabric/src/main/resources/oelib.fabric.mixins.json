@@ -2,17 +2,10 @@
   "required": true,
   "minVersion": "0.8",
   "package": "cc.sighs.oelib.fabric.mixin",
-  "plugin": "cc.sighs.oelib.fabric.mixin.MixinPlugin",
-  "compatibilityLevel": "JAVA_17",
+  "compatibilityLevel": "JAVA_21",
   "mixins": [
   ],
   "client": [
-    "FabricIconHandlerMixin",
-    "event.EffectRenderingInventoryScreenMixin",
-    "event.KeyboardHandlerMixin",
-    "event.MinecraftMixin",
-    "event.MouseHandlerMixin",
-    "event.ScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1

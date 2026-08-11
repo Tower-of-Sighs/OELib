@@ -6,15 +6,8 @@ plugins {
 val modId: String = property("mod_id") as String
 val mcVersion: String = property("minecraft_version") as String
 val forgeVer: String = property("forge_version") as String
-val parchmentMC: String = property("parchment_minecraft") as String
-val parchmentVer: String =  property("parchment_version") as String
-val jeiVer: String = property("jei_version") as String
-
-mixin {
-    add(sourceSets.main.get(), "${modId}.refmap.json")
-    config("${modId}.mixins.json")
-    config("${modId}.forge.mixins.json")
-}
+val parchmentMc: String = property("parchment_minecraft") as String
+val parchmentVer: String = property("parchment_version") as String
 
 legacyForge {
     version = "${mcVersion}-${forgeVer}"
@@ -25,7 +18,7 @@ legacyForge {
     }
 
     parchment {
-        minecraftVersion = parchmentMC
+        minecraftVersion = parchmentMc
         mappingsVersion = parchmentVer
     }
 
@@ -63,32 +56,40 @@ sourceSets.named("main") {
 
 dependencies {
     annotationProcessor("org.spongepowered:mixin:0.8.5-SNAPSHOT:processor")
-    annotationProcessor(project(":common"))
-
-//    modImplementation("mezz.jei:jei-${mcVersion}-forge:${jeiVer}")
-
-    implementation("cn.6tail:lunar:1.7.3")
-    implementation("de.marhali:json5-java:3.0.0")
-    implementation("org.mvel:mvel2:2.5.0.Final")
-    implementation("io.smallrye.classfile:jdk-classfile-backport:26")
-
-    jarJar("cn.6tail:lunar:1.7.3")
-    jarJar("de.marhali:json5-java:3.0.0")
-    jarJar("io.smallrye.classfile:jdk-classfile-backport:26")
 
     compileOnly("org.jetbrains:annotations:24.1.0")
 
-    "additionalRuntimeClasspath"("cn.6tail:lunar:1.7.3")
-    "additionalRuntimeClasspath"("de.marhali:json5-java:3.0.0")
-    "additionalRuntimeClasspath"("io.smallrye.classfile:jdk-classfile-backport:26")
+    // Keep the final JarJar self-contained, but publish the embedded OEL modules as
+    // compile dependencies as well. ModDev loads JarJar entries at game runtime;
+    // javac does not treat nested jars as compile-classpath entries.
+    extra["mavenDependencyWhitelist"] = listOf("cc.sighs.oelib")
+
+    // Jar-in-Jar: embed all module Forge subprojects
+    @Suppress("UNCHECKED_CAST")
+    val discoveredModules = rootProject.extra["discoveredModules"] as? Map<String, File> ?: emptyMap()
+    for ((name, _) in discoveredModules) {
+        val path = ":modules:${name}:${name}-forge"
+        try {
+            val targetProject = project(path)
+
+            jarJar(targetProject)
+            api(targetProject)
+        } catch (_: UnknownProjectException) {
+        }
+    }
 }
 
-extra["mavenDependencyWhitelist"] = listOf(
-    "cn.6tail",
-    "de.marhali",
-    "org.mvel",
-    "io.smallrye.classfile"
-)
+tasks.named<JavaCompile>("compileJava") {
+    // Ensure module reobfJar outputs (used via api/jarJar) are built before this compile
+    @Suppress("UNCHECKED_CAST")
+    val discoveredModules = rootProject.extra["discoveredModules"] as? Map<String, File> ?: emptyMap()
+    for ((name, _) in discoveredModules) {
+        try {
+            dependsOn(":modules:$name:${name}-forge:reobfJar")
+        } catch (_: UnknownProjectException) {
+        }
+    }
+}
 
 tasks.named<Jar>("jar") {
     finalizedBy("reobfJar")
@@ -98,5 +99,35 @@ tasks.named<Jar>("jar") {
                 "MixinConfigs" to "${modId}.mixins.json,${modId}.forge.mixins.json"
             )
         )
+    }
+
+    // Strip MDG's group. prefix from embedded JAR filenames in jarJar output
+    // (MDG hardcodes {group}.{filename} for project deps; we want clean names like Fabric)
+    doFirst {
+        val jarjarDir = project.layout.buildDirectory.dir("generated/jarJar/META-INF/jarjar").get().asFile
+        if (!jarjarDir.exists()) return@doFirst
+        val metaFile = File(jarjarDir, "metadata.json")
+        if (!metaFile.exists()) return@doFirst
+        val meta = metaFile.readText()
+        val artifactR = Regex(""""artifact"\s*:\s*"([^"]+)"""")
+        val pathR = Regex(""""path"\s*:\s*"([^"]+)"""")
+        val artifacts = artifactR.findAll(meta).map { it.groupValues[1] }.toList()
+        val paths = pathR.findAll(meta).map { it.groupValues[1] }.toList()
+        val renames = linkedMapOf<String, String>()
+        for (idx in artifacts.indices) {
+            val path = paths.getOrNull(idx) ?: continue
+            val oldFile = path.substringAfterLast("/")
+            val marker = "${artifacts[idx]}-"
+            val mIdx = oldFile.indexOf(marker)
+            if (mIdx > 0) renames[oldFile] = oldFile.substring(mIdx)
+        }
+        for ((oldName, newName) in renames) {
+            File(jarjarDir, oldName).renameTo(File(jarjarDir, newName))
+        }
+        if (renames.isNotEmpty()) {
+            var newMeta = meta
+            for ((oldName, newName) in renames) newMeta = newMeta.replace(oldName, newName)
+            metaFile.writeText(newMeta)
+        }
     }
 }

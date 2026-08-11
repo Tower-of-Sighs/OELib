@@ -1,0 +1,163 @@
+package cc.sighs.oelib.config.model;
+
+import net.minecraft.resources.ResourceLocation;
+
+import java.util.Objects;
+
+/**
+ * Configuration metadata consumed by the I/O and UI layers.
+ *
+ * <p>An {@code ConfigMeta} instance describes where and how a configuration
+ * is persisted: its storage filename, serialization format, logical side
+ * (client or server), and an optional sub-directory under the platform
+ * config root.
+ *
+ * <p>Instances are created through the {@link Builder}, which is obtained via
+ * {@link #builder(ResourceLocation)}.
+ */
+public final class ConfigMeta {
+    private final ResourceLocation id;
+    private final String fileName;
+    private final ConfigStorageFormat format;
+    private final ConfigSide side;
+    private final String directory;
+
+    private ConfigMeta(Builder builder) {
+        this.id = builder.id;
+        this.fileName = builder.fileName;
+        this.format = builder.format;
+        this.side = builder.side;
+        this.directory = builder.directory;
+    }
+
+    /**
+     * Creates a new builder for the given configuration id.
+     *
+     * @param id the configuration id
+     * @return a new builder
+     */
+    public static Builder builder(ResourceLocation id) {
+        Objects.requireNonNull(id);
+        return new Builder(id);
+    }
+
+    /**
+     * Returns the configuration id.
+     *
+     * @return the ResourceLocation
+     */
+    public ResourceLocation id() {
+        return id;
+    }
+
+    /**
+     * Returns the storage filename, without directories.
+     *
+     * @return the filename
+     */
+    public String fileName() {
+        return fileName;
+    }
+
+    /**
+     * Returns the serialization format.
+     *
+     * @return the format
+     */
+    public ConfigStorageFormat format() {
+        return format;
+    }
+
+    /**
+     * Returns the logical side this configuration belongs to.
+     *
+     * @return the side
+     */
+    public ConfigSide side() {
+        return side;
+    }
+
+    /**
+     * Returns the sub-directory under the platform config root,
+     * or {@code null} for the root directory.
+     *
+     * @return the directory path, or {@code null}
+     */
+    public String directory() {
+        return directory;
+    }
+
+    /**
+     * Mutable builder for {@link ConfigMeta}.
+     *
+     * <p>Defaults: format is {@link ConfigStorageFormat#TOML}, side is
+     * {@link ConfigSide#SERVER}, filename is derived from the
+     * ResourceLocation's path component.
+     */
+    public static final class Builder {
+        private final ResourceLocation id;
+        private String fileName;
+        private ConfigStorageFormat format = ConfigStorageFormat.TOML;
+        private ConfigSide side = ConfigSide.SERVER;
+        private String directory;
+
+        private Builder(ResourceLocation id) {
+            this.id = id;
+            this.fileName = id.getPath();
+        }
+
+        /**
+         * Sets the storage filename.
+         *
+         * @param fileName the filename, without directory components
+         * @return this builder
+         */
+        public Builder fileName(String fileName) {
+            this.fileName = fileName;
+            return this;
+        }
+
+        /**
+         * Sets the serialization format.
+         *
+         * @param format the format
+         * @return this builder
+         */
+        public Builder format(ConfigStorageFormat format) {
+            this.format = format;
+            return this;
+        }
+
+        /**
+         * Sets the logical side.
+         *
+         * @param side the side
+         * @return this builder
+         */
+        public Builder side(ConfigSide side) {
+            this.side = side;
+            return this;
+        }
+
+        /**
+         * Sets a sub-directory relative to the platform config root.
+         * Multi-level paths (for example {@code "a/b/c"}) are accepted.
+         *
+         * @param directory the sub-directory path, or {@code null} to use the root
+         * @return this builder
+         */
+        public Builder directory(String directory) {
+            this.directory = directory;
+            return this;
+        }
+
+        /**
+         * Builds the metadata instance.
+         *
+         * @return the new {@link ConfigMeta}
+         */
+        public ConfigMeta build() {
+            return new ConfigMeta(this);
+        }
+    }
+}

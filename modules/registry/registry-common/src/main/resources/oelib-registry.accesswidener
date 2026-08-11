@@ -1,0 +1,28 @@
+accessWidener v2 named
+
+transitive-accessible	field	net/minecraft/world/item/CreativeModeTabs	BUILDING_BLOCKS	Lnet/minecraft/resources/ResourceKey;
+transitive-accessible	field	net/minecraft/world/item/CreativeModeTabs	COLORED_BLOCKS	Lnet/minecraft/resources/ResourceKey;
+transitive-accessible	field	net/minecraft/world/item/CreativeModeTabs	NATURAL_BLOCKS	Lnet/minecraft/resources/ResourceKey;
+transitive-accessible	field	net/minecraft/world/item/CreativeModeTabs	FUNCTIONAL_BLOCKS	Lnet/minecraft/resources/ResourceKey;
+transitive-accessible	field	net/minecraft/world/item/CreativeModeTabs	REDSTONE_BLOCKS	Lnet/minecraft/resources/ResourceKey;
+transitive-accessible	field	net/minecraft/world/item/CreativeModeTabs	HOTBAR	Lnet/minecraft/resources/ResourceKey;
+transitive-accessible	field	net/minecraft/world/item/CreativeModeTabs	SEARCH	Lnet/minecraft/resources/ResourceKey;
+transitive-accessible	field	net/minecraft/world/item/CreativeModeTabs	TOOLS_AND_UTILITIES	Lnet/minecraft/resources/ResourceKey;
+transitive-accessible	field	net/minecraft/world/item/CreativeModeTabs	COMBAT	Lnet/minecraft/resources/ResourceKey;
+transitive-accessible	field	net/minecraft/world/item/CreativeModeTabs	FOOD_AND_DRINKS	Lnet/minecraft/resources/ResourceKey;
+transitive-accessible	field	net/minecraft/world/item/CreativeModeTabs	INGREDIENTS	Lnet/minecraft/resources/ResourceKey;
+transitive-accessible	field	net/minecraft/world/item/CreativeModeTabs	SPAWN_EGGS	Lnet/minecraft/resources/ResourceKey;
+transitive-accessible	field	net/minecraft/world/item/CreativeModeTabs	OP_BLOCKS	Lnet/minecraft/resources/ResourceKey;
+transitive-accessible	field	net/minecraft/world/item/CreativeModeTabs	INVENTORY	Lnet/minecraft/resources/ResourceKey;
+accessible	field	net/minecraft/world/item/CreativeModeTabs	CACHED_PARAMETERS	Lnet/minecraft/world/item/CreativeModeTab$ItemDisplayParameters;
+transitive-accessible	class	net/minecraft/world/item/CreativeModeTab$TabVisibility
+transitive-accessible	class	net/minecraft/world/item/CreativeModeTab$Output
+transitive-accessible	class	net/minecraft/world/item/CreativeModeTab$ItemDisplayBuilder
+
+transitive-accessible	class	net/minecraft/world/inventory/MenuType$MenuSupplier
+transitive-extendable	method	net/minecraft/world/inventory/MenuType	<init>	(Lnet/minecraft/world/inventory/MenuType$MenuSupplier;Lnet/minecraft/world/flag/FeatureFlagSet;)V
+transitive-accessible	method	net/minecraft/world/inventory/MenuType	<init>	(Lnet/minecraft/world/inventory/MenuType$MenuSupplier;Lnet/minecraft/world/flag/FeatureFlagSet;)V
+transitive-accessible	class	net/minecraft/client/gui/screens/MenuScreens$ScreenConstructor
+transitive-accessible	method	net/minecraft/client/gui/screens/MenuScreens	register	(Lnet/minecraft/world/inventory/MenuType;Lnet/minecraft/client/gui/screens/MenuScreens$ScreenConstructor;)V
+transitive-accessible	method	net/minecraft/client/gui/screens/MenuScreens	getConstructor	(Lnet/minecraft/world/inventory/MenuType;)Lnet/minecraft/client/gui/screens/MenuScreens$ScreenConstructor;
+transitive-accessible	field	net/minecraft/world/SimpleMenuProvider	menuConstructor	Lnet/minecraft/world/inventory/MenuConstructor;
