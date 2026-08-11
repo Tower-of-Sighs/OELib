@@ -2,7 +2,7 @@ plugins {
     id("multiloader-common")
 }
 
-val mavenGroup: String = property("maven_group") as String
+val mavenGroup: String = property("group") as String
 val modId: String = property("mod_id") as String
 
 configurations {
@@ -32,8 +32,13 @@ tasks.named<JavaCompile>("compileJava") {
 tasks.named<ProcessResources>("processResources") {
     dependsOn(configurations.getByName("commonResources"))
     from(configurations.getByName("commonResources"))
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
+tasks.named<Javadoc>("javadoc") {
+    dependsOn(configurations.getByName("commonJava"))
+    source(configurations.getByName("commonJava"))
+}
 
 tasks.named<Jar>("sourcesJar") {
     dependsOn(configurations.getByName("commonJava"))
