@@ -1,13 +1,20 @@
+import cc.sighs.gradle.configureJarJarFilenameNormalization
+import cc.sighs.gradle.registerGeneratedResources
+
 plugins {
     id("multiloader-loader")
     id("net.neoforged.moddev")
 }
 
 val modId: String = property("mod_id") as String
-val mcVersion: String = property("minecraft_version") as String
 val neoVer: String = property("neoforge_version") as String
 val parchmentMc: String = property("parchment_minecraft") as String
 val parchmentVer: String = property("parchment_version") as String
+
+// Keep the final JarJar self-contained, but publish the embedded OEL modules as
+// compile dependencies as well. ModDev loads JarJar entries at game runtime;
+// javac does not treat nested jars as compile-classpath entries.
+extra["mavenDependencyWhitelist"] = listOf("cc.sighs.oelib")
 
 neoForge {
     version = neoVer
@@ -43,9 +50,7 @@ neoForge {
     }
 }
 
-sourceSets.named("main") {
-    resources.srcDir("src/generated/resources")
-}
+registerGeneratedResources()
 
 dependencies {
     compileOnly("org.jetbrains:annotations:24.1.0")
@@ -60,43 +65,15 @@ dependencies {
             val targetProject = project(path)
 
             jarJar(targetProject)
-            implementation(targetProject)
+            api(targetProject)
         } catch (_: UnknownProjectException) {
         }
     }
 }
 
 tasks.named<Jar>("jar") {
-
     manifest {
     }
-    // Strip MDG's group. prefix from embedded JAR filenames in jarJar output
-    // (MDG hardcodes {group}.{filename} for project deps; we want clean names like Fabric)
-    doFirst {
-        val jarjarDir = project.layout.buildDirectory.dir("generated/jarJar/META-INF/jarjar").get().asFile
-        if (!jarjarDir.exists()) return@doFirst
-        val metaFile = File(jarjarDir, "metadata.json")
-        if (!metaFile.exists()) return@doFirst
-        val meta = metaFile.readText()
-        val artifactR = Regex(""""artifact"\s*:\s*"([^"]+)"""")
-        val pathR = Regex(""""path"\s*:\s*"([^"]+)"""")
-        val artifacts = artifactR.findAll(meta).map { it.groupValues[1] }.toList()
-        val paths = pathR.findAll(meta).map { it.groupValues[1] }.toList()
-        val renames = linkedMapOf<String, String>()
-        for (idx in artifacts.indices) {
-            val path = paths.getOrNull(idx) ?: continue
-            val oldFile = path.substringAfterLast("/")
-            val marker = "${artifacts[idx]}-"
-            val mIdx = oldFile.indexOf(marker)
-            if (mIdx > 0) renames[oldFile] = oldFile.substring(mIdx)
-        }
-        for ((oldName, newName) in renames) {
-            File(jarjarDir, oldName).renameTo(File(jarjarDir, newName))
-        }
-        if (renames.isNotEmpty()) {
-            var newMeta = meta
-            for ((oldName, newName) in renames) newMeta = newMeta.replace(oldName, newName)
-            metaFile.writeText(newMeta)
-        }
-    }
 }
+
+configureJarJarFilenameNormalization()

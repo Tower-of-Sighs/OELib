@@ -1,27 +1,24 @@
 package cc.sighs.oelib.config;
 
 import cc.sighs.oelib.config.model.ConfigValueMeta;
+import com.flechazo.optics.LensGetter;
 import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * Scoped state carrier active during configuration schema definition.
+ * Provides the active state of a configuration schema definition.
  *
- * <p>A {@code ConfigContext} is bound as a {@link ThreadLocal} while a
- * {@link ConfigSchema} or {@link ConfigRecordCodecBuilder} call tree is
- * executing. It carries the current configuration id, the current
- * record class, an accumulator for {@link ConfigValueMeta} entries, and a
- * dotted path prefix used to qualify keys for nested records.
- *
- * <p>Callers outside the schema-definition flow may query whether a context
- * is currently active via {@link #isActive()}, but mutation methods such as
- * {@link #recordMeta(ConfigValueMeta)} require an active context and throw
- * {@link IllegalStateException} otherwise.
+ * <p>Schema builders use this context to qualify nested field paths, collect field descriptors,
+ * and associate record accessors with the complete configuration value. Context queries return
+ * their documented empty value when no definition is active.
  */
+@ApiStatus.Internal
 public final class ConfigContext {
     private static final ThreadLocal<Frame> CURRENT = new ThreadLocal<>();
 
@@ -29,35 +26,29 @@ public final class ConfigContext {
     }
 
     /**
-     * Executes the given supplier with a root-level configuration context
-     * bound to the current thread.
+     * Evaluates an action as the root of a configuration schema definition.
+ *
+     * <p>Field descriptors registered while the action is running are appended to {@code fields}.
+     * Any previously active definition is restored before this method returns or propagates an
+     * exception.
      *
-     * @param configId the id of the configuration being defined
-     * @param fields   a mutable list that accumulates {@link ConfigValueMeta} entries
-     * @param supplier the code block to run under this context
-     * @param <T>      the type returned by the supplier
-     * @return the value returned by the supplier
+     * @param configId the identifier of the configuration being defined
+     * @param rootRecordClass the root record type
+     * @param fields the list that receives field descriptors in declaration order
+     * @param supplier the action evaluated as the root definition
+     * @param <T> the action result type
+     * @return the value returned by {@code supplier}
      */
-    public static <T> T withRoot(ResourceLocation configId, List<ConfigValueMeta> fields, Supplier<T> supplier) {
-        return withRoot(configId, null, fields, supplier);
-    }
-
-    /**
-     * Executes the given supplier with a root-level configuration context,
-     * optionally recording the root record class.
-     *
-     * @param configId       the id of the configuration being defined
-     * @param rootRecordClass the root record class, or {@code null}
-     * @param fields         a mutable list that accumulates {@link ConfigValueMeta} entries
-     * @param supplier       the code block to run under this context
-     * @param <T>            the type returned by the supplier
-     * @return the value returned by the supplier
-     */
-    public static <T> T withRoot(ResourceLocation configId, @Nullable Class<?> rootRecordClass, List<ConfigValueMeta> fields, Supplier<T> supplier) {
+    public static <T> T withRoot(
+            ResourceLocation configId,
+            Class<?> rootRecordClass,
+            List<ConfigValueMeta> fields,
+            Supplier<T> supplier) {
         Objects.requireNonNull(configId);
+        Objects.requireNonNull(rootRecordClass);
         Objects.requireNonNull(fields);
         Objects.requireNonNull(supplier);
-        var frame = new Frame(configId, rootRecordClass, fields, "", 0);
+        var frame = new Frame(configId, rootRecordClass, fields, "", 0, Function.identity());
         Frame old = CURRENT.get();
         CURRENT.set(frame);
         try {
@@ -68,23 +59,30 @@ public final class ConfigContext {
     }
 
     /**
-     * Executes the given supplier with a nested record context, extending
-     * the current path prefix with the given key.
+     * Evaluates an action as a nested record in the active schema definition.
      *
-     * @param key         the key name for this nested record within the parent
-     * @param recordClass the class of the nested record
-     * @param supplier    the code block to run under the nested context
-     * @param <T>         the type returned by the supplier
-     * @return the value returned by the supplier
-     * @throws IllegalStateException if no context is currently active
+     * <p>Field paths registered by the action are prefixed with {@code key}. Field readers are
+     * composed with {@code getter} so they accept the complete configuration value. The enclosing
+     * definition is restored before this method returns or propagates an exception.
+     *
+     * @param key the serialized name of the nested record
+     * @param recordClass the nested record type
+     * @param getter the parent-record accessor for the nested record
+     * @param supplier the action evaluated within the nested record definition
+     * @param <P> the parent record type
+     * @param <C> the nested record type
+     * @param <T> the action result type
+     * @return the value returned by {@code supplier}
+     * @throws IllegalStateException if no schema definition is active
      */
-    public static <T> T withRecord(String key, Class<?> recordClass, Supplier<T> supplier) {
-        Objects.requireNonNull(key);
-        Objects.requireNonNull(recordClass);
-        Objects.requireNonNull(supplier);
-        Frame parent = requireCurrent("record(...) can only be used during ConfigSchema/ConfigRecordCodecBuilder definition");
+    public static <P, C, T> T withRecord(
+            String key, Class<C> recordClass, LensGetter<P, C> getter, Supplier<T> supplier) {
+        Objects.requireNonNull(getter, "getter");
+        Frame parent = requireCurrent("record(...) can only be used during ConfigSchema definition");
+        Function<Object, Object> childAccessor = compileAccessor(getter);
         String prefix = qualify(parent.pathPrefix(), key);
-        var frame = new Frame(parent.configId(), recordClass, parent.fields(), prefix, parent.depth() + 1);
+        var frame = new Frame(parent.configId(), recordClass, parent.fields(), prefix,
+                parent.depth() + 1, childAccessor);
         Frame old = CURRENT.get();
         CURRENT.set(frame);
         try {
@@ -95,20 +93,51 @@ public final class ConfigContext {
     }
 
     /**
-     * Returns {@code true} if a configuration definition context is active
-     * on the current thread.
+     * Creates a reader from the complete configuration value to a record component.
      *
-     * @return {@code true} if a context is bound
+     * @param getter the component accessor for the record active in the current definition
+     * @param <P> the record type containing the component
+     * @param <A> the component type
+     * @return a reader that accepts the complete configuration value
+     * @throws IllegalArgumentException if {@code getter} does not identify a record component
+     * @throws IllegalStateException if no schema definition or record type is active
+     */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static <P, A> Function<Object, Object> compileAccessor(LensGetter<P, A> getter) {
+        Frame frame = requireCurrent("Field getters can only be compiled during schema definition");
+        if (frame.recordClass() == null) {
+            throw new IllegalStateException("The active schema context has no record class");
+        }
+        var lens = RecordLensBuilder.lens((Class) frame.recordClass(), (LensGetter) getter);
+        return root -> lens.get(frame.rootAccessor().apply(root));
+    }
+
+    /**
+     * Adapts a nested-record reader to accept the complete configuration value.
+     *
+     * @param localAccessor the reader whose input is the record active in the current definition
+     * @return a reader whose input is the complete configuration value
+     * @throws IllegalStateException if no schema definition is active
+     */
+    public static Function<Object, Object> rebaseAccessor(Function<Object, Object> localAccessor) {
+        Objects.requireNonNull(localAccessor, "localAccessor");
+        Frame frame = requireCurrent("Accessors can only be re-based during schema definition");
+        return root -> localAccessor.apply(frame.rootAccessor().apply(root));
+    }
+
+    /**
+     * Determines whether a configuration schema definition is active.
+     *
+     * @return {@code true} when a definition is active; otherwise {@code false}
      */
     public static boolean isActive() {
         return CURRENT.get() != null;
     }
 
     /**
-     * Returns the id of the configuration currently being defined,
-     * or {@code null} if no context is active.
+     * Returns the identifier of the active configuration definition.
      *
-     * @return the current configuration id, or {@code null}
+     * @return the configuration identifier, or {@code null} when no definition is active
      */
     @Nullable
     public static ResourceLocation currentConfigId() {
@@ -116,10 +145,9 @@ public final class ConfigContext {
     }
 
     /**
-     * Returns the record class active in the current context, or {@code null}
-     * if no context is active.
+     * Returns the record type active in the current configuration definition.
      *
-     * @return the current record class, or {@code null}
+     * @return the active record type, or {@code null} when no definition is active
      */
     @Nullable
     public static Class<?> currentRecordClass() {
@@ -127,20 +155,20 @@ public final class ConfigContext {
     }
 
     /**
-     * Returns the dotted path prefix accumulated from nesting levels,
-     * or an empty string if no context is active.
+     * Returns the path prefix for fields in the active record definition.
      *
-     * @return the current path prefix, never {@code null}
+     * @return the dotted path prefix, or an empty string at the root level or when no definition
+     *         is active
      */
     public static String currentPathPrefix() {
         return isActive() ? CURRENT.get().pathPrefix() : "";
     }
 
     /**
-     * Qualifies the given key with the current path prefix.
+     * Qualifies a local field name with the active record path.
      *
-     * @param key the local field key
-     * @return the fully qualified key (for example {@code "parent.child"})
+     * @param key the local serialized field name
+     * @return the fully qualified dotted path, or {@code key} when no nested record is active
      */
     public static String qualifyKey(String key) {
         Objects.requireNonNull(key);
@@ -148,11 +176,11 @@ public final class ConfigContext {
     }
 
     /**
-     * Records a {@link ConfigValueMeta} entry into the active context's field list.
+     * Appends a field descriptor to the active schema definition.
      *
-     * <p>This is a no-op if no context is active.
+     * <p>This method has no effect when no definition is active.
      *
-     * @param meta the field metadata to record
+     * @param meta the field descriptor to append
      */
     public static void recordMeta(ConfigValueMeta meta) {
         Objects.requireNonNull(meta);
@@ -172,7 +200,7 @@ public final class ConfigContext {
         return CURRENT.get();
     }
 
-    private record Frame(ResourceLocation configId, @Nullable Class<?> recordClass, List<ConfigValueMeta> fields,
-                         String pathPrefix, int depth) {
+    private record Frame(ResourceLocation configId, Class<?> recordClass, List<ConfigValueMeta> fields,
+                         String pathPrefix, int depth, Function<Object, Object> rootAccessor) {
     }
 }

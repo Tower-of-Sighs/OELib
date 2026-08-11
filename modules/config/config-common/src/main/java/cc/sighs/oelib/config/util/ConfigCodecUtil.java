@@ -1,5 +1,6 @@
 package cc.sighs.oelib.config.util;
 
+import com.flechazo.hkt.business.util.OptionalOps;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
@@ -25,7 +26,9 @@ public final class ConfigCodecUtil {
     public static <T> T deriveDefault(Codec<T> codec) {
         var element = new JsonObject();
         var res = codec.parse(JsonOps.INSTANCE, element);
-        return res.result()
-                .orElseThrow(() -> new IllegalStateException("Missing defaults for config; please specify defaultValue for all fields"));
+        return OptionalOps.toMaybe(res.result()).fold(
+                () -> { throw new IllegalStateException(
+                        "Missing defaults for config; please specify defaultValue for all fields"); },
+                value -> value);
     }
 }

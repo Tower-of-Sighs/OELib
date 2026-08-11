@@ -1,6 +1,8 @@
 package cc.sighs.oelib.dev;
 
-import cc.sighs.oelib.config.*;
+import cc.sighs.oelib.config.ConfigManager;
+import cc.sighs.oelib.config.ConfigSchema;
+import cc.sighs.oelib.config.ConfigUnit;
 import cc.sighs.oelib.config.codecs.ConfigMetaCodec;
 import cc.sighs.oelib.config.codecs.ConfigSealedCodec;
 import cc.sighs.oelib.config.field.ConfigField;
@@ -28,7 +30,7 @@ public record DevConfig(
 ) {
     private static final String FILE_NAME = "dev_features";
 
-    public static final ConfigSchema.Definition<DevConfig> DEFINITION = ConfigSchema.defineServer(
+    public static final ConfigUnit<DevConfig> UNIT = ConfigSchema.defineServer(
             MethodHandles.lookup(),
             ResourceLocation.fromNamespaceAndPath("oelib", "dev_features"),
             DevConfig.class,
@@ -169,156 +171,56 @@ public record DevConfig(
         TEST2
     }
     
-    public static final ConfigUnit<DevConfig> UNIT = DEFINITION.unit();
-
     public static void register() {
         ConfigManager.registerServer(UNIT, player -> player.hasPermissions(4));
     }
 
-    /**
-     * ConfigPath API 使用示例，仅作演示无实际用途。
-     */
+    // Exercises the public configuration API from a consumer module.
     public static void exampleUsages() {
-        var enabledPath = DEFINITION.path(DevConfig::enableExampleContent);
-        var testStringPath = DEFINITION.path(DevConfig::testString);
-        var testDoublePath = DEFINITION.path(DevConfig::testDouble);
-        var demoModePath = DEFINITION.path(DevConfig::demoMode);
-        var levelModePath = DEFINITION.pathSubtype(DevConfig::demoMode, LevelMode.class);
-        var levelModeLevelPath = levelModePath.then(LevelMode::level);
-        var nestedLevelPath = DEFINITION.path(DevConfig::nestedDemo).then(NestedDemo::level);
-        var optionalChildPath = DEFINITION.pathOptional(DevConfig::optionalChild);
-        var optionalChildEnabledPath = optionalChildPath.then(NestedDemo::enabled);
-        var optionalChildLevelPath = optionalChildPath.then(NestedDemo::level);
-        var featurePath = DEFINITION.pathEach(DevConfig::featureConfigs);
-        var resettableFeaturePath = featurePath.where(feature -> feature.weight() > 10);
-        var featureWeightPath = featurePath.then(FeatureConfig::weight);
-        var featureExtraLevelPath = featurePath.thenOptional(FeatureConfig::extraConfig).then(NestedDemo::level);
-        var firstFeatureWeightPath = featureWeightPath.at(0);
-        var heavyFeatureWeightPath = featureWeightPath.where(weight -> weight > 10);
-        var wholeMapValuePath = DEFINITION.pathValues(DevConfig::featureConfigMap);
-        var mapValuePath = DEFINITION.pathValue(DevConfig::featureConfigMap, "beta");
-        var mapBetaWeightPath = mapValuePath.then(FeatureConfig::weight);
-        var mapWeightPath = DEFINITION.pathValues(DevConfig::featureConfigMap).then(FeatureConfig::weight);
-        var mapKeysPath = DEFINITION.pathKeys(DevConfig::featureConfigMap);
-        var mapExtraEnabledPath = mapValuePath.thenOptional(FeatureConfig::extraConfig).then(NestedDemo::enabled);
+        var nestedLevel = UNIT.focus(DevConfig::nestedDemo).then(NestedDemo::level);
+        var optionalChildLevel = UNIT.focusOptional(DevConfig::optionalChild).then(NestedDemo::level);
+        var featureWeights = UNIT.focusListElements(DevConfig::featureConfigs).then(FeatureConfig::weight);
+        var heavyFeatureWeights = featureWeights.filter(weight -> weight > 10);
+        var firstFeatureWeight = featureWeights.at(0);
+        var mapWeights = UNIT.focusMapValues(DevConfig::featureConfigMap).then(FeatureConfig::weight);
+        var betaEnabled = UNIT.focusMapValue(DevConfig::featureConfigMap, "beta")
+                .thenOptional(FeatureConfig::extraConfig)
+                .then(NestedDemo::enabled);
 
-        // getter API：第一层字段，以及“替换整个元素值”的场景。
         UNIT.update(DevConfig::enableExampleContent, value -> !value);
-        UNIT.update(DevConfig::testInt, value -> value + 10);
-        UNIT.update(DevConfig::testDouble, value -> value * 1.5);
-        UNIT.update(DevConfig::testString, value -> value + "_modified");
-        UNIT.update(DevConfig::testEnum, ignored -> TestEnum.TEST2);
         UNIT.ifPresent(DevConfig::optionalChild, child -> new NestedDemo(!child.enabled(), child.level() + 1));
         UNIT.whenSubtype(DevConfig::demoMode, LevelMode.class, mode -> new LevelMode(mode.level() + 1));
         UNIT.updateElements(DevConfig::testList, value -> value + "_item");
-        UNIT.updateWhere(
-                DevConfig::featureConfigs,
-                feature -> feature.weight() > 10,
-                feature -> new FeatureConfig(feature.id(), 0, feature.extraConfig())
+        UNIT.update(nestedLevel, value -> value + 1);
+        UNIT.ifPresent(optionalChildLevel, value -> value + 1);
+        UNIT.updateEach(heavyFeatureWeights, value -> value / 2);
+        UNIT.ifPresent(firstFeatureWeight, value -> value * 2);
+        UNIT.updateEach(mapWeights, value -> value + 1);
+        UNIT.ifPresent(betaEnabled, value -> !value);
+
+        List<Integer> weights = UNIT.getAll(featureWeights);
+        Optional<Integer> firstWeight = UNIT.preview(firstFeatureWeight);
+
+        UNIT.updateNoSave(DevConfig::testString, value -> value + "_draft");
+        UNIT.ifPresentNoSave(optionalChildLevel, value -> value + 1);
+        UNIT.updateEachNoSave(featureWeights, value -> value + 1);
+
+        UNIT.applyMutation(
+                UNIT.mutation()
+                        .set(DevConfig::testString, "batched")
+                        .map(DevConfig::testInt, value -> value + 1)
+                        .ifPresent(DevConfig::optionalChild,
+                                child -> new NestedDemo(child.enabled(), child.level() + 1))
+                        .whenSubtype(DevConfig::demoMode, LevelMode.class,
+                                mode -> new LevelMode(mode.level() + 1))
+                        .updateEach(featureWeights, value -> value + 1)
+                        .ifPresent(betaEnabled, value -> !value)
         );
-        UNIT.updateValues(
-                DevConfig::featureConfigMap,
-                feature -> new FeatureConfig(feature.id(), feature.weight() * 2, feature.extraConfig())
-        );
 
-        List<FeatureConfig> getterFeatureList = UNIT.getAll(DevConfig::featureConfigs);
-        List<FeatureConfig> getterFilteredFeatures = UNIT.getAllWhere(DevConfig::featureConfigs, feature -> feature.weight() > 10);
-        long getterFeatureCount = UNIT.count(DevConfig::featureConfigs);
-        boolean getterAnyFeature = UNIT.anyMatch(DevConfig::featureConfigs, feature -> feature.weight() > 10);
-        boolean getterAllFeatures = UNIT.allMatch(DevConfig::featureConfigs, feature -> feature.weight() >= 0);
-        List<FeatureConfig> getterFeatureValues = UNIT.getValues(DevConfig::featureConfigMap);
-        List<String> getterFeatureKeys = UNIT.getKeys(DevConfig::featureConfigMap);
-
-        // path API：适合局部字段更新，也能表达子类型、集合筛选和按 key 直达。
-        var paths = UNIT.paths();
-        boolean enabled = paths.view(enabledPath);
-        Optional<LevelMode> levelMode = paths.preview(levelModePath);
-        int nestedLevel = paths.view(nestedLevelPath);
-        Optional<NestedDemo> optionalChild = paths.preview(optionalChildPath);
-        Optional<Boolean> optionalChildEnabled = paths.preview(optionalChildEnabledPath);
-
-        paths.update(enabledPath, value -> !value);
-        paths.update(testStringPath, value -> value + "_path");
-        paths.update(testDoublePath, value -> value + 0.25);
-        paths.ifPresent(levelModeLevelPath, value -> value + 1);
-        paths.ifPresent(levelModePath, value -> new LevelMode(value.level() + 1));
-        paths.whenSubtype(demoModePath, LevelMode.class, value -> new LevelMode(value.level() + 1));
-        paths.update(nestedLevelPath, value -> value + 1);
-        paths.ifPresent(optionalChildEnabledPath, value -> !value);
-        paths.ifPresent(optionalChildLevelPath, value -> value + 2);
-
-        // List 路径既能替换整元素，也能只改元素内部的某个字段。
-        paths.updateEach(
-                resettableFeaturePath,
-                feature -> new FeatureConfig(feature.id(), 1, feature.extraConfig())
-        );
-        paths.updateEach(featureWeightPath, weight -> weight + 5);
-        paths.ifPresent(firstFeatureWeightPath, weight -> weight * 2);
-        paths.updateEach(featureExtraLevelPath, level -> level + 1);
-        paths.updateEach(heavyFeatureWeightPath, weight -> weight / 2);
-
-        long featureCount = paths.count(featureWeightPath);
-        boolean anyHeavyFeature = paths.anyMatch(featureWeightPath, weight -> weight > 50);
-        boolean allWeightsNonNegative = paths.allMatch(featureWeightPath, weight -> weight >= 0);
-        Optional<Integer> firstHeavyWeight = paths.findFirst(featureWeightPath, weight -> weight > 10);
-        List<Integer> allFeatureWeights = paths.getAll(featureWeightPath);
-
-        // Map 路径同理：wholeMapValuePath 是 updateValues 的 path 等价物，
-        // mapWeightPath / mapBetaWeightPath 则是局部字段版本。
-        paths.updateEach(
-                wholeMapValuePath,
-                feature -> new FeatureConfig(feature.id(), feature.weight() + 1, feature.extraConfig())
-        );
-        paths.updateEach(mapWeightPath, weight -> weight + 10);
-        paths.ifPresent(mapBetaWeightPath, weight -> weight + 99);
-        paths.ifPresent(mapExtraEnabledPath, value -> !value);
-
-        List<Integer> allMappedWeights = paths.getAll(mapWeightPath);
-        List<String> allFeatureKeys = paths.getAll(mapKeysPath);
-        Optional<FeatureConfig> betaFeature = paths.preview(mapValuePath);
-
-        // ConfigUnitOps 提供 no-save 和批量修改入口。
-        var noSavePaths = ConfigUnitOps.paths(UNIT);
-        DevConfig draftValue = noSavePaths.updateNoSave(testStringPath, value -> value + "_draft");
-        String draftString = noSavePaths.setAndGetNoSave(testStringPath, "draft");
-        noSavePaths.ifPresentNoSave(levelModePath, value -> new LevelMode(value.level() + 1));
-        noSavePaths.whenSubtypeNoSave(demoModePath, LevelMode.class, value -> new LevelMode(value.level() + 1));
-        noSavePaths.ifPresentNoSave(optionalChildEnabledPath, value -> !value);
-        noSavePaths.updateEachNoSave(featureWeightPath, weight -> weight + 3);
-        ConfigUnitOps.withBatchNoSave(UNIT, batch -> {
-            batch.update(DevConfig::testInt, value -> value + 1);
-            batch.updateInt(DevConfig::testInt, value -> value + 1);
-            batch.updateDouble(DevConfig::testDouble, value -> value + 1.0);
-            batch.updateBoolean(DevConfig::enableExampleContent, value -> !value);
-            batch.paths().update(enabledPath, value -> !value);
-            batch.setAndGet(DevConfig::testString, "getter-batched");
-            batch.paths().setAndGet(testStringPath, "batched");
-            batch.paths().ifPresent(levelModePath, value -> new LevelMode(value.level() + 1));
-            batch.paths().whenSubtype(demoModePath, LevelMode.class, value -> new LevelMode(value.level() + 1));
-            batch.paths().ifPresent(mapExtraEnabledPath, value -> !value);
-            batch.paths().updateEach(featureWeightPath, weight -> weight + 1);
-        });
-        ConfigUnitOps.withBatch(UNIT, batch -> batch.paths().update(testStringPath, value -> value + "_saved"));
-
-        // ConfigMutation 同时支持 getter 风格和 path 风格。
-        UNIT.updateAll(
-                ConfigMutation.map(DevConfig::testString, value -> value + "_getter"),
-                ConfigMutation.ifPresent(DevConfig::optionalChild, child -> new NestedDemo(child.enabled(), child.level() + 1)),
-                ConfigMutation.whenSubtype(DevConfig::demoMode, LevelMode.class, mode -> new LevelMode(mode.level() + 1)),
-                ConfigMutation.paths().whenSubtype(demoModePath, LevelMode.class, mode -> new LevelMode(mode.level() + 1)),
-                ConfigMutation.updateWhere(
-                        DevConfig::featureConfigs,
-                        feature -> feature.weight() > 10,
-                        feature -> new FeatureConfig(feature.id(), feature.weight() - 1, feature.extraConfig())
-                ),
-                ConfigMutation.updateValues(
-                        DevConfig::featureConfigMap,
-                        feature -> new FeatureConfig(feature.id(), feature.weight() + 1, feature.extraConfig())
-                ),
-                ConfigMutation.paths().set(testStringPath, "frozen"),
-                ConfigMutation.paths().map(testDoublePath, value -> value * 1.1),
-                ConfigMutation.paths().ifPresent(optionalChildLevelPath, value -> value + 1),
-                ConfigMutation.paths().updateEach(featureWeightPath, ignored -> 0)
+        UNIT.applyMutationNoSave(
+                UNIT.mutation()
+                        .map(nestedLevel, value -> value + 1)
+                        .updateWhere(featureWeights, value -> value > 50, value -> 50)
         );
     }
 }

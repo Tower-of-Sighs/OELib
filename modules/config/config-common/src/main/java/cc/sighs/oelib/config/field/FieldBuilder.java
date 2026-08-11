@@ -1,5 +1,6 @@
 package cc.sighs.oelib.config.field;
 
+import com.flechazo.optics.LensGetter;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
@@ -9,65 +10,90 @@ import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 /**
- * Common interface for fluent field builders in a configuration schema.
+ * Defines the common contract for configuration field builders.
  *
- * <p>A {@code FieldBuilder} accumulates metadata (comment, default value,
- * validators, migrations) and finally produces a
- * {@link RecordCodecBuilder} via {@link #forGetter(Function)} that wires
- * the field into the parent record codec.
+ * <p>A field builder associates serialization metadata, validation rules, and raw-data migrations
+ * with one record component. Calling {@link #forGetter(LensGetter)} completes the field definition.
  *
  * @param <T> the type of the field value
  */
 public interface FieldBuilder<T> {
 
     /**
-     * Sets the comment text for this field.
+     * Sets the comment associated with the serialized field and generated configuration screen.
      *
-     * @param text the comment text
-     * @return this builder
+     * @param text the comment to associate with the field
+     * @return this builder instance
      */
     FieldBuilder<T> comment(String text);
 
     /**
-     * Enables automatic tooltip generation from the translation key.
+     * Enables a tooltip key derived from the field translation key.
      *
-     * @return this builder
+     * @return this builder instance
      */
     FieldBuilder<T> tooltip();
 
     /**
-     * Sets the default value for this field.
+     * Sets the value returned by the field codec when the serialized field is absent.
      *
-     * @param value the default value
-     * @return this builder
+     * @param value the value to use for an absent field
+     * @return this builder instance
      */
     FieldBuilder<T> defaultValue(T value);
 
     /**
-     * Registers a validator for this field.
+     * Registers a validation rule for this field.
+ *
+     * <p>The rule returns an empty value when validation succeeds and a message when validation
+     * fails. All registered rules are evaluated when the containing configuration is validated.
      *
-     * @param validator a function that receives the field value and the
-     *                  entire parent object, returning an error message if
-     *                  validation fails
-     * @return this builder
+     * @param code the stable identifier reported for a violation
+     * @param validator the rule evaluated against the field value
+     * @return this builder instance
      */
-    FieldBuilder<T> validate(BiFunction<T, Object, Optional<String>> validator);
+    FieldBuilder<T> validate(String code, Function<T, Optional<String>> validator);
 
     /**
-     * Registers a datafix migration for this field at the given version.
+     * Registers a validation rule that may inspect the complete configuration value.
      *
-     * @param version   the version this migration targets
-     * @param migration the migration operator
-     * @return this builder
+     * <p>The supplied root type is checked before the rule is invoked. The rule returns an empty
+     * value when validation succeeds and a message when validation fails.
+     *
+     * @param code the stable identifier reported for a violation
+     * @param rootClass the runtime type of the complete configuration value
+     * @param validator the rule evaluated against the field and complete configuration values
+     * @param <R> the complete configuration type
+     * @return this builder instance
+     * @throws ClassCastException if the validated configuration is not an instance of
+     *         {@code rootClass}
      */
-    FieldBuilder<T> migrate(int version, UnaryOperator<Dynamic<?>> migration);
+    <R> FieldBuilder<T> validateRoot(
+            String code, Class<R> rootClass, BiFunction<T, R, Optional<String>> validator);
 
     /**
-     * Finalizes this field and produces a record codec builder entry.
+     * Registers a raw-data migration for this field.
+ *
+     * <p>The migration participates in the transition from {@code fromVersion} to
+     * {@code toVersion} and runs before the current field codec decodes the value.
      *
-     * @param getter the accessor function on the parent record
-     * @param <O>    the parent record type
-     * @return a record codec builder for this field
+     * @param fromVersion the nonnegative source version
+     * @param toVersion the target version, greater than {@code fromVersion}
+     * @param migration the transformation applied to the field's dynamic representation
+     * @return this builder instance
+     * @throws IllegalArgumentException if either version is outside the permitted range
      */
-    <O> RecordCodecBuilder<O, T> forGetter(Function<O, T> getter);
+    FieldBuilder<T> migrate(
+            int fromVersion, int toVersion, UnaryOperator<Dynamic<?>> migration);
+
+    /**
+     * Creates a record codec entry and registers the field with the active schema definition.
+ *
+     * @param getter the record component accessor associated with this field
+     * @param <O> the record type containing the field
+     * @return a codec builder entry for the containing record
+     * @throws IllegalArgumentException if {@code getter} does not identify a record component
+     * @throws IllegalStateException if no schema definition is active
+     */
+    <O> RecordCodecBuilder<O, T> forGetter(LensGetter<O, T> getter);
 }

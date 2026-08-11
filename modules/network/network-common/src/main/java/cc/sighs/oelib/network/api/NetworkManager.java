@@ -29,8 +29,11 @@ public class NetworkManager {
                 .orElseThrow(() -> new IllegalStateException("No INetworkManager implementation found"));
     }
 
+    /**
+     * @deprecated Packet classes are discovered from the global mod scan index.
+     */
+    @Deprecated(forRemoval = true)
     public static void registerPacketScanPackage(String basePackage) {
-        NetworkAutoRegistration.registerBasePackage(basePackage);
     }
 
     /**

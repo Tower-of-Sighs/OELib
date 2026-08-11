@@ -1,7 +1,13 @@
 package cc.sighs.oelib.misc.icon;
 
+import com.flechazo.hkt.Maybe;
+import com.flechazo.hkt.business.control.MaybePath;
+import com.flechazo.hkt.business.core.Pathway;
+import com.flechazo.hkt.business.util.OptionalOps;
+
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 /**
  * A registry for dynamic mod icons, allowing the registration of multiple weighted icon variants
@@ -56,35 +62,46 @@ public final class DynamicIconRegistry {
     }
 
     public static Optional<String> getSelectedFabricPath(String modId) {
-        String cached = SELECTED_FABRIC_PATH.get(modId);
-        if (cached != null) return Optional.of(cached);
-
-        List<IconVariant> variants = VARIANTS.get(modId);
-        if (variants == null || variants.isEmpty()) return Optional.empty();
-
-        List<IconVariant> effective = filterForFabric(variants);
-        if (effective.isEmpty()) return Optional.empty();
-
-        IconVariant picked = pickWeighted(effective);
-        String path = resolveFabricPath(modId, picked);
-        SELECTED_FABRIC_PATH.put(modId, path);
-        return Optional.of(path);
+        return OptionalOps.fromMaybe(findSelectedFabricPath(modId));
     }
 
     public static Optional<String> getSelectedNeoForgePath(String modId) {
-        String cached = SELECTED_NEOFORGE_PATH.get(modId);
-        if (cached != null) return Optional.of(cached);
+        return OptionalOps.fromMaybe(findSelectedNeoForgePath(modId));
+    }
 
-        List<IconVariant> variants = VARIANTS.get(modId);
-        if (variants == null || variants.isEmpty()) return Optional.empty();
+    public static Maybe<String> findSelectedFabricPath(String modId) {
+        return selectPath(
+                modId,
+                SELECTED_FABRIC_PATH,
+                DynamicIconRegistry::filterForFabric,
+                variant -> resolveFabricPath(modId, variant)
+        ).run();
+    }
 
-        List<IconVariant> effective = filterForNeoForge(variants);
-        if (effective.isEmpty()) return Optional.empty();
+    public static Maybe<String> findSelectedNeoForgePath(String modId) {
+        return selectPath(
+                modId,
+                SELECTED_NEOFORGE_PATH,
+                DynamicIconRegistry::filterForNeoForge,
+                DynamicIconRegistry::resolveNeoForgePath
+        ).run();
+    }
 
-        IconVariant picked = pickWeighted(effective);
-        String path = resolveNeoForgePath(picked);
-        SELECTED_NEOFORGE_PATH.put(modId, path);
-        return Optional.of(path);
+    private static MaybePath<String> selectPath(
+            String modId,
+            Map<String, String> cache,
+            Function<List<IconVariant>, List<IconVariant>> platformFilter,
+            Function<IconVariant, String> pathResolver
+    ) {
+        return Pathway.nullable(cache.get(modId)).orElse(() ->
+                Pathway.nullable(VARIANTS.get(modId))
+                        .filter(variants -> !variants.isEmpty())
+                        .map(platformFilter)
+                        .filter(variants -> !variants.isEmpty())
+                        .map(DynamicIconRegistry::pickWeighted)
+                        .map(pathResolver)
+                        .peek(path -> cache.put(modId, path))
+        );
     }
 
     private static IconVariant pickWeighted(List<IconVariant> variants) {
@@ -104,19 +121,11 @@ public final class DynamicIconRegistry {
     }
 
     private static List<IconVariant> filterForFabric(List<IconVariant> variants) {
-        List<IconVariant> out = new ArrayList<>();
-        for (IconVariant v : variants) {
-            if (v.appliesToFabric()) out.add(v);
-        }
-        return out;
+        return variants.stream().filter(IconVariant::appliesToFabric).toList();
     }
 
     private static List<IconVariant> filterForNeoForge(List<IconVariant> variants) {
-        List<IconVariant> out = new ArrayList<>();
-        for (IconVariant v : variants) {
-            if (v.appliesToNeoForge()) out.add(v);
-        }
-        return out;
+        return variants.stream().filter(IconVariant::appliesToNeoForge).toList();
     }
 
     private static String resolveFabricPath(String modId, IconVariant variant) {

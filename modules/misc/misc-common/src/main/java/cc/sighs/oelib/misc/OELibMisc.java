@@ -1,6 +1,7 @@
 package cc.sighs.oelib.misc;
 
 import cc.sighs.oelib.misc.icon.DynamicIconRegistry;
+import cc.sighs.oelib.misc.util.AnnotationScanUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,6 +12,7 @@ public class OELibMisc {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_NAME);
 
     public static void init() {
+        AnnotationScanUtil.preload();
         DynamicIconRegistry.forMod("oelib")
                 .addNameFabric("icon1.png", 1)
                 .addNameFabric("icon2.png", 1)

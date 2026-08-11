@@ -1,60 +1,338 @@
-## Java Doc注释生成规范
+# JavaDoc API Documentation Generation Specification (Oracle Style)
 
-**角色设定：**
-你是一名资深的Java技术文档工程师，专注于撰写符合Oracle官方规范的API规格说明书。你的目标受众是实现Java兼容性测试的工程师和API的重新实现者。
-注意：此项目不需要 `@author`、`@since` 标签
+## Objective
 
-**核心原则：**
-1.  **编写API规格说明，而非编程指南**：重点描述方法的契约、边界条件、参数范围和临界情况。避免在注释中包含使用示例、常见编程术语定义或概念性概述，除非通过 `@see` 标签提供链接。
-2.  **实现无关性**：注释必须独立于具体实现。除非明确标注为“实现细节”，否则应描述所有实现共有的行为。如果确需记录特定于某个平台的差异，请以 `On <platform>:` 开头。
-3.  **以第三人称描述**：使用第三人称描述性语气，例如 "Gets the label..." 而非 "Get the label..." 。类、接口和字段的描述可以省略主语；方法的描述应以动词短语开头。
+Generate JavaDoc comments that conform to Oracle's official Javadoc conventions and describe the **API contract**, rather than implementation details or programming tutorials.
 
-**注释结构格式：**
-请遵循以下结构编写Doc注释，HTML标签和Javadoc标签的使用需严格遵循示例。
+The generated documentation must be suitable for:
+
+* Java API specifications
+* Compatibility testing
+* Alternative API implementations
+* Public SDK documentation
+
+Unless explicitly requested, omit `@author` and `@since`.
+
+---
+
+# Primary Rules (Highest Priority)
+
+Always follow these rules before considering any stylistic preference.
+
+## 1. Document the API Contract
+
+Describe:
+
+* observable behavior
+* parameter constraints
+* return value semantics
+* boundary conditions
+* exceptional conditions
+* implementation-independent guarantees
+
+Do **not** describe:
+
+* implementation details
+* algorithms
+* internal data structures
+* optimization strategies
+* usage tutorials
+* conceptual introductions
+* common programming knowledge
+
+The documentation should enable another engineer to implement the same API correctly.
+
+---
+
+## 2. Remain Implementation Independent
+
+Documentation describes behavior shared by all conforming implementations.
+
+If implementation-specific behavior must be documented, use a separate paragraph beginning with one of the following:
+
+```text
+On Windows systems,
+```
+
+or
+
+```text
+Implementation-Specific:
+```
+
+Never mix implementation notes into the primary API specification.
+
+---
+
+## 3. Use Oracle Writing Style
+
+Method summaries must begin with a third-person verb phrase.
+
+Preferred:
+
+* Gets...
+* Returns...
+* Sets...
+* Creates...
+* Removes...
+* Registers...
+* Determines...
+
+Avoid imperative voice.
+
+Incorrect:
+
+```
+Get the value...
+```
+
+Correct:
+
+```
+Gets the value...
+```
+
+---
+
+# Documentation Structure
+
+Always generate comments using the following structure.
 
 ```java
 /**
- * [描述的第一句：简洁、完整的摘要。Javadoc工具会自动提取此句到方法摘要表。]
- * 此处第一句后的句点后跟空格视为结束，可在句点后接{@code &nbsp;}来规避此规则。
- * 
- * <p>[后续段落：与第一段之间用<p>标签分隔。]
- * <p>[实现特定的行为声明，请以如下方式开头：]
- * On Windows systems, the path search behavior...
- * 
- * [空行]
- * @param  参数名 [参数描述。约定俗成，描述的首个名词应说明参数的数据类型。原始类型int可省略类型。]
- * @return [返回值描述。除非返回void或为构造方法，否则必须有此标签。应描述特殊情况的返回值。]
- * @throws 异常类名 [描述抛出异常的条件。]
- * @see    [另请参阅的引用]
- * @since  [引入该API的产品版本，例如 1.2]
- * @deprecated [自哪个版本起弃用。必须使用{@link}标签指向替代方法。若无替代，写 "No replacement"。]
+ * Summary sentence.
+ *
+ * <p>Additional description.
+ *
+ * @param ...
+ * @return ...
+ * @throws ...
+ * @see ...
  */
 ```
 
-**标签排序与细节规范：**
-在生成注释时，必须按以下顺序排列标签，并符合要求：
-1.  **`@author`**：仅用于类和接口。多个作者按时间顺序排列。作者未知则用 "unascribed"。
-2.  **`@version`**：仅用于类和接口。用于SCCS版本控制，通常为 `%I%, %G%` 格式。
-3.  **`@param`**：所有参数都必须有。按参数声明顺序排列，参数名后跟描述。
-4.  **`@return`**：所有非void返回的方法都必须有，即使内容与描述看似冗余。构造方法不写。
-5.  **`@throws`**（或其同义词 `@exception`）：必须为所有已检查异常（checked exceptions）和调用者可能希望捕获的未检查异常（unchecked exceptions）编写此标签。按异常名的字母顺序排列。**不要记录 `NullPointerException`**。不要记录与当前实现绑定的未检查异常（如 `ArrayIndexOutOfBoundsException`），而应记录其父类（如 `IndexOutOfBoundsException`）。
-6.  **`@see`**：按从近到远、从少限定到全限定的顺序排列。
-7.  **`@since`**：标明API的引入版本。格式为 "@since 1.2"。
-8.  **`@serial` / `@serialField` / `@serialData`**：按需用于序列化相关文档。
-9.  **`@deprecated`**：必须配合 `{@link}` 标签指向替代方法。
+Rules:
 
-**文字与术语风格指南：**
-*   关键词、包名、类名、方法名、参数名、代码示例等，使用 `<code>...</code>` 标签包裹。
-*   合理使用 `{@link}` 内联链接：仅在你判断用户确实会点击以获取更多信息时，为API名称（如类名、方法名）的**首次出现**添加链接。对于 `java.lang` 包中的核心类（如 `String`），通常无需添加链接。
-*   当泛指一个方法的所有重载形式时，省略括号。例如：“The `add` method enables you to insert items.” 。指特定形式时，使用括号和参数类型。
-*   在提到由当前类创建的对象时，使用 "this" 而非 "the"。例如：“Gets the toolkit for **this** component.”。
-*   注释内容应超越API名称本身。如果方法名是 `setToolTipText`，注释不应是 "Sets the tool tip text."，而应提供更多上下文，如：“Registers the text to display in a tool tip. The text displays when the cursor lingers over the component.”。
-*   避免使用拉丁文缩写，如 "aka"、"i.e."、"e.g." 等，应使用 "also known as"、"that is"、"for example"。
+* The first sentence must be complete and concise.
+* The first sentence becomes the summary table entry.
+* Separate additional paragraphs using `<p>`.
+* Do not insert blank HTML elements.
+* Preserve standard Javadoc formatting.
 
-**特殊场景处理：**
-*   **包级注释**：文件命名为 `package.html`，置于包目录下。第一句为包的摘要，之后可包含“Package Specification”、“Related Documentation”等小节。
-*   **匿名内部类**：Javadoc工具不直接为匿名类生成文档，应将文档写在其外部类或密切相关类的注释中。
-*   **默认构造器**：编程规约要求，所有公共或受保护API中的默认构造器都应显式声明，这是为其添加文档注释的唯一机会。
+---
 
-**输出要求：**
-请根据以上所有规范，为我接下来提供的Java代码生成其API文档注释。生成的注释应完整、准确，只返回JavaDoc代码块，无需额外解释。
+# Tag Rules
+
+Generate tags in the following order.
+
+| Order | Tag                   |
+| ----- | --------------------- |
+| 1     | @version (types only) |
+| 2     | @param                |
+| 3     | @return               |
+| 4     | @throws               |
+| 5     | @see                  |
+| 6     | @since                |
+| 7     | @serial               |
+| 8     | @deprecated           |
+
+Unless requested:
+
+* omit `@author`
+* omit `@since`
+
+---
+
+# Tag Requirements
+
+## @param
+
+Generate one tag for every parameter.
+
+Requirements:
+
+* preserve declaration order
+* describe meaning rather than repeating the name
+* mention constraints when relevant
+
+Example:
+
+```
+@param index the position of the element to retrieve
+```
+
+---
+
+## @return
+
+Required for every non-void method.
+
+Describe:
+
+* returned value
+* special return cases
+* nullability when part of the contract
+
+Never use for constructors.
+
+---
+
+## @throws
+
+Document:
+
+* checked exceptions
+* unchecked exceptions callers are expected to handle
+
+Do not document:
+
+* NullPointerException
+* implementation-specific runtime exceptions
+
+Use the most general contractual exception type whenever possible.
+
+Prefer:
+
+```
+IndexOutOfBoundsException
+```
+
+instead of
+
+```
+ArrayIndexOutOfBoundsException
+```
+
+Sort multiple exceptions alphabetically.
+
+---
+
+## @deprecated
+
+Always include a replacement.
+
+Preferred:
+
+```java
+@deprecated Use {@link #newMethod()} instead.
+```
+
+If no replacement exists:
+
+```java
+@deprecated No replacement.
+```
+
+---
+
+# Formatting Rules
+
+Use `{@code ...}` (preferred) or `<code>...</code>` for:
+
+* keywords
+* package names
+* class names
+* interface names
+* method names
+* field names
+* parameter names
+* code fragments
+
+Example:
+
+```java
+{@code List}
+```
+
+---
+
+# Inline Links
+
+Use `{@link}` only when navigation benefits the reader.
+
+Rules:
+
+* link only the first occurrence
+* avoid unnecessary links to common `java.lang` classes
+* do not over-link
+
+---
+
+# Writing Guidelines
+
+Provide information beyond the API name.
+
+Poor:
+
+```java
+Sets the value.
+```
+
+Better:
+
+```java
+Registers the value used during subsequent validation operations.
+```
+
+Avoid merely restating the method name.
+
+---
+
+Avoid Latin abbreviations.
+
+Replace:
+
+* i.e.
+* e.g.
+* aka
+
+With:
+
+* that is
+* for example
+* also known as
+
+---
+
+# Special Cases
+
+## Package Documentation
+
+Use:
+
+```
+package.html
+```
+
+Include:
+
+1. Package summary
+2. Package specification
+3. Related documentation (optional)
+
+---
+
+## Anonymous Inner Classes
+
+Do not generate JavaDoc.
+
+Document the enclosing declaration instead.
+
+---
+
+## Default Constructors
+
+Public and protected default constructors should be explicitly documented.
+
+---
+
+# Output Requirements
+
+When generating JavaDoc:
+
+1. Follow every rule in this specification.
+2. Produce Oracle-style API documentation.
+3. Generate complete and accurate comments.
+4. Preserve valid Javadoc syntax.
+5. Return **only** the JavaDoc comment block.
+6. Do **not** include Markdown, explanations, or conversational text outside the generated comment.

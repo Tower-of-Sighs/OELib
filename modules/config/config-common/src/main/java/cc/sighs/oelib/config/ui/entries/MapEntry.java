@@ -2,6 +2,7 @@ package cc.sighs.oelib.config.ui.entries;
 
 import cc.sighs.oelib.config.ui.screen.ConfigScreen;
 import cc.sighs.oelib.config.util.ConfigGuiUtil;
+import com.flechazo.hkt.Maybe;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
@@ -16,7 +17,6 @@ import net.minecraft.network.chat.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * A collapsible entry for editing a JSON object (map) field.
@@ -32,7 +32,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
     private final int controlWidth;
     private final int rowHeight;
     private final Component label;
-    private final Component tooltip;
+    private final Maybe<Component> tooltip;
     private final JsonObject mapObj;
     private final List<EditBox> keyBoxes = new ArrayList<>();
     private final List<EditBox> valBoxes = new ArrayList<>();
@@ -55,9 +55,11 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
      * @param working      the working JSON object
      * @param controlWidth the width of the edit controls
      * @param rowHeight    the row height
-     * @param tooltip      the tooltip component, or {@code null}
+     * @param tooltip      the optional tooltip component
      */
-    public MapEntry(String keyPath, Component label, JsonObject working, int controlWidth, int rowHeight, Component tooltip) {
+    public MapEntry(
+            String keyPath, Component label, JsonObject working,
+            int controlWidth, int rowHeight, Maybe<Component> tooltip) {
         this.keyPath = keyPath;
         this.label = label;
         this.tooltip = tooltip;
@@ -243,9 +245,9 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
     public void render(GuiGraphics graphics, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean isHovered, float delta) {
         headerY = y;
         graphics.drawString(Minecraft.getInstance().font, label, x + 4, y + 6, 0xFFFFFFFF);
-        if (isHovered && tooltip != null && screen instanceof ConfigScreen cs) {
+        if (isHovered && screen instanceof ConfigScreen cs) {
             if (mouseY >= y && mouseY <= y + rowHeight) {
-                cs.setHoverTooltip(tooltip, mouseX, mouseY);
+                tooltip.ifPresent(value -> cs.setHoverTooltip(value, mouseX, mouseY));
             }
         }
         int resetX = Minecraft.getInstance().screen.width - 80;
@@ -323,7 +325,7 @@ public class MapEntry extends AbstractConfigEntry<JsonObject> {
     }
 
     @Override
-    public Optional<JsonObject> getDefaultValue() {
-        return Optional.of(mapObj);
+    public Maybe<JsonObject> getDefaultValue() {
+        return Maybe.some(mapObj);
     }
 }

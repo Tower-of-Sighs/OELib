@@ -1,4 +1,5 @@
 import cc.sighs.gradle.ModuleDependenciesExtension
+import cc.sighs.gradle.configureStandardArtifactMetadata
 
 plugins {
     `java-library`
@@ -56,6 +57,16 @@ repositories {
         name = "BlameJared"
         url = uri("https://maven.blamejared.com")
     }
+    maven {
+        name = "SighsReleases"
+        url = uri("https://maven.sighs.cc/repository/maven-releases/")
+        mavenContent { releasesOnly() }
+    }
+    maven {
+        name = "SighsSnapshots"
+        url = uri("https://maven.sighs.cc/repository/maven-snapshots/")
+        mavenContent { snapshotsOnly() }
+    }
 }
 
 listOf("apiElements", "runtimeElements", "sourcesElements").forEach { variant ->
@@ -67,64 +78,27 @@ listOf("apiElements", "runtimeElements", "sourcesElements").forEach { variant ->
     }
 }
 
-tasks.named<Jar>("sourcesJar") {
-    from(rootProject.file("LICENSE")) {
-        rename { "${it}_${modName}" }
-    }
+// Publish the curated Maven POM as the single external dependency model. The
+// Java variants contain Loom/ModDev build dependencies and embedded module
+// projects which must not be exposed transitively to consumers.
+tasks.withType<org.gradle.api.publish.tasks.GenerateModuleMetadata>().configureEach {
+    enabled = false
 }
 
-tasks.named<Jar>("jar") {
-    from(rootProject.file("LICENSE")) {
-        rename { "${it}_${modName}" }
-    }
-    manifest {
-        attributes(
-            mapOf(
-                "Specification-Title" to modName,
-                "Specification-Vendor" to modAuthor,
-                "Specification-Version" to project.version,
-                "Implementation-Title" to project.name,
-                "Implementation-Version" to project.version,
-                "Implementation-Vendor" to modAuthor,
-                "Built-On-Minecraft" to mcVersion
-            )
-        )
-    }
-}
-
-tasks.named<ProcessResources>("processResources") {
-    val expandProps = mapOf(
-        "version" to project.version,
-        "group" to project.group,
-        "minecraft_version" to mcVersion,
-        "minecraft_version_range" to mcVersionRange,
-        "fabric_version" to fabricVersion,
-        "fabric_loader_version" to fabricLoaderVersion,
-        "mod_name" to modName,
-        "mod_author" to modAuthor,
-        "mod_id" to modId,
-        "license" to licenseVal,
-        "description" to (project.description ?: ""),
-        "neoforge_version" to neoforge_version,
-        "neoforge_loader_version_range" to neoforge_loader_version_range,
-        "credits" to creditsVal,
-        "java_version" to javaVersion
-    )
-
-    val jsonExpandProps = expandProps.mapValues { (_, value) ->
-        if (value is String) value.replace("\n", "\\\\n") else value
-    }
-
-    filesMatching(listOf("META-INF/neoforge.mods.toml")) {
-        expand(expandProps)
-    }
-
-    filesMatching(listOf("pack.mcmeta", "fabric.mod.json", "*.mixins.json")) {
-        expand(jsonExpandProps)
-    }
-
-    inputs.properties(expandProps)
-}
+configureStandardArtifactMetadata(
+    modId = modId,
+    modName = modName,
+    modAuthor = modAuthor,
+    mcVersion = mcVersion,
+    mcVersionRange = mcVersionRange,
+    fabricVersion = fabricVersion,
+    fabricLoaderVersion = fabricLoaderVersion,
+    license = licenseVal,
+    neoforgeVersion = neoforge_version,
+    neoforgeLoaderVersionRange = neoforge_loader_version_range,
+    credits = creditsVal,
+    javaVersion = javaVersion
+)
 
 // Extract text from a POM node's child element, handling namespace prefixes
 fun childText(node: groovy.util.Node, name: String): String {
@@ -144,7 +118,8 @@ fun childText(node: groovy.util.Node, name: String): String {
     return ""
 }
 
-// Maven dependency whitelist for POM filtering
+// Maven dependency whitelist for POM filtering. Empty means no external
+// dependencies are published.
 extra["mavenDependencyWhitelist"] = emptyList<String>()
 
 publishing {
@@ -159,45 +134,43 @@ publishing {
                     .find { it.name().toString().endsWith("}dependencies") || it.name().toString() == "dependencies" }
                     ?: (xml.appendNode("dependencies") as groovy.util.Node)
 
-                // 1) Whitelist filtering (only when non-empty)
+                // 1) Keep only explicitly whitelisted external dependencies.
                 @Suppress("UNCHECKED_CAST")
                 val raw = project.extra["mavenDependencyWhitelist"] as? Iterable<*> ?: emptyList<Any>()
                 val whitelist = raw.map { it.toString().trim() }.filter { it.isNotEmpty() }.toSet()
-                if (whitelist.isNotEmpty()) {
-                    fun match(g: String, a: String) =
-                        whitelist.contains(g) || whitelist.contains(a) || whitelist.contains("$g:$a")
+                fun match(g: String, a: String) =
+                    whitelist.contains(g) || whitelist.contains(a) || whitelist.contains("$g:$a")
 
-                    val toRemove = depsNode.children().filterIsInstance<groovy.util.Node>()
-                        .filterNot { match(childText(it, "groupId"), childText(it, "artifactId")) }
-                    toRemove.forEach { depsNode.remove(it) }
+                val toRemove = depsNode.children().filterIsInstance<groovy.util.Node>()
+                    .filterNot { match(childText(it, "groupId"), childText(it, "artifactId")) }
+                toRemove.forEach { depsNode.remove(it) }
 
-                    val declared = linkedMapOf<String, Triple<String, String, String>>()
-                    for ((cfgName, scope) in listOf(
-                        "api" to "compile", "implementation" to "runtime",
-                        "runtimeOnly" to "runtime", "compileOnly" to "compile"
-                    )) {
-                        project.configurations.findByName(cfgName)?.dependencies
-                            ?.withType(ExternalModuleDependency::class.java)
-                            ?.forEach { dep ->
-                                val g = dep.group?.trim() ?: ""
-                                val a = dep.name?.trim() ?: ""
-                                val v = dep.version?.toString()?.trim() ?: ""
-                                if (g.isEmpty() || a.isEmpty() || v.isEmpty() || !match(g, a)) return@forEach
-                                val key = "$g:$a"
-                                if (!declared.containsKey(key) || scope == "compile") {
-                                    declared[key] = Triple(g, a, v)
-                                }
+                val declared = linkedMapOf<String, Triple<String, String, String>>()
+                for ((cfgName, scope) in listOf(
+                    "api" to "compile", "implementation" to "runtime",
+                    "runtimeOnly" to "runtime", "compileOnly" to "compile"
+                )) {
+                    project.configurations.findByName(cfgName)?.dependencies
+                        ?.withType(ExternalModuleDependency::class.java)
+                        ?.forEach { dep ->
+                            val g = dep.group?.trim() ?: ""
+                            val a = dep.name?.trim() ?: ""
+                            val v = dep.version?.toString()?.trim() ?: ""
+                            if (g.isEmpty() || a.isEmpty() || v.isEmpty() || !match(g, a)) return@forEach
+                            val key = "$g:$a"
+                            if (!declared.containsKey(key) || scope == "compile") {
+                                declared[key] = Triple(g, a, v)
                             }
-                    }
-
-                    for (info in declared.values) {
-                        val key = "${info.first}:${info.second}"
-                        depsNode.appendNode("dependency").apply {
-                            appendNode("groupId", info.first)
-                            appendNode("artifactId", info.second)
-                            appendNode("version", info.third)
-                            appendNode("scope", if (key.startsWith("net.fabricmc")) "compile" else "runtime")
                         }
+                }
+
+                for (info in declared.values) {
+                    val key = "${info.first}:${info.second}"
+                    depsNode.appendNode("dependency").apply {
+                        appendNode("groupId", info.first)
+                        appendNode("artifactId", info.second)
+                        appendNode("version", info.third)
+                        appendNode("scope", if (key.startsWith("net.fabricmc")) "compile" else "runtime")
                     }
                 }
 
@@ -210,11 +183,14 @@ publishing {
                         .map { "${childText(it, "groupId")}:${childText(it, "artifactId")}" }.toSet()
                     for (dep in moduleApiDeps) {
                         val depProj = project(":modules:$dep:$dep-$suffix")
-                        val coord = "${depProj.group}:${depProj.name}"
+                        val depArtifactId = depProj.extensions
+                            .getByType(org.gradle.api.plugins.BasePluginExtension::class.java)
+                            .archivesName.get()
+                        val coord = "${depProj.group}:$depArtifactId"
                         if (!existingArtifacts.contains(coord)) {
                             depsNode.appendNode("dependency").apply {
                                 appendNode("groupId", depProj.group)
-                                appendNode("artifactId", depProj.name)
+                                appendNode("artifactId", depArtifactId)
                                 appendNode("version", depProj.version)
                                 appendNode("scope", "compile")
                             }

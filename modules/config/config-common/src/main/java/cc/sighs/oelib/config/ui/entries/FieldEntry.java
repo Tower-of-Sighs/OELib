@@ -5,6 +5,8 @@ import cc.sighs.oelib.config.ui.ConfigUiHint;
 import cc.sighs.oelib.config.ui.ConfigWidgetRegistry;
 import cc.sighs.oelib.config.ui.screen.ConfigScreen;
 import cc.sighs.oelib.config.util.ConfigGuiUtil;
+import com.flechazo.hkt.Maybe;
+import com.flechazo.hkt.Try;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
@@ -16,7 +18,6 @@ import net.minecraft.network.chat.Component;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 
 public class FieldEntry extends AbstractConfigEntry<Object> {
     private final ConfigValueMeta meta;
@@ -25,7 +26,7 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
     private final int controlWidth;
     private final int rowHeight;
     private final Component label;
-    private final Component tooltip;
+    private final Maybe<Component> tooltip;
     private final ConfigUiHint hint;
     private boolean created = false;
     private Checkbox toggle;
@@ -35,11 +36,11 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
     private AbstractWidget customWidget;
     private ConfigWidgetRegistry.CustomWidgetHandle customHandle;
     private Button resetButton;
-    private JsonElement defaultValueElement;
+    private Maybe<JsonElement> defaultValueElement = Maybe.none();
     private Screen screen;
 
     /**
-     * Constructs a field entry.
+     * Creates a field entry.
      *
      * @param meta         the field metadata
      * @param working      the working JSON object being edited
@@ -54,7 +55,7 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
         this.controlWidth = controlWidth;
         this.rowHeight = rowHeight;
         this.label = meta.translationKey().map(Component::translatable).orElse(Component.literal(meta.key()));
-        this.tooltip = meta.tooltip().map(Component::translatable).orElse(null);
+        this.tooltip = meta.tooltip().map(Component::translatable);
         var value = ConfigGuiUtil.getPath(working, meta.key());
         this.hint = meta.uiHint().orElse(defaultHintFor(value));
     }
@@ -79,10 +80,8 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
         int controlX = resetX - 8 - controlWidth;
 
         var value = ConfigGuiUtil.getPath(working, meta.key());
-        defaultValueElement = ConfigGuiUtil.getPath(defaults, meta.key());
-        if (defaultValueElement == null) {
-            defaultValueElement = meta.defaultJsonValue().orElse(null);
-        }
+        defaultValueElement = Maybe.ofNullable(ConfigGuiUtil.getPath(defaults, meta.key()))
+                .or(meta::defaultJsonValue);
 
         createUiControl(controlX, y, value);
         createResetButton(resetX, y);
@@ -234,14 +233,13 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
     }
 
     private void resetToDefault() {
-        if (defaultValueElement == null) return;
-
-        ConfigGuiUtil.setPath(working, meta.key(), defaultValueElement);
-        String defaultValueStr = ConfigGuiUtil.jsonToString(defaultValueElement);
-
-        updateControlValue(defaultValueStr, defaultValueElement);
-        updateResetButtonState();
-        if (screen instanceof ConfigScreen cs) cs.markDirty();
+        defaultValueElement.ifPresent(defaultElement -> {
+            ConfigGuiUtil.setPath(working, meta.key(), defaultElement);
+            String defaultValueStr = ConfigGuiUtil.jsonToString(defaultElement);
+            updateControlValue(defaultValueStr, defaultElement);
+            updateResetButtonState();
+            if (screen instanceof ConfigScreen cs) cs.markDirty();
+        });
     }
 
     private void updateControlValue(String defaultValueStr, JsonElement defaultValueElement) {
@@ -307,8 +305,8 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
         int dynamicControlWidth = Math.max(100, Math.min(this.controlWidth, availableWidth));
 
         updateControlPositions(dynamicControlX, y, dynamicControlWidth, resetX);
-        if (isHovered && tooltip != null && screen instanceof ConfigScreen cs) {
-            cs.setHoverTooltip(tooltip, mouseX, mouseY);
+        if (isHovered && screen instanceof ConfigScreen cs) {
+            tooltip.ifPresent(value -> cs.setHoverTooltip(value, mouseX, mouseY));
         }
     }
 
@@ -365,27 +363,29 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
     }
 
     @Override
-    public Optional<Object> getDefaultValue() {
-        return Optional.empty();
+    public Maybe<Object> getDefaultValue() {
+        return Maybe.none();
     }
 
     private void updateResetButtonState() {
         if (resetButton == null) return;
 
-        if (defaultValueElement == null) {
+        if (defaultValueElement.isEmpty()) {
             resetButton.active = false;
             return;
         }
 
+        JsonElement defaultElement = defaultValueElement.get();
         var current = ConfigGuiUtil.getPath(working, meta.key());
-        boolean same = (current == null && defaultValueElement.isJsonNull()) ||
-                (current != null && current.equals(defaultValueElement));
+        boolean same = (current == null && defaultElement.isJsonNull()) ||
+                (current != null && current.equals(defaultElement));
         resetButton.active = !same;
     }
 
     private Component optionComponent(String option) {
-        var base = meta.translationKey().orElse(null);
-        return base != null ? Component.translatable(base + "." + option) : Component.literal(option);
+        return meta.translationKey().fold(
+                () -> Component.literal(option),
+                base -> Component.translatable(base + "." + option));
     }
 
     private ConfigUiHint defaultHintFor(JsonElement value) {
@@ -410,20 +410,12 @@ public class FieldEntry extends AbstractConfigEntry<Object> {
             return new JsonPrimitive(Boolean.parseBoolean(s));
         }
 
-        if (s.matches("^-?\\d+$")) {
-            try {
-                return new JsonPrimitive(Integer.parseInt(s));
-            } catch (NumberFormatException ignored) {
-            }
-        }
-
-        if (s.matches("^-?\\d+(?:\\.\\d+)?$")) {
-            try {
-                return new JsonPrimitive(Double.parseDouble(s));
-            } catch (NumberFormatException ignored) {
-            }
-        }
-
-        return new JsonPrimitive(s);
+        Maybe<JsonElement> integer = s.matches("^-?\\d+$")
+                ? Try.of(() -> Integer.parseInt(s)).toMaybe().map(JsonPrimitive::new)
+                : Maybe.none();
+        return integer.or(() -> s.matches("^-?\\d+(?:\\.\\d+)?$")
+                        ? Try.of(() -> Double.parseDouble(s)).toMaybe().map(JsonPrimitive::new)
+                        : Maybe.none())
+                .orElseGet(() -> new JsonPrimitive(s));
     }
 }

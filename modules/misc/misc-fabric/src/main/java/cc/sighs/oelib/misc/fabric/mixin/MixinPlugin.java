@@ -20,11 +20,7 @@ public class MixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        try {
-            return FabricLoader.getInstance().isModLoaded("modmenu");
-        } catch (Throwable t) {
-            return false;
-        }
+        return FabricLoader.getInstance().isModLoaded("modmenu");
     }
 
     @Override

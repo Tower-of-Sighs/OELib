@@ -2,6 +2,7 @@ package cc.sighs.oelib.misc.neoforge.mixin;
 
 import cc.sighs.oelib.misc.OELibMisc;
 import cc.sighs.oelib.misc.icon.DynamicIconRegistry;
+import com.flechazo.hkt.business.util.OptionalOps;
 import net.neoforged.neoforge.client.gui.ModListScreen;
 import net.neoforged.neoforgespi.language.IModInfo;
 import org.spongepowered.asm.mixin.Mixin;
@@ -23,13 +24,9 @@ public abstract class NeoForgeIconHandlerMixin {
     private Optional<String> oelib$redirectLogo(IModInfo info) {
         String modId = info.getModId();
 
-        Optional<String> dynamic = DynamicIconRegistry.getSelectedNeoForgePath(modId);
-        if (dynamic.isPresent()) {
-            OELibMisc.LOGGER.info("[OELib: DynamicIcon] Set icon for {}: {}", modId, dynamic.get());
-            return dynamic;
-        }
-
-        return info.getLogoFile();
+        return OptionalOps.fromMaybe(DynamicIconRegistry.findSelectedNeoForgePath(modId)
+                .peek(path -> OELibMisc.LOGGER.info("[OELib: DynamicIcon] Set icon for {}: {}", modId, path))
+                .or(() -> OptionalOps.toMaybe(info.getLogoFile())));
     }
 }
 

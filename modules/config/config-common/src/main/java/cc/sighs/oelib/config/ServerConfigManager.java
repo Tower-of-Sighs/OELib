@@ -7,35 +7,28 @@ import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import cc.sighs.oelib.config.net.ConfigSyncPacket;
 import cc.sighs.oelib.config.net.ConfigUpdateRequestPacket;
 import cc.sighs.oelib.config.util.ConfigSerializationUtil;
+import cc.sighs.oelib.config.validation.ConfigValidationException;
 import cc.sighs.oelib.network.api.NetworkManager;
 import cc.sighs.oelib.platform.Platform;
+import com.flechazo.hkt.Maybe;
+import com.flechazo.hkt.Try;
+import com.flechazo.hkt.business.util.OptionalOps;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Registry for server-side configuration units.
+ * Registers, reloads, and synchronizes server-side configuration units.
  *
- * <p>This manager stores all configurations whose {@link ConfigSide} is
- * {@link ConfigSide#SERVER}. In addition to the basic register/lookup/reload
- * operations, it handles:
- * <ul>
- *   <li>Encoding config values for network synchronization</li>
- *   <li>Applying remote updates received from clients (with permission checks)</li>
- *   <li>Broadcasting config changes to connected players via
- *       {@link ConfigSyncPacket}</li>
- *   <li>Tracking the last broadcast payload to avoid redundant syncs</li>
- * </ul>
- *
- * <p>The public-facing {@link ConfigManager} delegates server-related
- * operations to this class. Direct use is rarely needed outside the
- * framework internals.
+ * <p>A resource-manager reload reloads registered values and synchronizes changed payloads.
+ * Duplicate identifiers replace the previously registered unit.
  */
+@ApiStatus.Internal
 public class ServerConfigManager implements ResourceManagerReloadListener {
     private static final Map<ResourceLocation, ConfigUnit<?>> CONFIGS = new ConcurrentHashMap<>();
     private static final Map<ResourceLocation, IConfigPermissionChecker> PERMISSIONS = new ConcurrentHashMap<>();
@@ -57,8 +50,8 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
         unit.applyAutoMigrationOnRegister();
     }
 
-    static Optional<ConfigUnit<?>> get(ResourceLocation id) {
-        return Optional.ofNullable(CONFIGS.get(id));
+    static Maybe<ConfigUnit<?>> get(ResourceLocation id) {
+        return Maybe.ofNullable(CONFIGS.get(id));
     }
 
     /**
@@ -75,10 +68,10 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
      * if any.
      *
      * @param id the configuration id
-     * @return the permission checker, or {@link Optional#empty()}
+     * @return the permission checker, or an empty value
      */
-    public static Optional<IConfigPermissionChecker> getPermissionChecker(ResourceLocation id) {
-        return Optional.ofNullable(PERMISSIONS.get(id));
+    public static Maybe<IConfigPermissionChecker> getPermissionChecker(ResourceLocation id) {
+        return Maybe.ofNullable(PERMISSIONS.get(id));
     }
 
     /**
@@ -97,10 +90,10 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
      * Returns the last broadcast payload for the given configuration.
      *
      * @param id the configuration id
-     * @return the last broadcast payload, or {@link Optional#empty()}
+     * @return the last broadcast payload, or an empty value
      */
-    public static Optional<String> getLastBroadcast(ResourceLocation id) {
-        return Optional.ofNullable(LAST_BROADCAST.get(id));
+    public static Maybe<String> getLastBroadcast(ResourceLocation id) {
+        return Maybe.ofNullable(LAST_BROADCAST.get(id));
     }
 
     /**
@@ -119,15 +112,35 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
      * configuration.
      *
      * @param id the configuration id
-     * @return the known payload, or {@link Optional#empty()}
+     * @return the known payload, or an empty value
      */
-    public static Optional<String> getClientKnownServer(ResourceLocation id) {
-        return Optional.ofNullable(CLIENT_KNOWN_SERVER.get(id));
+    public static Maybe<String> getClientKnownServer(ResourceLocation id) {
+        return Maybe.ofNullable(CLIENT_KNOWN_SERVER.get(id));
+    }
+
+    static <T> void synchronizeAccepted(ConfigUnit<T> unit, T value) {
+        if (CONFIGS.get(unit.id()) != unit) {
+            return;
+        }
+        var format = unit.meta().format();
+        var encoded = ConfigSerializationUtil.encodeToString(
+                value, format, unit.codec().codec(), unit.codec().fields());
+        if (encoded.isEmpty()) {
+            OELibConfig.LOGGER.error(
+                    "Failed to encode accepted server config {} for synchronization", unit.id());
+            return;
+        }
+        recordBroadcast(unit.id(), encoded.get());
+        if (Platform.getCurrentServer() != null
+                && !Platform.getAllPlayers(Platform.getCurrentServer()).isEmpty()) {
+            NetworkManager.sendToAll(new ConfigSyncPacket(unit.id(), encoded.get(), format));
+        }
+        ConfigEvents.onSync(unit, value, false);
     }
 
     static void reloadAll() {
         for (ConfigUnit<?> unit : CONFIGS.values()) {
-            unit.reload();
+            ConfigLifecycle.reload(unit);
             if (Platform.isServer()) {
                 var id = unit.id();
                 var payloadOpt = encodeToString(id);
@@ -145,7 +158,7 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
                 @SuppressWarnings("unchecked")
                 ConfigUnit<Object> cast = (ConfigUnit<Object>) unit;
                 var encoded = ConfigSerializationUtil.encodeToString(cast.get(), format, cast.codec().codec(), cast.codec().fields());
-                if (encoded.isPresent()) {
+                if (encoded.isDefined()) {
                     var known = getClientKnownServer(id);
                     if (known.isEmpty() || !known.get().equals(encoded.get())) {
                         if (Platform.getCurrentServer() != null && !Platform.getAllPlayers(Platform.getCurrentServer()).isEmpty()) {
@@ -157,10 +170,10 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
         }
     }
 
-    static Optional<ConfigManager.EncodedPayload> encodeToString(ResourceLocation id) {
+    static Maybe<ConfigManager.EncodedPayload> encodeToString(ResourceLocation id) {
         var unit = CONFIGS.get(id);
         if (unit == null) {
-            return Optional.empty();
+            return Maybe.none();
         }
         var format = unit.meta().format();
         @SuppressWarnings("unchecked")
@@ -175,17 +188,32 @@ public class ServerConfigManager implements ResourceManagerReloadListener {
             return;
         }
         var result = ConfigSerializationUtil.parse(payload, format, unit.codec().codec());
-        if (result.error().isPresent()) {
-            OELibConfig.LOGGER.error("Failed to apply remote server config {}: {}", unit.id(), result.error().get().message());
+        var parseError = OptionalOps.toMaybe(result.error());
+        if (parseError.isDefined()) {
+            OELibConfig.LOGGER.error("Failed to apply remote server config {}: {}", unit.id(), parseError.get().message());
             return;
         }
-        result.result().ifPresent(v -> {
+        OptionalOps.toMaybe(result.result()).ifPresent(v -> {
             @SuppressWarnings("unchecked")
             ConfigUnit<Object> cast = (ConfigUnit<Object>) unit;
-            OELibConfig.LOGGER.info("Applying remote update for server config {} with format {}", unit.id(), format);
-            cast.setValue(v);
-            ConfigEvents.onSync(cast, v, true);
-            OELibConfig.LOGGER.info("Applied remote update for server config {}", unit.id());
+            Try.of(() -> {
+                OELibConfig.LOGGER.info(
+                        "Applying remote update for server config {} with format {}",
+                        unit.id(), format);
+                Object accepted = ConfigLifecycle.replace(cast, v, false);
+                ConfigEvents.onSync(cast, accepted, true);
+                OELibConfig.LOGGER.info("Applied remote update for server config {}", unit.id());
+                return accepted;
+            }).peekFailure(error -> {
+                if (error instanceof ConfigValidationException validation) {
+                    OELibConfig.LOGGER.warn(
+                            "Rejected remote update for server config {}: {}",
+                            unit.id(), validation.report().summary());
+                } else {
+                    OELibConfig.LOGGER.error(
+                            "Failed to apply remote update for server config {}", unit.id(), error);
+                }
+            });
         });
     }
 

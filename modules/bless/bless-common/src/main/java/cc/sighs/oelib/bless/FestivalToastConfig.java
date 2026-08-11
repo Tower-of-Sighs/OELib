@@ -23,7 +23,7 @@ public record FestivalToastConfig(
 ) {
     private static final String FILE_NAME = "oelib_festivals";
 
-    public static final ConfigSchema.Definition<FestivalToastConfig> DEFINITION = ConfigSchema.defineClient(
+    public static final ConfigUnit<FestivalToastConfig> UNIT = ConfigSchema.defineClient(
             MethodHandles.lookup(),
             ResourceLocation.fromNamespaceAndPath("oelib", "festival_toast"),
             FestivalToastConfig.class,
@@ -47,8 +47,6 @@ public record FestivalToastConfig(
                             .forGetter(FestivalToastConfig::festivals)
             ).apply(schema, FestivalToastConfig::new)
     );
-    public static final ConfigUnit<FestivalToastConfig> UNIT = DEFINITION.unit();
-
     public static FestivalToastConfig get() {
         return UNIT.get();
     }

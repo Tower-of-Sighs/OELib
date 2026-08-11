@@ -6,53 +6,62 @@ import cc.sighs.oelib.config.model.ConfigMeta;
 import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigValueMeta;
 import cc.sighs.oelib.config.util.ConfigIOUtil;
-import cc.sighs.oelib.config.util.ConfigMigrationUtil;
-import cc.sighs.oelib.config.util.ConfigPathUtil;
 import cc.sighs.oelib.config.util.ConfigSerializationUtil;
+import cc.sighs.oelib.config.validation.ConfigValidationException;
+import cc.sighs.oelib.config.validation.ConfigValidationReport;
+import cc.sighs.oelib.config.validation.ConfigViolation;
 import cc.sighs.oelib.platform.Platform;
-import com.flechazo.optics.generated.LensGetter;
-import com.flechazo.optics.util.Affines;
+import com.flechazo.hkt.Maybe;
+import com.flechazo.hkt.Try;
+import com.flechazo.hkt.Validated;
+import com.flechazo.hkt.business.core.Traverses;
+import com.flechazo.hkt.business.data.NonEmptyList;
+import com.flechazo.hkt.business.util.OptionalOps;
+import com.flechazo.hkt.tuple.Tuple2;
+import com.flechazo.optics.*;
+import com.flechazo.optics.focus.AffinePath;
+import com.flechazo.optics.focus.FocusPath;
+import com.flechazo.optics.focus.TraversalPath;
+import com.flechazo.optics.util.Traversals;
 import net.minecraft.resources.ResourceLocation;
 
-import java.lang.invoke.MethodHandles;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
 /**
- * A runtime unit that owns one configuration instance: its codec, its
- * current value, and its persistence lifecycle.
+ * Provides access to one configuration value and its persistence lifecycle.
  *
- * <p>An {@code ConfigUnit} lazily loads its value from disk on the first
- * call to {@link #get()}. Subsequent reads return the cached value.
- * Mutations go through {@link #update(LensGetter, UnaryOperator)} or
- * {@link #updateAll(ConfigMutation[])} and are validated, persisted,
- * and broadcast as change events in a single atomic step.
+ * <p>The first call to {@link #get()} loads, migrates, decodes, and validates the configured file.
+ * Later reads return the accepted in-memory value. A successful persisted mutation validates and
+ * writes its candidate before replacing the in-memory value and publishing a change event. A
+ * failed validation or write leaves the preceding value unchanged. A mutation equal to the
+ * preceding value performs no write and publishes no change event.
  *
- * <p>On load failure the unit falls back through: last valid value,
- * current cached value, and finally the default value provided at
- * construction time.
+ * <p>When loading or reloading fails, the unit uses the most recently validated and accepted value,
+ * then the current in-memory value, then the configured default value. The accepted value may have
+ * been committed without persistence and therefore is not necessarily the value stored on disk.
  *
- * <p>Instances are created via {@link #of(ConfigCodec, Object)} or
- * through the {@link ConfigManager} registration helpers.
+ * <p>Instances are created by {@link #of(Class, ConfigCodec, Object)} or a
+ * {@link ConfigSchema} definition.
  *
  * @param <T> the type of the configuration value
  */
 public class ConfigUnit<T> {
+    private final Class<T> rootClass;
     private final ConfigCodec<T> configCodec;
     private final T defaultValue;
     private final AtomicBoolean loaded = new AtomicBoolean();
     private volatile T currentValue;
     private volatile T lastValidValue;
-    private ConfigOpticResolver<T> resolver;
 
-    private ConfigUnit(ConfigCodec<T> configCodec, T defaultValue) {
+    private ConfigUnit(Class<T> rootClass, ConfigCodec<T> configCodec, T defaultValue) {
+        this.rootClass = Objects.requireNonNull(rootClass, "rootClass");
         this.configCodec = configCodec;
         this.defaultValue = defaultValue;
     }
@@ -60,69 +69,116 @@ public class ConfigUnit<T> {
     /**
      * Creates a new configuration unit.
      *
-     * @param codec        the codec and metadata for this configuration
+     * @param rootClass the configuration record type
+     * @param codec the codec and metadata for this configuration
      * @param defaultValue the default value used when no persisted file exists
-     * @param <T>          the type of the configuration value
+     * @param <T> the type of the configuration value
      * @return a new configuration unit
      */
-    public static <T> ConfigUnit<T> of(ConfigCodec<T> codec, T defaultValue) {
+    public static <T> ConfigUnit<T> of(Class<T> rootClass, ConfigCodec<T> codec, T defaultValue) {
+        Objects.requireNonNull(rootClass);
         Objects.requireNonNull(codec);
         Objects.requireNonNull(defaultValue);
-        return new ConfigUnit<>(codec, defaultValue);
+        return new ConfigUnit<>(rootClass, codec, defaultValue);
+    }
+
+    /**
+     * Returns the root record type of this configuration.
+     *
+     * @return the configuration root type
+     */
+    public Class<T> rootClass() {
+        return rootClass;
     }
 
     /**
      * Returns the current configuration value, loading from disk on first access.
      *
-     * <p>On load failure, a fallback value is returned: the last valid value,
-     * the current cached value, or the default value, in that order.
+     * <p>When loading, migration, decoding, or validation fails, this method returns the most
+     * recently validated and accepted value, the current in-memory value, or the default value, in
+     * that order. The failure is logged and the source file is not modified.
      *
      * @return the current configuration value
      */
     public T get() {
         if (loaded.compareAndSet(false, true)) {
-            try {
-                T value = load();
+            Try.of(this::load).match(value -> {
                 currentValue = value;
                 lastValidValue = value;
-            } catch (Exception e) {
+            }, error -> {
                 T fallback = fallbackValue();
-                OELibConfig.LOGGER.error("Failed to load config {}, fallback to last valid value", configCodec.meta().id(), e);
+                OELibConfig.LOGGER.error(
+                        "Failed to load config {}, fallback to last valid value",
+                        configCodec.meta().id(), error);
                 currentValue = fallback;
-            }
+            });
         }
         return currentValue;
     }
 
     /**
-     * Reloads the configuration value from disk, replacing the cached value.
+     * Reloads the configuration value from its configured storage location.
+     *
+     * <p>A successful reload replaces the current and most recently accepted values. A failed
+     * reload logs the failure and restores the most recently accepted value according to the same
+     * ordering as {@link #get()}.
      */
-    public void reload() {
-        try {
-            T value = load();
+    void reload() {
+        Try.of(this::load).match(value -> {
             currentValue = value;
             lastValidValue = value;
-        } catch (Exception e) {
+        }, error -> {
             T fallback = fallbackValue();
-            OELibConfig.LOGGER.error("Failed to reload config {}, keeping last valid value", configCodec.meta().id(), e);
+            OELibConfig.LOGGER.error(
+                    "Failed to reload config {}, keeping last valid value",
+                    configCodec.meta().id(), error);
             currentValue = fallback;
-        }
+        });
     }
 
     /**
-     * Runs automatic migration on registration if the configuration file
-     * exists on disk.
+     * Applies configured migrations when this unit is registered.
+     *
+     * <p>A successfully migrated and decoded value may be rewritten in the configured format. A
+     * migration or decoding failure is logged and leaves the source file unchanged.
      */
-    public void applyAutoMigrationOnRegister() {
+    void applyAutoMigrationOnRegister() {
         ConfigIOUtil.applyAutoMigrationOnRegister(this);
     }
 
     private T load() {
         var meta = configCodec.meta();
         var path = ConfigIOUtil.resolveLoadPath(meta);
-        var loaded = ConfigSerializationUtil.loadFromFile(path, meta.format(), configCodec.codec(), defaultValue);
-        T value = loaded.orElse(defaultValue);
-        value = ConfigMigrationUtil.applyFieldMigrations(value, configCodec.codec(), configCodec.fields());
+        if (!Files.exists(path)) {
+            validateValueOrThrow(defaultValue);
+            return defaultValue;
+        }
+        String raw = Try.of(() -> Files.readString(path, StandardCharsets.UTF_8)).fold(
+                error -> { throw new IllegalStateException(
+                        "Failed to read config " + meta.id(), error); },
+                content -> content);
+        var dynamic = ConfigSerializationUtil.parseToDynamic(raw, meta.format());
+        int inputVersion = dynamic.get("__cfg_version").asInt(0);
+        var fixed = ConfigFixRegistry.apply(
+                meta.id(), dynamic, inputVersion, configCodec.fields());
+        if (fixed.left().isPresent()) {
+            var error = fixed.left().orElseThrow();
+            throw new IllegalStateException(
+                    "Config migration failed [" + error.code() + "]: " + error.message(),
+                    error.cause());
+        }
+        dynamic = fixed.right().orElseThrow();
+        var decoded = configCodec.codec().parse(dynamic);
+        var decodeError = OptionalOps.toMaybe(decoded.error());
+        if (decodeError.isDefined()) {
+            throw new IllegalStateException(
+                    "Config decode failed for " + meta.id() + ": "
+                            + decodeError.get().message());
+        }
+        T value = OptionalOps.toMaybe(decoded.result()).fold(
+                () -> { throw new IllegalStateException(
+                        "Config decode returned no value for " + meta.id()); },
+                decodedValue -> decodedValue);
         validateValueOrThrow(value);
         OELibConfig.LOGGER.debug("Loaded config {} from {}", meta.id(), path);
         ConfigEvents.onLoad(this, value);
@@ -130,20 +186,23 @@ public class ConfigUnit<T> {
     }
 
     /**
-     * Persists the current configuration value to disk.
-     *
-     * <p>On failure the unit rolls back to the last known valid value.
+     * Persists the current configuration value.
+ *
+     * <p>A validation or write failure is logged and restores the most recently validated and
+     * accepted value. That value is not necessarily the most recently persisted value.
      */
-    public void save() {
+    void save() {
         T value = currentValue != null ? currentValue : defaultValue;
-        try {
+        Try.of(() -> {
             validateValueOrThrow(value);
             writeToDisk(value);
             lastValidValue = value;
-        } catch (Exception e) {
-            OELibConfig.LOGGER.error("Failed to save config {}", configCodec.meta().id(), e);
+            return value;
+        }).peekFailure(error -> {
+            OELibConfig.LOGGER.error(
+                    "Failed to save config {}", configCodec.meta().id(), error);
             rollbackToLastValid();
-        }
+        });
     }
 
     /**
@@ -183,7 +242,7 @@ public class ConfigUnit<T> {
     }
 
     /**
-     * Atomically sets the configuration value and fires a change event.
+     * Sets the current configuration value and publishes a change event.
      *
      * <p>When the platform is a client and this unit is server-side and a
      * server update is in progress, the change event is suppressed to avoid
@@ -191,7 +250,7 @@ public class ConfigUnit<T> {
      *
      * @param value the new value
      */
-    public void setValue(T value) {
+    void setValue(T value) {
         var old = this.currentValue;
         this.currentValue = value;
         if (Platform.isClient() && configCodec.meta().side() == ConfigSide.SERVER && ConfigManager.isUpdatingFromServer()) {
@@ -199,15 +258,11 @@ public class ConfigUnit<T> {
         }
         OELibConfig.LOGGER.info("Config {} changed", configCodec.meta().id());
         ConfigEvents.onChanged(this, old, value);
-    }
-
-    /**
-     * Returns operations that apply preconstructed paths to this unit.
-     *
-     * @return path-based operations for this unit
-     */
-    public ConfigUnitPaths<T> paths() {
-        return new ConfigUnitPaths<>(this);
+        if (configCodec.meta().side() == ConfigSide.SERVER
+                && Platform.isServer()
+                && !ConfigManager.isUpdatingFromServer()) {
+            ServerConfigManager.synchronizeAccepted(this, value);
+        }
     }
 
     /**
@@ -219,7 +274,7 @@ public class ConfigUnit<T> {
      */
     public <V> V view(LensGetter<T, V> getter) {
         Objects.requireNonNull(getter);
-        return resolver().lens(getter).get(get());
+        return lens(getter).get(get());
     }
 
     /**
@@ -234,37 +289,90 @@ public class ConfigUnit<T> {
     public <V> T update(LensGetter<T, V> getter, UnaryOperator<V> modifier) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(modifier);
-        var lens = resolver().lens(getter);
+        var lens = lens(getter);
         T current = get();
         T updated = lens.modify(modifier, current);
         return commitCandidate(current, updated, true);
     }
 
     /**
-     * Applies multiple mutations in sequence, validates, persists, and fires
-     * a change event if the value changed.
+     * Replaces a record component, validates the resulting configuration, and
+     * persists it.
      *
-     * <p>Null mutations in the array are silently skipped.
-     *
-     * @param mutations the mutations to apply
+     * @param getter the accessor identifying the record component
+     * @param value the replacement component value
+     * @param <V> the component type
      * @return the committed configuration value
+     * @throws IllegalStateException if validation or persistence fails
      */
-    @SafeVarargs
-    public final T updateAll(ConfigMutation<T>... mutations) {
-        Objects.requireNonNull(mutations);
+    public <V> T set(LensGetter<T, V> getter, V value) {
+        return set(getter, value, true);
+    }
+
+    /**
+     * Replaces a record component and validates the resulting configuration
+     * without persisting it.
+     *
+     * @param getter the accessor identifying the record component
+     * @param value the replacement component value
+     * @param <V> the component type
+     * @return the committed in-memory configuration value
+     * @throws IllegalStateException if validation fails
+     */
+    public <V> T setNoSave(LensGetter<T, V> getter, V value) {
+        return set(getter, value, false);
+    }
+
+    private <V> T set(LensGetter<T, V> getter, V value, boolean persist) {
+        Objects.requireNonNull(getter, "getter");
         T current = get();
-        T updated = current;
-        for (ConfigMutation<T> mutation : mutations) {
-            if (mutation == null) {
-                continue;
-            }
-            if (mutation instanceof ContextualMutation<T> contextual) {
-                updated = contextual.apply(updated, resolver());
-            } else {
-                updated = mutation.apply(updated);
-            }
+        return commitCandidate(current, lens(getter).set(value, current), persist);
+    }
+
+    /**
+     * Creates an empty mutation for this configuration.
+     *
+     * @return an empty mutation that accepts this configuration root type
+     */
+    public ConfigMutation<T> mutation() {
+        return new ConfigMutation<>(rootClass);
+    }
+
+    /**
+     * Applies a mutation, validates the resulting configuration, and persists
+     * it as one committed change.
+     *
+     * @param mutation the ordered transformations to apply
+     * @return the committed configuration value
+     * @throws IllegalArgumentException if the mutation belongs to another root type
+     * @throws IllegalStateException if validation or persistence fails
+     */
+    public T applyMutation(ConfigMutation<T> mutation) {
+        return applyMutation(mutation, true);
+    }
+
+    /**
+     * Applies a mutation and validates the resulting configuration without
+     * persisting it.
+     *
+     * @param mutation the ordered transformations to apply
+     * @return the committed in-memory configuration value
+     * @throws IllegalArgumentException if the mutation belongs to another root type
+     * @throws IllegalStateException if validation fails
+     */
+    public T applyMutationNoSave(ConfigMutation<T> mutation) {
+        return applyMutation(mutation, false);
+    }
+
+    private T applyMutation(ConfigMutation<T> mutation, boolean persist) {
+        Objects.requireNonNull(mutation, "mutation");
+        if (mutation.rootClass() != rootClass) {
+            throw new IllegalArgumentException(
+                    "Mutation for " + mutation.rootClass().getName()
+                            + " cannot be applied to " + rootClass.getName());
         }
-        return commitCandidate(current, updated, true);
+        T current = get();
+        return commitCandidate(current, mutation.apply(current), persist);
     }
 
     /**
@@ -278,7 +386,7 @@ public class ConfigUnit<T> {
      */
     public <V> Optional<V> preview(LensGetter<T, Optional<V>> getter) {
         Objects.requireNonNull(getter);
-        return Affines.previewOptional(resolver().optional(getter), get());
+        return OptionalOps.fromEither(optional(getter).preview(get()));
     }
 
     /**
@@ -295,7 +403,7 @@ public class ConfigUnit<T> {
     public <V, X extends V> Optional<X> preview(LensGetter<T, V> getter, Class<X> subtype) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(subtype);
-        return Affines.previewOptional(resolver().subtype(getter, subtype), get());
+        return OptionalOps.fromEither(subtype(getter, subtype).preview(get()));
     }
 
     /**
@@ -310,7 +418,7 @@ public class ConfigUnit<T> {
     public <V> T ifPresent(LensGetter<T, Optional<V>> getter, UnaryOperator<V> modifier) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(modifier);
-        var selector = resolver().optional(getter);
+        var selector = optional(getter);
         T current = get();
         T updated = selector.modify(modifier, current);
         return commitCandidate(current, updated, true);
@@ -332,7 +440,7 @@ public class ConfigUnit<T> {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(subtype);
         Objects.requireNonNull(modifier);
-        var selector = resolver().subtype(getter, subtype);
+        var selector = subtype(getter, subtype);
         T current = get();
         T updated = selector.modify(modifier, current);
         return commitCandidate(current, updated, true);
@@ -350,7 +458,7 @@ public class ConfigUnit<T> {
     public <V> T updateElements(LensGetter<T, List<V>> getter, UnaryOperator<V> modifier) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(modifier);
-        var traversal = resolver().listTraversal(getter);
+        var traversal = listTraversal(getter);
         T current = get();
         T updated = traversal.modify(modifier, current);
         return commitCandidate(current, updated, true);
@@ -371,7 +479,7 @@ public class ConfigUnit<T> {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
         Objects.requireNonNull(modifier);
-        var traversal = resolver().listTraversal(getter).filtered(predicate);
+        var traversal = listTraversal(getter).filtered(predicate);
         T current = get();
         T updated = traversal.modify(modifier, current);
         return commitCandidate(current, updated, true);
@@ -387,7 +495,7 @@ public class ConfigUnit<T> {
      */
     public <V> List<V> getAll(LensGetter<T, List<V>> getter) {
         Objects.requireNonNull(getter);
-        return resolver().listTraversal(getter).getAll(get());
+        return listTraversal(getter).getAll(get());
     }
 
     /**
@@ -402,7 +510,7 @@ public class ConfigUnit<T> {
     public <V> List<V> getAllWhere(LensGetter<T, List<V>> getter, Predicate<V> predicate) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
-        return resolver().listTraversal(getter).filtered(predicate).getAll(get());
+        return listTraversal(getter).filtered(predicate).getAll(get());
     }
 
     /**
@@ -415,7 +523,7 @@ public class ConfigUnit<T> {
      */
     public <V> long count(LensGetter<T, List<V>> getter) {
         Objects.requireNonNull(getter);
-        return resolver().listTraversal(getter).length(get());
+        return listTraversal(getter).length(get());
     }
 
     /**
@@ -430,7 +538,7 @@ public class ConfigUnit<T> {
     public <V> boolean anyMatch(LensGetter<T, List<V>> getter, Predicate<V> predicate) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
-        return resolver().listTraversal(getter).exists(predicate, get());
+        return listTraversal(getter).exists(predicate, get());
     }
 
     /**
@@ -446,7 +554,7 @@ public class ConfigUnit<T> {
     public <V> Optional<V> findFirst(LensGetter<T, List<V>> getter, Predicate<V> predicate) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
-        return resolver().listTraversal(getter).asFold().findOptional(predicate, get());
+        return OptionalOps.fromMaybe(listTraversal(getter).asFold().find(predicate, get()));
     }
 
     /**
@@ -462,7 +570,7 @@ public class ConfigUnit<T> {
     public <V> boolean allMatch(LensGetter<T, List<V>> getter, Predicate<V> predicate) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
-        return resolver().listTraversal(getter).all(predicate, get());
+        return listTraversal(getter).all(predicate, get());
     }
 
     /**
@@ -478,7 +586,7 @@ public class ConfigUnit<T> {
     public <K, V> T updateValues(LensGetter<T, Map<K, V>> getter, UnaryOperator<V> modifier) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(modifier);
-        var traversal = resolver().mapValuesTraversal(getter);
+        var traversal = mapValuesTraversal(getter);
         T current = get();
         T updated = traversal.modify(modifier, current);
         return commitCandidate(current, updated, true);
@@ -500,7 +608,7 @@ public class ConfigUnit<T> {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
         Objects.requireNonNull(modifier);
-        var traversal = resolver().mapValuesTraversal(getter).filtered(predicate);
+        var traversal = mapValuesTraversal(getter).filtered(predicate);
         T current = get();
         T updated = traversal.modify(modifier, current);
         return commitCandidate(current, updated, true);
@@ -517,7 +625,7 @@ public class ConfigUnit<T> {
      */
     public <K, V> List<V> getValues(LensGetter<T, Map<K, V>> getter) {
         Objects.requireNonNull(getter);
-        return resolver().mapValuesTraversal(getter).getAll(get());
+        return mapValuesTraversal(getter).getAll(get());
     }
 
     /**
@@ -533,7 +641,7 @@ public class ConfigUnit<T> {
     public <K, V> List<V> getValuesWhere(LensGetter<T, Map<K, V>> getter, Predicate<V> predicate) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
-        return resolver().mapValuesTraversal(getter).filtered(predicate).getAll(get());
+        return mapValuesTraversal(getter).filtered(predicate).getAll(get());
     }
 
     /**
@@ -547,7 +655,7 @@ public class ConfigUnit<T> {
      */
     public <K, V> long countValues(LensGetter<T, Map<K, V>> getter) {
         Objects.requireNonNull(getter);
-        return resolver().mapValuesTraversal(getter).length(get());
+        return mapValuesTraversal(getter).length(get());
     }
 
     /**
@@ -563,7 +671,7 @@ public class ConfigUnit<T> {
     public <K, V> boolean anyValueMatch(LensGetter<T, Map<K, V>> getter, Predicate<V> predicate) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
-        return resolver().mapValuesTraversal(getter).exists(predicate, get());
+        return mapValuesTraversal(getter).exists(predicate, get());
     }
 
     /**
@@ -580,7 +688,7 @@ public class ConfigUnit<T> {
     public <K, V> boolean allValueMatch(LensGetter<T, Map<K, V>> getter, Predicate<V> predicate) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
-        return resolver().mapValuesTraversal(getter).all(predicate, get());
+        return mapValuesTraversal(getter).all(predicate, get());
     }
 
     /**
@@ -597,7 +705,7 @@ public class ConfigUnit<T> {
     public <K, V> Optional<V> findValue(LensGetter<T, Map<K, V>> getter, Predicate<V> predicate) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
-        return resolver().mapValuesTraversal(getter).asFold().findOptional(predicate, get());
+        return OptionalOps.fromMaybe(mapValuesTraversal(getter).asFold().find(predicate, get()));
     }
 
     /**
@@ -611,7 +719,7 @@ public class ConfigUnit<T> {
      */
     public <K, V> List<K> getKeys(LensGetter<T, Map<K, V>> getter) {
         Objects.requireNonNull(getter);
-        return resolver().mapKeysFold(getter).getAll(get());
+        return mapKeysFold(getter).getAll(get());
     }
 
     /**
@@ -625,7 +733,7 @@ public class ConfigUnit<T> {
      */
     public <K, V> long countKeys(LensGetter<T, Map<K, V>> getter) {
         Objects.requireNonNull(getter);
-        return resolver().mapKeysFold(getter).length(get());
+        return mapKeysFold(getter).length(get());
     }
 
     /**
@@ -641,7 +749,7 @@ public class ConfigUnit<T> {
     public <K, V> boolean anyKeyMatch(LensGetter<T, Map<K, V>> getter, Predicate<K> predicate) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
-        return resolver().mapKeysFold(getter).exists(predicate, get());
+        return mapKeysFold(getter).exists(predicate, get());
     }
 
     /**
@@ -658,7 +766,7 @@ public class ConfigUnit<T> {
     public <K, V> boolean allKeyMatch(LensGetter<T, Map<K, V>> getter, Predicate<K> predicate) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
-        return resolver().mapKeysFold(getter).all(predicate, get());
+        return mapKeysFold(getter).all(predicate, get());
     }
 
     /**
@@ -675,82 +783,618 @@ public class ConfigUnit<T> {
     public <K, V> Optional<K> findKey(LensGetter<T, Map<K, V>> getter, Predicate<K> predicate) {
         Objects.requireNonNull(getter);
         Objects.requireNonNull(predicate);
-        return resolver().mapKeysFold(getter).findOptional(predicate, get());
+        return OptionalOps.fromMaybe(mapKeysFold(getter).find(predicate, get()));
     }
 
-    ConfigOpticResolver<T> resolver() {
-        if (resolver == null) {
-            throw new IllegalStateException(
-                    "This ConfigUnit was constructed without lens initialization. " +
-                            "Use ConfigSchema.define() with a MethodHandles.Lookup instead of " +
-                            "defineLegacy() or ConfigManager.register(ConfigCodec, T) to enable " +
-                            "getter-based API methods."
-            );
-        }
-        return resolver;
+    private <A> Lens<T, A> lens(LensGetter<T, A> getter) {
+        return RecordLensBuilder.lens(rootClass, getter);
     }
 
-    void initLensData(Class<T> rootClass, MethodHandles.Lookup lensLookup) {
-        this.resolver = new ConfigOpticResolver<>(lensLookup, rootClass);
+    private <A> Affine<T, A> optional(LensGetter<T, Optional<A>> getter) {
+        return RecordLensBuilder.optional(lens(getter));
+    }
+
+    private <A, X extends A> Affine<T, X> subtype(
+            LensGetter<T, A> getter, Class<X> subtypeClass) {
+        return RecordLensBuilder.subtype(lens(getter), subtypeClass);
+    }
+
+    private <A> Traversal<T, A> listTraversal(LensGetter<T, List<A>> getter) {
+        return lens(getter).andThen(Traversals.forList());
+    }
+
+    private <K, V> Traversal<T, V> mapValuesTraversal(LensGetter<T, Map<K, V>> getter) {
+        return lens(getter).andThen(Traversals.forMapValues());
+    }
+
+    private <K, V> Fold<T, K> mapKeysFold(LensGetter<T, Map<K, V>> getter) {
+        return lens(getter).andThen(Fold.mapKeys());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <A> Class<A> componentClass(Class<?> sourceClass, LensGetter<?, A> getter) {
+        return (Class<A>) RecordLensBuilder.componentType(
+                sourceClass, RecordLensBuilder.componentName(getter));
     }
 
     /**
-     * Validates a candidate value, sets it if different from the current value,
-     * and optionally persists it to disk.
+     * Creates a reusable focus that selects one record component.
      *
-     * @param previous  the previous configuration value
-     * @param candidate the candidate value to commit
-     * @param persist   whether to write to disk
-     * @return the candidate value
+     * @param getter the accessor identifying the record component
+     * @param <A> the component type
+     * @return an exactly-one focus for the component
+     */
+    public <A> ConfigFocus.One<T, A> focus(LensGetter<T, A> getter) {
+        Objects.requireNonNull(getter, "getter");
+        return new ConfigFocus.One<>(
+                componentClass(rootClass, getter),
+                FocusPath.of(lens(getter))
+        );
+    }
+
+    /**
+     * Creates a reusable focus for the present value of an {@link Optional}
+     * record component.
+     *
+     * @param getter the accessor identifying the optional component
+     * @param <A> the optional value type
+     * @return a zero-or-one focus for the present value
+     */
+    @SuppressWarnings("unchecked")
+    public <A> ConfigFocus.Maybe<T, A> focusOptional(LensGetter<T, Optional<A>> getter) {
+        Objects.requireNonNull(getter, "getter");
+        return new ConfigFocus.Maybe<>(
+                (Class<A>) RecordLensBuilder.optionalElementType(getter),
+                AffinePath.of(optional(getter))
+        );
+    }
+
+    /**
+     * Creates a reusable focus for a component value matching a runtime subtype.
+     *
+     * @param getter the accessor identifying the component
+     * @param subtypeClass the subtype selected by the focus
+     * @param <A> the component base type
+     * @param <X> the selected subtype
+     * @return a zero-or-one focus for the matching value
+     */
+    public <A, X extends A> ConfigFocus.Maybe<T, X> focusSubtype(
+            LensGetter<T, A> getter, Class<X> subtypeClass) {
+        Objects.requireNonNull(getter, "getter");
+        Objects.requireNonNull(subtypeClass, "subtypeClass");
+        return new ConfigFocus.Maybe<>(subtypeClass, AffinePath.of(subtype(getter, subtypeClass)));
+    }
+
+    /**
+     * Creates a reusable focus over all elements of a {@link List} component.
+     *
+     * @param getter the accessor identifying the list component
+     * @param <A> the list element type
+     * @return a multi-focus selecting list elements in encounter order
+     */
+    @SuppressWarnings("unchecked")
+    public <A> ConfigFocus.Many<T, A> focusListElements(LensGetter<T, List<A>> getter) {
+        Objects.requireNonNull(getter, "getter");
+        return new ConfigFocus.Many<>(
+                (Class<A>) RecordLensBuilder.listElementType(getter),
+                TraversalPath.of(listTraversal(getter))
+        );
+    }
+
+    /**
+     * Creates a reusable focus over all elements of a {@link Set} component.
+     *
+     * @param getter the accessor identifying the set component
+     * @param <A> the set element type
+     * @return a multi-focus selecting set elements in encounter order
+     */
+    @SuppressWarnings("unchecked")
+    public <A> ConfigFocus.Many<T, A> focusSetElements(LensGetter<T, Set<A>> getter) {
+        Objects.requireNonNull(getter, "getter");
+        Class<A> elementClass = (Class<A>) RecordLensBuilder.setElementType(getter);
+        return new ConfigFocus.Many<>(elementClass, TraversalPath.of(
+                lens(getter).andThen(Traversals.forSet())));
+    }
+
+    /**
+     * Creates a reusable focus over all elements of an array component.
+     *
+     * @param getter the accessor identifying the array component
+     * @param <A> the array element type
+     * @return a multi-focus selecting array elements in index order
+     */
+    @SuppressWarnings("unchecked")
+    public <A> ConfigFocus.Many<T, A> focusArrayElements(LensGetter<T, A[]> getter) {
+        Objects.requireNonNull(getter, "getter");
+        Class<A> elementClass = (Class<A>) RecordLensBuilder.arrayElementType(getter);
+        return new ConfigFocus.Many<>(elementClass, TraversalPath.of(
+                lens(getter).andThen(Traversals.forArray(elementClass))));
+    }
+
+    /**
+     * Creates a reusable focus over all values of a {@link Map} component.
+     *
+     * @param getter the accessor identifying the map component
+     * @param <K> the map key type
+     * @param <V> the map value type
+     * @return a multi-focus selecting map values in entry encounter order
+     */
+    @SuppressWarnings("unchecked")
+    public <K, V> ConfigFocus.Many<T, V> focusMapValues(LensGetter<T, Map<K, V>> getter) {
+        Objects.requireNonNull(getter, "getter");
+        return new ConfigFocus.Many<>(
+                (Class<V>) RecordLensBuilder.mapValueType(getter),
+                TraversalPath.of(mapValuesTraversal(getter))
+        );
+    }
+
+    /**
+     * Creates a reusable focus over all entries of a {@link Map} component.
+     *
+     * <p>Each selected entry is represented as a key-value tuple. Replacing an
+     * entry may therefore replace both its key and value.
+     *
+     * @param getter the accessor identifying the map component
+     * @param <K> the map key type
+     * @param <V> the map value type
+     * @return a multi-focus selecting map entries in encounter order
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public <K, V> ConfigFocus.Many<T, Tuple2<K, V>> focusMapEntries(
+            LensGetter<T, Map<K, V>> getter) {
+        Objects.requireNonNull(getter, "getter");
+        return new ConfigFocus.Many<>((Class) Tuple2.class, TraversalPath.of(
+                lens(getter).andThen(Traversals.forMapEntries())));
+    }
+
+    /**
+     * Creates a reusable focus for the value associated with a map key.
+     *
+     * @param getter the accessor identifying the map component
+     * @param key the key whose associated value is selected
+     * @param <K> the map key type
+     * @param <V> the map value type
+     * @return a zero-or-one focus that is empty when the key is absent
+     */
+    @SuppressWarnings("unchecked")
+    public <K, V> ConfigFocus.Maybe<T, V> focusMapValue(
+            LensGetter<T, Map<K, V>> getter, K key) {
+        Objects.requireNonNull(getter, "getter");
+        Objects.requireNonNull(key, "key");
+        return new ConfigFocus.Maybe<>(
+                (Class<V>) RecordLensBuilder.mapValueType(getter),
+                AffinePath.of(lens(getter).andThen(Affine.mapValue(key)))
+        );
+    }
+
+    /**
+     * Returns the value selected by an exactly-one focus.
+     *
+     * @param focus the focus selecting the value
+     * @param <A> the focused value type
+     * @return the selected value
+     */
+    public <A> A view(ConfigFocus.One<T, A> focus) {
+        Objects.requireNonNull(focus, "focus");
+        return focus.prototype().get(get());
+    }
+
+    /**
+     * Returns the value selected by a zero-or-one focus, if present.
+     *
+     * @param focus the focus selecting the optional value
+     * @param <A> the focused value type
+     * @return the selected value, or an empty optional if the focus is absent
+     */
+    public <A> Optional<A> preview(ConfigFocus.Maybe<T, A> focus) {
+        Objects.requireNonNull(focus, "focus");
+        return OptionalOps.fromMaybe(focus.prototype().preview(get()));
+    }
+
+    /**
+     * Returns every value selected by a multi-focus in encounter order.
+     *
+     * @param focus the focus selecting the values
+     * @param <A> the focused value type
+     * @return an unmodifiable list of selected values
+     */
+    public <A> List<A> getAll(ConfigFocus.Many<T, A> focus) {
+        Objects.requireNonNull(focus, "focus");
+        return focus.prototype().getAll(get());
+    }
+
+    /**
+     * Transforms the value selected by an exactly-one focus and persists the
+     * resulting configuration.
+     *
+     * @param focus the focus selecting the value to transform
+     * @param updater the focused value transformation
+     * @param <A> the focused value type
+     * @return the committed configuration value
+     * @throws IllegalStateException if validation or persistence fails
+     */
+    public <A> T update(ConfigFocus.One<T, A> focus, UnaryOperator<A> updater) {
+        return updateFocus(focus, updater, true);
+    }
+
+    /**
+     * Transforms the value selected by an exactly-one focus without persisting
+     * the resulting configuration.
+     *
+     * @param focus the focus selecting the value to transform
+     * @param updater the focused value transformation
+     * @param <A> the focused value type
+     * @return the committed in-memory configuration value
      * @throws IllegalStateException if validation fails
      */
-    T commitCandidate(T previous, T candidate, boolean persist) {
+    public <A> T updateNoSave(ConfigFocus.One<T, A> focus, UnaryOperator<A> updater) {
+        return updateFocus(focus, updater, false);
+    }
+
+    private <A> T updateFocus(
+            ConfigFocus.One<T, A> focus, UnaryOperator<A> updater, boolean persist) {
+        Objects.requireNonNull(focus, "focus");
+        Objects.requireNonNull(updater, "updater");
+        T current = get();
+        return commitCandidate(current, focus.prototype().modify(updater, current), persist);
+    }
+
+    /**
+     * Transforms a present value selected by a zero-or-one focus and persists
+     * the resulting configuration.
+     *
+     * <p>An absent focus leaves the configuration unchanged.
+     *
+     * @param focus the focus selecting the optional value
+     * @param updater the transformation applied to a present value
+     * @param <A> the focused value type
+     * @return the committed or unchanged configuration value
+     * @throws IllegalStateException if validation or persistence fails
+     */
+    public <A> T ifPresent(ConfigFocus.Maybe<T, A> focus, UnaryOperator<A> updater) {
+        return updateOptionalFocus(focus, updater, true);
+    }
+
+    /**
+     * Transforms a present value selected by a zero-or-one focus without
+     * persisting the resulting configuration.
+     *
+     * <p>An absent focus leaves the configuration unchanged.
+     *
+     * @param focus the focus selecting the optional value
+     * @param updater the transformation applied to a present value
+     * @param <A> the focused value type
+     * @return the committed or unchanged in-memory configuration value
+     * @throws IllegalStateException if validation fails
+     */
+    public <A> T ifPresentNoSave(ConfigFocus.Maybe<T, A> focus, UnaryOperator<A> updater) {
+        return updateOptionalFocus(focus, updater, false);
+    }
+
+    private <A> T updateOptionalFocus(
+            ConfigFocus.Maybe<T, A> focus, UnaryOperator<A> updater, boolean persist) {
+        Objects.requireNonNull(focus, "focus");
+        Objects.requireNonNull(updater, "updater");
+        T current = get();
+        return commitCandidate(current, focus.prototype().modify(updater, current), persist);
+    }
+
+    /**
+     * Transforms every value selected by a multi-focus and persists the
+     * resulting configuration.
+     *
+     * @param focus the focus selecting values to transform
+     * @param updater the transformation applied to each selected value
+     * @param <A> the focused value type
+     * @return the committed configuration value
+     * @throws IllegalStateException if validation or persistence fails
+     */
+    public <A> T updateEach(ConfigFocus.Many<T, A> focus, UnaryOperator<A> updater) {
+        return updateManyFocus(focus, updater, true);
+    }
+
+    /**
+     * Transforms every value selected by a multi-focus without persisting the
+     * resulting configuration.
+     *
+     * @param focus the focus selecting values to transform
+     * @param updater the transformation applied to each selected value
+     * @param <A> the focused value type
+     * @return the committed in-memory configuration value
+     * @throws IllegalStateException if validation fails
+     */
+    public <A> T updateEachNoSave(ConfigFocus.Many<T, A> focus, UnaryOperator<A> updater) {
+        return updateManyFocus(focus, updater, false);
+    }
+
+    private <A> T updateManyFocus(
+            ConfigFocus.Many<T, A> focus, UnaryOperator<A> updater, boolean persist) {
+        Objects.requireNonNull(focus, "focus");
+        Objects.requireNonNull(updater, "updater");
+        T current = get();
+        return commitCandidate(current, focus.prototype().modify(updater, current), persist);
+    }
+
+    /**
+     * Transforms selected values satisfying a predicate and persists the
+     * resulting configuration.
+     *
+     * @param focus the focus selecting candidate values
+     * @param predicate the condition selecting values to transform
+     * @param updater the transformation applied to matching values
+     * @param <A> the focused value type
+     * @return the committed configuration value
+     * @throws IllegalStateException if validation or persistence fails
+     */
+    public <A> T updateWhere(
+            ConfigFocus.Many<T, A> focus,
+            Predicate<? super A> predicate,
+            UnaryOperator<A> updater) {
+        return updateEach(focus.filter(predicate), updater);
+    }
+
+    /**
+     * Transforms selected values satisfying a predicate without persisting the
+     * resulting configuration.
+     *
+     * @param focus the focus selecting candidate values
+     * @param predicate the condition selecting values to transform
+     * @param updater the transformation applied to matching values
+     * @param <A> the focused value type
+     * @return the committed in-memory configuration value
+     * @throws IllegalStateException if validation fails
+     */
+    public <A> T updateWhereNoSave(
+            ConfigFocus.Many<T, A> focus,
+            Predicate<? super A> predicate,
+            UnaryOperator<A> updater) {
+        return updateEachNoSave(focus.filter(predicate), updater);
+    }
+
+    /**
+     * Transforms a record component without persisting the resulting
+     * configuration.
+     *
+     * @param getter the accessor identifying the record component
+     * @param updater the component transformation
+     * @param <A> the component type
+     * @return the committed in-memory configuration value
+     * @throws IllegalStateException if validation fails
+     */
+    public <A> T updateNoSave(LensGetter<T, A> getter, UnaryOperator<A> updater) {
+        Objects.requireNonNull(getter, "getter");
+        Objects.requireNonNull(updater, "updater");
+        T current = get();
+        return commitCandidate(current, lens(getter).modify(updater, current), false);
+    }
+
+    /**
+     * Transforms the value of a nonempty {@link Optional} component without
+     * persisting the resulting configuration.
+     *
+     * <p>An empty component remains unchanged.
+     *
+     * @param getter the accessor identifying the optional component
+     * @param updater the transformation applied to a present value
+     * @param <A> the optional value type
+     * @return the committed or unchanged in-memory configuration value
+     * @throws IllegalStateException if validation fails
+     */
+    public <A> T ifPresentNoSave(
+            LensGetter<T, Optional<A>> getter, UnaryOperator<A> updater) {
+        Objects.requireNonNull(getter, "getter");
+        Objects.requireNonNull(updater, "updater");
+        T current = get();
+        return commitCandidate(current, optional(getter).modify(updater, current), false);
+    }
+
+    /**
+     * Transforms a component value matching a subtype without persisting the
+     * resulting configuration.
+     *
+     * <p>A value of another runtime type remains unchanged.
+     *
+     * @param getter the accessor identifying the component
+     * @param subtypeClass the subtype accepted by the transformation
+     * @param updater the transformation applied to a matching value
+     * @param <A> the component base type
+     * @param <X> the selected subtype
+     * @return the committed or unchanged in-memory configuration value
+     * @throws IllegalStateException if validation fails
+     */
+    public <A, X extends A> T whenSubtypeNoSave(
+            LensGetter<T, A> getter, Class<X> subtypeClass, UnaryOperator<X> updater) {
+        Objects.requireNonNull(getter, "getter");
+        Objects.requireNonNull(subtypeClass, "subtypeClass");
+        Objects.requireNonNull(updater, "updater");
+        T current = get();
+        return commitCandidate(
+                current, subtype(getter, subtypeClass).modify(updater, current), false);
+    }
+
+    /**
+     * Transforms every element of a {@link List} component without persisting
+     * the resulting configuration.
+     *
+     * @param getter the accessor identifying the list component
+     * @param updater the transformation applied to each element
+     * @param <A> the list element type
+     * @return the committed in-memory configuration value
+     * @throws IllegalStateException if validation fails
+     */
+    public <A> T updateElementsNoSave(
+            LensGetter<T, List<A>> getter, UnaryOperator<A> updater) {
+        Objects.requireNonNull(getter, "getter");
+        Objects.requireNonNull(updater, "updater");
+        T current = get();
+        return commitCandidate(current, listTraversal(getter).modify(updater, current), false);
+    }
+
+    /**
+     * Transforms list elements satisfying a predicate without persisting the
+     * resulting configuration.
+     *
+     * @param getter the accessor identifying the list component
+     * @param predicate the condition selecting elements to transform
+     * @param updater the transformation applied to matching elements
+     * @param <A> the list element type
+     * @return the committed in-memory configuration value
+     * @throws IllegalStateException if validation fails
+     */
+    public <A> T updateWhereNoSave(
+            LensGetter<T, List<A>> getter,
+            Predicate<A> predicate,
+            UnaryOperator<A> updater) {
+        Objects.requireNonNull(predicate, "predicate");
+        Objects.requireNonNull(updater, "updater");
+        T current = get();
+        return commitCandidate(
+                current, listTraversal(getter).filtered(predicate).modify(updater, current), false);
+    }
+
+    /**
+     * Transforms every value of a {@link Map} component without persisting the
+     * resulting configuration.
+     *
+     * @param getter the accessor identifying the map component
+     * @param updater the transformation applied to each value
+     * @param <K> the map key type
+     * @param <V> the map value type
+     * @return the committed in-memory configuration value
+     * @throws IllegalStateException if validation fails
+     */
+    public <K, V> T updateValuesNoSave(
+            LensGetter<T, Map<K, V>> getter, UnaryOperator<V> updater) {
+        Objects.requireNonNull(getter, "getter");
+        Objects.requireNonNull(updater, "updater");
+        T current = get();
+        return commitCandidate(current, mapValuesTraversal(getter).modify(updater, current), false);
+    }
+
+    /**
+     * Transforms map values satisfying a predicate without persisting the
+     * resulting configuration.
+     *
+     * @param getter the accessor identifying the map component
+     * @param predicate the condition selecting values to transform
+     * @param updater the transformation applied to matching values
+     * @param <K> the map key type
+     * @param <V> the map value type
+     * @return the committed in-memory configuration value
+     * @throws IllegalStateException if validation fails
+     */
+    public <K, V> T updateValuesWhereNoSave(
+            LensGetter<T, Map<K, V>> getter,
+            Predicate<V> predicate,
+            UnaryOperator<V> updater) {
+        Objects.requireNonNull(predicate, "predicate");
+        Objects.requireNonNull(updater, "updater");
+        T current = get();
+        return commitCandidate(
+                current, mapValuesTraversal(getter).filtered(predicate).modify(updater, current), false);
+    }
+
+    /**
+     * Commits a candidate value when it differs from the preceding value.
+ *
+     * <p>The candidate is validated before any state change. When persistence is requested, the
+     * candidate is written before it becomes current. An equal candidate returns {@code previous}
+     * without writing or publishing a change event.
+     *
+     * @param previous the preceding configuration value
+     * @param candidate the candidate value to commit
+     * @param persist {@code true} to persist the candidate; {@code false} to update memory only
+     * @return {@code previous} when both values are equal; otherwise the committed candidate
+     * @throws IllegalStateException if validation or requested persistence fails
+     */
+    synchronized T commitCandidate(T previous, T candidate, boolean persist) {
         validateValueOrThrow(candidate);
-        if (!Objects.equals(candidate, previous)) {
-            setValue(candidate);
+        if (Objects.equals(candidate, previous)) {
+            return previous;
         }
         if (persist) {
             writeToDisk(candidate);
         }
+        setValue(candidate);
         lastValidValue = candidate;
         return candidate;
     }
 
     private void validateValueOrThrow(T value) {
-        for (ConfigValueMeta fieldMeta : configCodec.fields()) {
-            if (fieldMeta.validators().isEmpty()) {
-                continue;
-            }
-            Object fieldValue = ConfigPathUtil.getObjectByPath(value, fieldMeta.key());
-            for (ConfigValueMeta.ConfigValueValidator validator : fieldMeta.validators()) {
-                var result = validator.validate(fieldValue, value);
-                if (result.isPresent()) {
-                    throw new IllegalStateException("Validation failed at '" + fieldMeta.key() + "': " + result.get());
-                }
-            }
-        }
+        validateInternal(value).fold(
+                violations -> { throw new ConfigValidationException(
+                        new ConfigValidationReport(violations.toList())); },
+                accepted -> accepted);
+    }
+
+    /**
+     * Validates a candidate against every schema rule.
+     *
+     * <p>All field and cross-field rules are evaluated in schema and registration order. A failed
+     * result contains every violation from that evaluation.
+     *
+     * @param value the complete configuration candidate
+     * @return an empty value when validation succeeds, or the complete failure report
+     */
+    public Optional<ConfigValidationReport> validate(T value) {
+        Maybe<ConfigValidationReport> report = validateInternal(value).fold(
+                violations -> Maybe.some(new ConfigValidationReport(violations.toList())),
+                accepted -> Maybe.none());
+        return OptionalOps.fromMaybe(report);
+    }
+
+    private Validated<NonEmptyList<ConfigViolation>, T> validateInternal(T value) {
+        Objects.requireNonNull(value, "value");
+        return Traverses.traverseValidatedNel(
+                        configCodec.fields().stream()
+                                .filter(field -> !field.validators().isEmpty())
+                                .toList(),
+                        field -> validateField(field, value))
+                .map(ignored -> value);
+    }
+
+    private Validated<NonEmptyList<ConfigViolation>, Object> validateField(
+            ConfigValueMeta field, T root) {
+        Object fieldValue = field.read(root);
+        return Traverses.traverseValidatedNel(
+                        field.validators(),
+                        validator -> validator.validate(fieldValue, root)
+                                .mapError(failures -> failures.map(failure -> new ConfigViolation(
+                                        field.key(), failure.code(), failure.message(), fieldValue))))
+                .map(ignored -> fieldValue);
     }
 
     private void writeToDisk(T value) {
         var meta = configCodec.meta();
         var path = ConfigIOUtil.resolveSavePath(meta);
         ConfigEvents.beforeSave(this, value);
-        int version = ConfigFixRegistry.get(meta.id()).map(ConfigFixRegistry.Chain::currentVersion).orElse(0);
+        int version = ConfigFixRegistry.currentVersion(meta.id(), configCodec.fields());
         var content = ConfigSerializationUtil.encodeToStringWithVersion(value, version, meta.format(), configCodec.codec(), configCodec.fields());
         if (content.isEmpty()) {
             throw new IllegalStateException("Failed to save config: " + meta.id());
         }
-        try {
+        Try.of(() -> {
             var parent = path.getParent();
             if (parent != null) {
                 Files.createDirectories(parent);
             }
-            Files.writeString(path, content.get(), StandardCharsets.UTF_8);
+            Path temp = Files.createTempFile(
+                    parent != null ? parent : path.toAbsolutePath().getParent(),
+                    path.getFileName().toString(), ".tmp");
+            try {
+                Files.writeString(temp, content.get(), StandardCharsets.UTF_8);
+                Files.move(temp, path, StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } finally {
+                Files.deleteIfExists(temp);
+            }
             OELibConfig.LOGGER.info("Saved config {} to {}", meta.id(), path);
             ConfigEvents.afterSave(this, value);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to write config file: " + meta.id(), e);
-        }
+            return value;
+        }).fold(
+                error -> { throw new IllegalStateException(
+                        "Failed to write config file: " + meta.id(), error); },
+                saved -> saved);
     }
 
     private T fallbackValue() {

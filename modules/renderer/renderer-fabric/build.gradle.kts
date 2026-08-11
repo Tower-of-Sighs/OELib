@@ -3,10 +3,7 @@ plugins {
     id("fabric-loom")
 }
 
-val modId: String = extra["mod_id"] as String
 val mcVersion: String = property("minecraft_version") as String
-val fabricLoaderVer: String = property("fabric_loader_version") as String
-val fabricApiVer: String = property("fabric_version") as String
 val parchmentMc: String = property("parchment_minecraft") as String
 val parchmentVer: String = property("parchment_version") as String
 

@@ -1,10 +1,12 @@
+import cc.sighs.gradle.configureJarJarFilenameNormalization
+import cc.sighs.gradle.registerGeneratedResources
+
 plugins {
     id("module-loader")
     id("net.neoforged.moddev")
 }
 
 val modId: String = extra["mod_id"] as String
-val mcVersion: String = property("minecraft_version") as String
 val neoVer: String = property("neoforge_version") as String
 val parchmentMc: String = property("parchment_minecraft") as String
 val parchmentVer: String = property("parchment_version") as String
@@ -44,39 +46,33 @@ neoForge {
     }
 }
 
-sourceSets.named("main") {
-    resources.srcDir("src/generated/resources")
-}
+registerGeneratedResources()
 
+// Optics and its classfile backend are embedded here. Publishing them as
+// runtime dependencies as well would expose the same JPMS modules twice.
+extra["mavenDependencyWhitelist"] = emptyList<String>()
 dependencies {
-}
-
-tasks.named<Jar>("jar") {
-
-    // Strip MDG's group. prefix from embedded JAR filenames in jarJar output
-    doFirst {
-        val jarjarDir = project.layout.buildDirectory.dir("generated/jarJar/META-INF/jarjar").get().asFile
-        if (!jarjarDir.exists()) return@doFirst
-        val metaFile = File(jarjarDir, "metadata.json")
-        if (!metaFile.exists()) return@doFirst
-        val meta = metaFile.readText()
-        val artifactR = Regex(""""artifact"\s*:\s*"([^"]+)"""")
-        val pathR = Regex(""""path"\s*:\s*"([^"]+)"""")
-        val artifacts = artifactR.findAll(meta).map { it.groupValues[1] }.toList()
-        val paths = pathR.findAll(meta).map { it.groupValues[1] }.toList()
-        val renames = linkedMapOf<String, String>()
-        for (idx in artifacts.indices) {
-            val path = paths.getOrNull(idx) ?: continue
-            val oldFile = path.substringAfterLast("/")
-            val marker = "${artifacts[idx]}-"
-            val mIdx = oldFile.indexOf(marker)
-            if (mIdx > 0) renames[oldFile] = oldFile.substring(mIdx)
-        }
-        for ((oldName, newName) in renames) File(jarjarDir, oldName).renameTo(File(jarjarDir, newName))
-        if (renames.isNotEmpty()) {
-            var newMeta = meta
-            for ((oldName, newName) in renames) newMeta = newMeta.replace(oldName, newName)
-            metaFile.writeText(newMeta)
-        }
+    compileOnlyApi("io.smallrye.classfile:jdk-classfile-backport:26")
+    compileOnlyApi("com.flechazo:optics-java:1.0.8-beta") {
+        exclude(group = "com.google.guava", module = "guava")
+        exclude(group = "it.unimi.dsi", module = "fastutil")
+    }
+    jarJar("io.smallrye.classfile:jdk-classfile-backport:26")
+    jarJar("com.flechazo:optics-java:1.0.8-beta") {
+        exclude(group = "com.google.guava", module = "guava")
+        exclude(group = "it.unimi.dsi", module = "fastutil")
+    }
+    "additionalRuntimeClasspath"("io.smallrye.classfile:jdk-classfile-backport:26")
+    "additionalRuntimeClasspath"("com.flechazo:optics-java:1.0.8-beta") {
+        exclude(group = "com.google.guava", module = "guava")
+        exclude(group = "it.unimi.dsi", module = "fastutil")
     }
 }
+
+// Downstream projects need optics on their compile classpath because misc now
+// exposes HKT/optics types, while the runtime copy is supplied by JarJar.
+tasks.withType<GenerateModuleMetadata>().configureEach {
+    enabled = true
+}
+
+configureJarJarFilenameNormalization()

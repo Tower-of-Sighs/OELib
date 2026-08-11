@@ -14,7 +14,7 @@ import java.lang.annotation.Target;
  *     <li>have exactly one parameter implementing {@link Event},</li>
  *     <li>be either static or belong to an instance that is registered via {@link EventBus#register(Object)}.</li>
  * </ul>
- * Handlers are ordered by {@link #phase()} and {@link #priority()}.
+ * Handlers are ordered by {@link #priority()}.
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)

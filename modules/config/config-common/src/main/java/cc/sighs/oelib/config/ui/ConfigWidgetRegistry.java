@@ -1,6 +1,7 @@
 package cc.sighs.oelib.config.ui;
 
 import cc.sighs.oelib.config.model.ConfigValueMeta;
+import com.flechazo.hkt.Maybe;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -8,23 +9,14 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Registry for custom configuration UI widgets.
+ * Registers custom controls for generated configuration screens.
  *
- * <p>Widgets can be registered in two ways:
- * <ul>
- *   <li>By {@link ResourceLocation} — a specific widget factory that is
- *       referenced from a {@link ConfigUiHint.Custom} hint.</li>
- *   <li>By Java type — a fallback factory that is applied to all fields
- *       of a given class.</li>
- * </ul>
- *
- * <p>Factories are invoked when the config screen creates controls for
- * each field. The resulting {@link CustomWidgetHandle} provides the
- * actual {@link AbstractWidget} to be rendered.
+ * <p>An identifier registration serves fields with a matching {@link ConfigUiHint.Custom} value.
+ * A type registration serves fields of the registered value type when no identifier-specific
+ * control is selected.
  */
 public final class ConfigWidgetRegistry {
     private static final Map<ResourceLocation, CustomWidgetFactory> CUSTOM_WIDGETS = new ConcurrentHashMap<>();
@@ -47,10 +39,10 @@ public final class ConfigWidgetRegistry {
      * Looks up a custom widget factory by id.
      *
      * @param widgetId the widget id
-     * @return the factory, or {@link Optional#empty()}
+     * @return the factory, or an empty value
      */
-    public static Optional<CustomWidgetFactory> custom(ResourceLocation widgetId) {
-        return Optional.ofNullable(CUSTOM_WIDGETS.get(widgetId));
+    public static Maybe<CustomWidgetFactory> custom(ResourceLocation widgetId) {
+        return Maybe.ofNullable(CUSTOM_WIDGETS.get(widgetId));
     }
 
     /**
@@ -67,10 +59,10 @@ public final class ConfigWidgetRegistry {
      * Looks up a type-based widget factory.
      *
      * @param javaType the Java type
-     * @return the factory, or {@link Optional#empty()}
+     * @return the factory, or an empty value
      */
-    public static Optional<TypeWidgetFactory> byType(Class<?> javaType) {
-        return Optional.ofNullable(TYPE_WIDGETS.get(javaType));
+    public static Maybe<TypeWidgetFactory> byType(Class<?> javaType) {
+        return Maybe.ofNullable(TYPE_WIDGETS.get(javaType));
     }
 
     /**

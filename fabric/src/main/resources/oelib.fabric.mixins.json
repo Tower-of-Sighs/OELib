@@ -7,7 +7,6 @@
   "mixins": [
   ],
   "client": [
-    "cc.sighs.oelib.misc.fabric.mixin.FabricIconHandlerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -27,13 +27,12 @@ subprojects {
     }
 }
 
-// Auto-discover modules for parent JiJ
-val discoveredModules = mutableMapOf<String, File>()
-if (file("modules").exists()) {
-    file("modules").listFiles()?.filter { it.isDirectory && !it.name.startsWith("_") }?.forEach { dir ->
-        discoveredModules[dir.name] = dir
-    }
-}
+// Reuse the module directory snapshot collected during settings evaluation.
+// Keeping one snapshot avoids repeated filesystem scans while preserving the
+// current discovery order and the set of directories selected by settings.
+@Suppress("UNCHECKED_CAST")
+val moduleDirs: List<File> = gradle.extra["moduleDirs"] as? List<File> ?: emptyList()
+val discoveredModules = moduleDirs.associateBy { it.name }
 extra["discoveredModules"] = discoveredModules
 
 // Convenience task: create a new module from template

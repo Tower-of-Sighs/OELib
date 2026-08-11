@@ -38,16 +38,14 @@ class ConfigUnitStressTest {
                 ).apply(schema, UnitStressConfig::new)
         );
 
-        ConfigUnit<UnitStressConfig> unit = definition.unit();
-        unit.updateAll(
-                ConfigMutation.set(UnitStressConfig::count, 1),
-                ConfigMutation.set(UnitStressConfig::opt, Optional.of(2))
-        );
+        ConfigUnit<UnitStressConfig> unit = definition;
+        unit.applyMutation(unit.mutation()
+                .set(UnitStressConfig::count, 1)
+                .set(UnitStressConfig::opt, Optional.of(2)));
         for (int i = 0; i < 2_000; i++) {
-            unit.updateAll(
-                    ConfigMutation.map(UnitStressConfig::count, v -> v + 1),
-                    ConfigMutation.map(UnitStressConfig::opt, v -> v.map(x -> x + 1))
-            );
+            unit.applyMutation(unit.mutation()
+                    .map(UnitStressConfig::count, v -> v + 1)
+                    .map(UnitStressConfig::opt, v -> v.map(x -> x + 1)));
             unit.ifPresent(UnitStressConfig::opt, v -> v + 1);
         }
 

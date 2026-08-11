@@ -9,8 +9,10 @@ val fabricLoaderVer: String = property("fabric_loader_version") as String
 val fabricApiVer: String = property("fabric_version") as String
 val parchmentMc: String = property("parchment_minecraft") as String
 val parchmentVer: String = property("parchment_version") as String
-val modmenuVer: String = property("modmenu_version") as String
-val jeiVer: String = property("jei_version") as String
+// The final JiJ stays self-contained, while these module dependencies remain
+// available transitively for Loom's development-time remapping and compilation.
+// Platform dependencies such as Fabric Loader/API are intentionally omitted.
+extra["mavenDependencyWhitelist"] = listOf("cc.sighs.oelib")
 
 repositories {
     maven {
@@ -27,9 +29,6 @@ dependencies {
     })
     modImplementation("net.fabricmc:fabric-loader:${fabricLoaderVer}")
     modImplementation("net.fabricmc.fabric-api:fabric-api:${fabricApiVer}")
-//    modImplementation("mezz.jei:jei-${mcVersion}-fabric:${jeiVer}")
-
-
     // Jar-in-Jar: embed all module Fabric subprojects
     @Suppress("UNCHECKED_CAST")
     val discoveredModules = rootProject.extra["discoveredModules"] as? Map<String, File> ?: emptyMap()
@@ -39,7 +38,10 @@ dependencies {
             val targetProject = project(path)
 
             include(targetProject)
-            implementation(targetProject)
+            // Loom strips nested jars from mod dependencies in development.
+            // Expose each embedded module on the API graph so Loom can remap it
+            // for both the java-api compile classpath and the runtime classpath.
+            api(targetProject)
         } catch (_: UnknownProjectException) {
         }
     }

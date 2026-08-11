@@ -1,315 +1,378 @@
 package cc.sighs.oelib.config;
 
-import com.flechazo.optics.generated.LensGetter;
+import com.flechazo.optics.Lens;
+import com.flechazo.optics.LensGetter;
+import com.flechazo.optics.Optic;
+import com.flechazo.optics.OpticBatch;
+import com.flechazo.optics.util.Traversals;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
 /**
- * A pure function that transforms a configuration value of type {@code S}
- * into a new value of the same type.
+ * Represents an immutable, ordered configuration mutation.
  *
- * <p>Mutations are composed and applied in batch via
- * {@link ConfigUnit#updateAll(ConfigMutation[])} or
- * {@link ConfigUnitOps#updateAllNoSave(ConfigUnit, ConfigMutation[])}.
- * Use the factory methods on this class to create mutations from record
- * component getters.
+ * <p>Each append operation returns a new mutation and leaves the original unchanged. Applying the
+ * mutation preserves the observable order of transformations, predicates, and exceptions.
  *
- * @param <S> the type of the configuration value
+ * @param <T> the configuration root type
  */
-@FunctionalInterface
-public interface ConfigMutation<S> {
-    S apply(S source);
+public final class ConfigMutation<T> implements UnaryOperator<T> {
+    private final Class<T> rootClass;
+    private final List<Edit<T>> edits;
 
-    /**
-     * Returns factories that create path-based mutations.
-     *
-     * @return path-based mutation factories
-     */
-    static Paths paths() {
-        return Paths.INSTANCE;
+    ConfigMutation(Class<T> rootClass) {
+        this(rootClass, List.of());
     }
 
-    // -- Getter factories --
-
-    /**
-     * Creates a mutation that sets a record component to a fixed value.
-     *
-     * @param getter a serializable method reference to a record component
-     * @param value  the new value
-     * @param <S>    the configuration type
-     * @param <V>    the field value type
-     * @return a mutation that sets the field
-     */
-    static <S, V> ConfigMutation<S> set(LensGetter<S, V> getter, V value) {
-        Objects.requireNonNull(getter);
-        Objects.requireNonNull(value);
-        return (ContextualMutation<S>) (source, resolver) -> {
-            var lens = resolver.lens(getter);
-            return lens.set(value, source);
-        };
+    private ConfigMutation(Class<T> rootClass, List<Edit<T>> edits) {
+        this.rootClass = Objects.requireNonNull(rootClass, "rootClass");
+        this.edits = List.copyOf(edits);
     }
 
     /**
-     * Creates a mutation that transforms a record component.
+     * Returns the configuration root type accepted by this mutation.
      *
-     * @param getter   a serializable method reference to a record component
-     * @param modifier a function transforming the current field value
-     * @param <S>      the configuration type
-     * @param <V>      the field value type
-     * @return a mutation that transforms the field
+     * @return the configuration root type
      */
-    static <S, V> ConfigMutation<S> map(LensGetter<S, V> getter, UnaryOperator<V> modifier) {
-        Objects.requireNonNull(getter);
-        Objects.requireNonNull(modifier);
-        return (ContextualMutation<S>) (source, resolver) -> {
-            var lens = resolver.lens(getter);
-            return lens.modify(modifier, source);
-        };
-    }
-
-    // -- Affine factories --
-
-    /**
-     * Creates a mutation that transforms an {@code Optional} field only if
-     * a value is present.
-     *
-     * @param getter   a serializable method reference to an {@code Optional} record component
-     * @param modifier a function transforming the present value
-     * @param <S>      the configuration type
-     * @param <V>      the optional value type
-     * @return a mutation that conditionally transforms the field
-     */
-    static <S, V> ConfigMutation<S> ifPresent(LensGetter<S, Optional<V>> getter, UnaryOperator<V> modifier) {
-        Objects.requireNonNull(getter);
-        Objects.requireNonNull(modifier);
-        return (ContextualMutation<S>) (source, resolver) -> {
-            var affine = resolver.optional(getter);
-            return affine.modify(modifier, source);
-        };
+    public Class<T> rootClass() {
+        return rootClass;
     }
 
     /**
-     * Creates a mutation that transforms a field only when its runtime value
-     * is an instance of the given subtype.
+     * Applies the appended transformations to a configuration value.
      *
-     * @param getter   a serializable method reference to a record component
-     * @param subtype  the expected subtype class
-     * @param modifier a function transforming the matched value
-     * @param <S>      the configuration type
-     * @param <V>      the base field type
-     * @param <X>      the subtype to match
-     * @return a mutation that conditionally transforms the field
+     * @param source the configuration value to transform
+     * @return the transformed configuration value
      */
-    static <S, V, X extends V> ConfigMutation<S> whenSubtype(LensGetter<S, V> getter, Class<X> subtype, UnaryOperator<X> modifier) {
-        Objects.requireNonNull(getter);
-        Objects.requireNonNull(subtype);
-        Objects.requireNonNull(modifier);
-        return (ContextualMutation<S>) (source, resolver) -> {
-            var affine = resolver.subtype(getter, subtype);
-            return affine.modify(modifier, source);
-        };
-    }
-
-    // -- Traversal factories --
-
-    /**
-     * Creates a mutation that transforms all elements of a {@code List} field.
-     *
-     * @param getter   a serializable method reference to a list field accessor
-     * @param modifier a function transforming each list element
-     * @param <S>      the configuration type
-     * @param <T>      the list element type
-     * @return a mutation that transforms all list elements
-     */
-    static <S, T> ConfigMutation<S> updateElements(LensGetter<S, List<T>> getter, UnaryOperator<T> modifier) {
-        Objects.requireNonNull(getter);
-        Objects.requireNonNull(modifier);
-        return (ContextualMutation<S>) (source, resolver) -> {
-            var traversal = resolver.listTraversal(getter);
-            return traversal.modify(modifier, source);
-        };
+    @Override
+    public T apply(T source) {
+        return toBatch().apply(source);
     }
 
     /**
-     * Creates a mutation that transforms only the elements of a {@code List}
-     * field that satisfy the given predicate.
+     * Returns a mutation that applies the specified root transformation after
+     * the operations in this mutation.
      *
-     * @param getter    a serializable method reference to a list field accessor
-     * @param predicate a predicate selecting which elements to transform
-     * @param modifier  a function transforming each selected element
-     * @param <S>       the configuration type
-     * @param <T>       the list element type
-     * @return a mutation that conditionally transforms list elements
+     * @param next the root transformation to append
+     * @return a mutation containing the existing operations followed by
+     *         {@code next}
      */
-    static <S, T> ConfigMutation<S> updateWhere(LensGetter<S, List<T>> getter, Predicate<T> predicate, UnaryOperator<T> modifier) {
-        Objects.requireNonNull(getter);
-        Objects.requireNonNull(predicate);
-        Objects.requireNonNull(modifier);
-        return (ContextualMutation<S>) (source, resolver) -> {
-            var traversal = resolver.listTraversal(getter).filtered(predicate);
-            return traversal.modify(modifier, source);
-        };
+    public ConfigMutation<T> then(UnaryOperator<T> next) {
+        Objects.requireNonNull(next, "next");
+        return append(next);
     }
 
     /**
-     * Creates a mutation that transforms all values of a {@code Map} field.
+     * Returns a mutation that replaces the selected record component.
      *
-     * @param getter   a serializable method reference to a map field accessor
-     * @param modifier a function transforming each map value
-     * @param <S>      the configuration type
-     * @param <K>      the map key type
-     * @param <V>      the map value type
-     * @return a mutation that transforms all map values
+     * @param getter the accessor identifying the record component
+     * @param value the replacement value
+     * @param <A> the component type
+     * @return a mutation containing the replacement operation
      */
-    static <S, K, V> ConfigMutation<S> updateValues(LensGetter<S, Map<K, V>> getter, UnaryOperator<V> modifier) {
-        Objects.requireNonNull(getter);
-        Objects.requireNonNull(modifier);
-        return (ContextualMutation<S>) (source, resolver) -> {
-            var traversal = resolver.mapValuesTraversal(getter);
-            return traversal.modify(modifier, source);
-        };
+    public <A> ConfigMutation<T> set(LensGetter<T, A> getter, A value) {
+        Objects.requireNonNull(getter, "getter");
+        Lens<T, A> lens = RecordLensBuilder.lens(rootClass, getter);
+        return appendSet(lens, value);
     }
 
     /**
-     * Creates a mutation that transforms only the values of a {@code Map}
-     * field that satisfy the given predicate.
+     * Returns a mutation that transforms the selected record component.
      *
-     * @param getter    a serializable method reference to a map field accessor
-     * @param predicate a predicate selecting which values to transform
-     * @param modifier  a function transforming each selected value
-     * @param <S>       the configuration type
-     * @param <K>       the map key type
-     * @param <V>       the map value type
-     * @return a mutation that conditionally transforms map values
+     * @param getter the accessor identifying the record component
+     * @param modifier the component transformation
+     * @param <A> the component type
+     * @return a mutation containing the component transformation
      */
-    static <S, K, V> ConfigMutation<S> updateValuesWhere(LensGetter<S, Map<K, V>> getter, Predicate<V> predicate, UnaryOperator<V> modifier) {
-        Objects.requireNonNull(getter);
-        Objects.requireNonNull(predicate);
-        Objects.requireNonNull(modifier);
-        return (ContextualMutation<S>) (source, resolver) -> {
-            var traversal = resolver.mapValuesTraversal(getter).filtered(predicate);
-            return traversal.modify(modifier, source);
-        };
+    public <A> ConfigMutation<T> map(
+            LensGetter<T, A> getter, UnaryOperator<A> modifier) {
+        Objects.requireNonNull(getter, "getter");
+        Objects.requireNonNull(modifier, "modifier");
+        Lens<T, A> lens = RecordLensBuilder.lens(rootClass, getter);
+        return appendModify(lens, modifier);
     }
 
     /**
-     * Creates mutations from preconstructed paths.
+     * Returns a mutation that transforms the value of a nonempty
+     * {@link Optional} component.
+     *
+     * <p>An empty component remains empty.
+     *
+     * @param getter the accessor identifying the optional component
+     * @param modifier the transformation applied to a present value
+     * @param <A> the optional value type
+     * @return a mutation containing the conditional transformation
      */
-    final class Paths {
-        private static final Paths INSTANCE = new Paths();
+    public <A> ConfigMutation<T> ifPresent(
+            LensGetter<T, Optional<A>> getter, UnaryOperator<A> modifier) {
+        Objects.requireNonNull(getter, "getter");
+        Objects.requireNonNull(modifier, "modifier");
+        var affine = RecordLensBuilder.optional(RecordLensBuilder.lens(rootClass, getter));
+        return appendModify(affine, modifier);
+    }
 
-        private Paths() {
+    /**
+     * Returns a mutation that transforms a component when its value is an
+     * instance of the specified subtype.
+     *
+     * <p>A value of another runtime type remains unchanged.
+     *
+     * @param getter the accessor identifying the component
+     * @param subtypeClass the subtype accepted by the transformation
+     * @param modifier the transformation applied to a matching value
+     * @param <A> the component base type
+     * @param <X> the selected subtype
+     * @return a mutation containing the conditional transformation
+     */
+    public <A, X extends A> ConfigMutation<T> whenSubtype(
+            LensGetter<T, A> getter,
+            Class<X> subtypeClass,
+            UnaryOperator<X> modifier) {
+        Objects.requireNonNull(getter, "getter");
+        Objects.requireNonNull(subtypeClass, "subtypeClass");
+        Objects.requireNonNull(modifier, "modifier");
+        var affine = RecordLensBuilder.subtype(
+                RecordLensBuilder.lens(rootClass, getter), subtypeClass);
+        return appendModify(affine, modifier);
+    }
+
+    /**
+     * Returns a mutation that transforms every element of a {@link List}
+     * component in encounter order.
+     *
+     * @param getter the accessor identifying the list component
+     * @param modifier the transformation applied to each element
+     * @param <A> the element type
+     * @return a mutation containing the element transformations
+     */
+    public <A> ConfigMutation<T> updateElements(
+            LensGetter<T, List<A>> getter, UnaryOperator<A> modifier) {
+        Objects.requireNonNull(getter, "getter");
+        Objects.requireNonNull(modifier, "modifier");
+        var traversal = RecordLensBuilder.lens(rootClass, getter)
+                .andThen(Traversals.<A>forList());
+        return appendModify(traversal, modifier);
+    }
+
+    /**
+     * Returns a mutation that transforms list elements satisfying a predicate.
+     *
+     * <p>Elements that do not satisfy the predicate remain unchanged.
+     *
+     * @param getter the accessor identifying the list component
+     * @param predicate the condition selecting elements to transform
+     * @param modifier the transformation applied to selected elements
+     * @param <A> the element type
+     * @return a mutation containing the selected element transformations
+     */
+    public <A> ConfigMutation<T> updateWhere(
+            LensGetter<T, List<A>> getter,
+            Predicate<? super A> predicate,
+            UnaryOperator<A> modifier) {
+        Objects.requireNonNull(getter, "getter");
+        Objects.requireNonNull(predicate, "predicate");
+        Objects.requireNonNull(modifier, "modifier");
+        var traversal = RecordLensBuilder.lens(rootClass, getter)
+                .andThen(Traversals.<A>forList())
+                .filtered(predicate);
+        return appendModify(traversal, modifier);
+    }
+
+    /**
+     * Returns a mutation that transforms every value of a {@link Map}
+     * component while preserving its keys.
+     *
+     * @param getter the accessor identifying the map component
+     * @param modifier the transformation applied to each value
+     * @param <K> the map key type
+     * @param <V> the map value type
+     * @return a mutation containing the value transformations
+     */
+    public <K, V> ConfigMutation<T> updateValues(
+            LensGetter<T, Map<K, V>> getter, UnaryOperator<V> modifier) {
+        Objects.requireNonNull(getter, "getter");
+        Objects.requireNonNull(modifier, "modifier");
+        var traversal = RecordLensBuilder.lens(rootClass, getter)
+                .andThen(Traversals.<K, V>forMapValues());
+        return appendModify(traversal, modifier);
+    }
+
+    /**
+     * Returns a mutation that transforms map values satisfying a predicate.
+     *
+     * <p>Keys and values that do not satisfy the predicate remain unchanged.
+     *
+     * @param getter the accessor identifying the map component
+     * @param predicate the condition selecting values to transform
+     * @param modifier the transformation applied to selected values
+     * @param <K> the map key type
+     * @param <V> the map value type
+     * @return a mutation containing the selected value transformations
+     */
+    public <K, V> ConfigMutation<T> updateValuesWhere(
+            LensGetter<T, Map<K, V>> getter,
+            Predicate<? super V> predicate,
+            UnaryOperator<V> modifier) {
+        Objects.requireNonNull(getter, "getter");
+        Objects.requireNonNull(predicate, "predicate");
+        Objects.requireNonNull(modifier, "modifier");
+        var traversal = RecordLensBuilder.lens(rootClass, getter)
+                .andThen(Traversals.<K, V>forMapValues())
+                .filtered(predicate);
+        return appendModify(traversal, modifier);
+    }
+
+    /**
+     * Returns a mutation that replaces the value selected by an exactly-one
+     * focus.
+     *
+     * @param focus the focus selecting the value to replace
+     * @param value the replacement value
+     * @param <A> the focused value type
+     * @return a mutation containing the replacement operation
+     */
+    public <A> ConfigMutation<T> set(ConfigFocus.One<T, A> focus, A value) {
+        Objects.requireNonNull(focus, "focus");
+        return appendSet(focus.prototype().toLens(), value);
+    }
+
+    /**
+     * Returns a mutation that transforms the value selected by an exactly-one
+     * focus.
+     *
+     * @param focus the focus selecting the value to transform
+     * @param modifier the focused value transformation
+     * @param <A> the focused value type
+     * @return a mutation containing the focused transformation
+     */
+    public <A> ConfigMutation<T> map(
+            ConfigFocus.One<T, A> focus, UnaryOperator<A> modifier) {
+        Objects.requireNonNull(focus, "focus");
+        Objects.requireNonNull(modifier, "modifier");
+        return appendModify(focus.prototype().toLens(), modifier);
+    }
+
+    /**
+     * Returns a mutation that transforms the value selected by a zero-or-one
+     * focus when that value is present.
+     *
+     * @param focus the optional focus selecting the value
+     * @param modifier the transformation applied to a present value
+     * @param <A> the focused value type
+     * @return a mutation containing the conditional transformation
+     */
+    public <A> ConfigMutation<T> ifPresent(
+            ConfigFocus.Maybe<T, A> focus, UnaryOperator<A> modifier) {
+        Objects.requireNonNull(focus, "focus");
+        Objects.requireNonNull(modifier, "modifier");
+        return appendModify(focus.prototype().toAffine(), modifier);
+    }
+
+    /**
+     * Returns a mutation that transforms every value selected by a multi-focus.
+     *
+     * @param focus the focus selecting values to transform
+     * @param modifier the transformation applied to each selected value
+     * @param <A> the focused value type
+     * @return a mutation containing the focused transformations
+     */
+    public <A> ConfigMutation<T> updateEach(
+            ConfigFocus.Many<T, A> focus, UnaryOperator<A> modifier) {
+        Objects.requireNonNull(focus, "focus");
+        Objects.requireNonNull(modifier, "modifier");
+        return appendModify(focus.prototype().toTraversal(), modifier);
+    }
+
+    /**
+     * Returns a mutation that transforms selected values satisfying a
+     * predicate.
+     *
+     * <p>Selected values that do not satisfy the predicate remain unchanged.
+     *
+     * @param focus the focus selecting candidate values
+     * @param predicate the condition selecting values to transform
+     * @param modifier the transformation applied to matching values
+     * @param <A> the focused value type
+     * @return a mutation containing the conditional transformations
+     */
+    public <A> ConfigMutation<T> updateWhere(
+            ConfigFocus.Many<T, A> focus,
+            Predicate<? super A> predicate,
+            UnaryOperator<A> modifier) {
+        Objects.requireNonNull(predicate, "predicate");
+        return updateEach(focus.filter(predicate), modifier);
+    }
+
+    private ConfigMutation<T> append(UnaryOperator<T> next) {
+        return appendEdit(new OpaqueEdit<>(next));
+    }
+
+    private <A> ConfigMutation<T> appendSet(Optic<T, T, A, A> optic, A value) {
+        return appendEdit(new SetEdit<>(optic, value));
+    }
+
+    private <A> ConfigMutation<T> appendModify(
+            Optic<T, T, A, A> optic, UnaryOperator<A> modifier) {
+        return appendEdit(new ModifyEdit<>(optic, modifier));
+    }
+
+    private ConfigMutation<T> appendEdit(Edit<T> edit) {
+        ArrayList<Edit<T>> next = new ArrayList<>(edits.size() + 1);
+        next.addAll(edits);
+        next.add(edit);
+        return new ConfigMutation<>(rootClass, next);
+    }
+
+    private OpticBatch<T> toBatch() {
+        OpticBatch<T> batch = OpticBatch.empty();
+        for (Edit<T> edit : edits) {
+            batch = edit.appendTo(batch);
+        }
+        return batch;
+    }
+
+    private sealed interface Edit<S> permits SetEdit, ModifyEdit, OpaqueEdit {
+        OpticBatch<S> appendTo(OpticBatch<S> batch);
+    }
+
+    private record SetEdit<S, A>(Optic<S, S, A, A> optic, A value) implements Edit<S> {
+        private SetEdit {
+            Objects.requireNonNull(optic, "optic");
+            Objects.requireNonNull(value, "value");
         }
 
-        /**
-         * Creates a mutation that sets the value selected by an exactly-one
-         * path.
-         *
-         * @param  path the path selecting exactly one value
-         * @param  value the replacement value
-         * @param  <S> the configuration type
-         * @param  <V> the focused value type
-         * @return a mutation that sets the focused value
-         */
-        public <S, V> ConfigMutation<S> set(ConfigPath.One<S, V> path, V value) {
-            Objects.requireNonNull(path);
-            Objects.requireNonNull(value);
-            return source -> path.set(source, value);
+        @Override
+        public OpticBatch<S> appendTo(OpticBatch<S> batch) {
+            return batch.set(optic, value);
         }
 
-        /**
-         * Creates a mutation that transforms the value selected by an
-         * exactly-one path.
-         *
-         * @param  path the path selecting exactly one value
-         * @param  modifier the function that transforms the focused value
-         * @param  <S> the configuration type
-         * @param  <V> the focused value type
-         * @return a mutation that transforms the focused value
-         */
-        public <S, V> ConfigMutation<S> map(ConfigPath.One<S, V> path, UnaryOperator<V> modifier) {
-            Objects.requireNonNull(path);
-            Objects.requireNonNull(modifier);
-            return source -> path.update(source, modifier);
+    }
+
+    private record ModifyEdit<S, A>(Optic<S, S, A, A> optic, UnaryOperator<A> modifier)
+            implements Edit<S> {
+        private ModifyEdit {
+            Objects.requireNonNull(optic, "optic");
+            Objects.requireNonNull(modifier, "modifier");
         }
 
-        /**
-         * Creates a mutation that transforms the value selected by a
-         * zero-or-one path when it is present.
-         *
-         * @param  path the path selecting zero or one value
-         * @param  modifier the function that transforms the focused value
-         * @param  <S> the configuration type
-         * @param  <V> the focused value type
-         * @return a mutation that conditionally transforms the focused value
-         */
-        public <S, V> ConfigMutation<S> ifPresent(ConfigPath.Maybe<S, V> path, UnaryOperator<V> modifier) {
-            Objects.requireNonNull(path);
-            Objects.requireNonNull(modifier);
-            return source -> path.updateIfPresent(source, modifier);
+        @Override
+        public OpticBatch<S> appendTo(OpticBatch<S> batch) {
+            return batch.modify(optic, modifier);
         }
 
-        /**
-         * Creates a mutation that transforms the value selected by an
-         * exactly-one path only when it has the specified runtime type.
-         *
-         * @param  path the path selecting exactly one value
-         * @param  subtype the expected subtype class
-         * @param  modifier the function that transforms the matched value
-         * @param  <S> the configuration type
-         * @param  <V> the base focused value type
-         * @param  <X> the subtype to match
-         * @return a mutation that conditionally transforms the focused value
-         */
-        public <S, V, X extends V> ConfigMutation<S> whenSubtype(ConfigPath.One<S, V> path, Class<X> subtype, UnaryOperator<X> modifier) {
-            Objects.requireNonNull(path);
-            Objects.requireNonNull(subtype);
-            Objects.requireNonNull(modifier);
-            return source -> {
-                V focused = path.view(source);
-                return subtype.isInstance(focused)
-                        ? path.set(source, modifier.apply(subtype.cast(focused)))
-                        : source;
-            };
+    }
+
+    private record OpaqueEdit<S>(UnaryOperator<S> operation) implements Edit<S> {
+        private OpaqueEdit {
+            Objects.requireNonNull(operation, "operation");
         }
 
-        /**
-         * Creates a mutation that transforms all values selected by a
-         * zero-or-more path.
-         *
-         * @param  path the path selecting zero or more values
-         * @param  modifier the function that transforms each focused value
-         * @param  <S> the configuration type
-         * @param  <V> the focused value type
-         * @return a mutation that transforms all focused values
-         */
-        public <S, V> ConfigMutation<S> updateEach(ConfigPath.Many<S, V> path, UnaryOperator<V> modifier) {
-            Objects.requireNonNull(path);
-            Objects.requireNonNull(modifier);
-            return source -> path.updateEach(source, modifier);
+        @Override
+        public OpticBatch<S> appendTo(OpticBatch<S> batch) {
+            return batch.thenOpaque(operation);
         }
 
-        /**
-         * Creates a mutation that transforms selected values that satisfy the
-         * given predicate.
-         *
-         * @param  path the path selecting zero or more values
-         * @param  predicate the predicate that selects values to transform
-         * @param  modifier the function that transforms each selected value
-         * @param  <S> the configuration type
-         * @param  <V> the focused value type
-         * @return a mutation that conditionally transforms focused values
-         */
-        public <S, V> ConfigMutation<S> updateWhere(ConfigPath.Many<S, V> path, Predicate<? super V> predicate, UnaryOperator<V> modifier) {
-            Objects.requireNonNull(path);
-            Objects.requireNonNull(predicate);
-            Objects.requireNonNull(modifier);
-            return source -> path.where(predicate).updateEach(source, modifier);
-        }
     }
 }

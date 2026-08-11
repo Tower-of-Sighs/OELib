@@ -34,15 +34,24 @@ class ConfigSchemaAndLensTest {
                 ).apply(schema, RootConfig::new)
         );
 
-        RootConfig defaults = definition.unit().getDefaultValue();
+        RootConfig defaults = definition.getDefaultValue();
         assertEquals(new General(true, 3), defaults.general());
         assertEquals(Optional.empty(), defaults.threshold());
         assertEquals("demo", defaults.name());
 
-        Set<String> keys = definition.unit().codec().fields().stream()
+        Set<String> keys = definition.codec().fields().stream()
                 .map(ConfigValueMeta::key)
                 .collect(Collectors.toSet());
         assertEquals(Set.of("general.enabled", "general.retries", "threshold", "name"), keys);
+
+        ConfigValueMeta retries = definition.codec().fields().stream()
+                .filter(field -> field.key().equals("general.retries"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(java.util.List.of("general", "retries"), retries.pathSegments());
+        assertTrue(retries.valueCodec().isDefined());
+        assertEquals(3, retries.defaultValue().get());
+        assertEquals(3, retries.read(defaults));
     }
 
     @Test
@@ -92,8 +101,8 @@ class ConfigSchemaAndLensTest {
                 ).apply(schema, RootConfig::new)
         );
 
-        var rootLens = RecordLensBuilder.lens(MethodHandles.lookup(), RootConfig.class, RootConfig::general);
-        var retriesLens = RecordLensBuilder.lens(MethodHandles.lookup(), General.class, General::retries);
+        var rootLens = RecordLensBuilder.lens(RootConfig.class, RootConfig::general);
+        var retriesLens = RecordLensBuilder.lens(General.class, General::retries);
         var composed = rootLens.andThen(retriesLens);
         RootConfig source = new RootConfig(new General(true, 2), Optional.empty(), "x");
 
@@ -119,7 +128,7 @@ class ConfigSchemaAndLensTest {
                 ).apply(schema, RootWithPrebuilt::new)
         );
 
-        RootWithPrebuilt defaults = definition.unit().getDefaultValue();
+        RootWithPrebuilt defaults = definition.getDefaultValue();
         assertEquals(new NestedCodecConfig(true, 2), defaults.nested());
         assertEquals("ok", defaults.name());
     }
@@ -137,20 +146,20 @@ class ConfigSchemaAndLensTest {
                 ).apply(schema, RootWithMetaCodec::new)
         );
 
-        Set<String> keys = definition.unit().codec().fields().stream()
+        Set<String> keys = definition.codec().fields().stream()
                 .map(ConfigValueMeta::key)
                 .collect(Collectors.toSet());
         assertEquals(Set.of("nested.value", "nested.depth", "enabled"), keys);
 
-        var byKey = definition.unit().codec().fields().stream()
+        var byKey = definition.codec().fields().stream()
                 .collect(Collectors.toMap(ConfigValueMeta::key, meta -> meta));
         assertEquals(
                 "config.oelibtest.schema_meta_codec.nested.value",
-                byKey.get("nested.value").translationKey().orElseThrow()
+                byKey.get("nested.value").translationKey().get()
         );
         assertEquals(
                 "config.oelibtest.schema_meta_codec.nested.depth",
-                byKey.get("nested.depth").translationKey().orElseThrow()
+                byKey.get("nested.depth").translationKey().get()
         );
     }
 

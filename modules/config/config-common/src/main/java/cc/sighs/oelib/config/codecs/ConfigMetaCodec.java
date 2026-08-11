@@ -5,6 +5,7 @@ import cc.sighs.oelib.config.ConfigSchema;
 import cc.sighs.oelib.config.OELibConfig;
 import cc.sighs.oelib.config.model.ConfigValueMeta;
 import cc.sighs.oelib.config.util.ConfigCodecUtil;
+import com.flechazo.optics.LensGetter;
 import com.mojang.datafixers.kinds.App;
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.Codec;
@@ -47,8 +48,8 @@ public final class ConfigMetaCodec<T> implements Codec<T> {
      * Creates a metadata codec from a record codec builder function.
      *
      * <p>The builder executes in an isolated schema context. Nested calls to
-     * {@link ConfigSchema#record(String, Class, Function, Function)} and
-     * {@link ConfigSchema#record(String, Class, ConfigMetaCodec, Function)}
+     * {@link ConfigSchema#record(String, Class, Function, LensGetter)} and
+     * {@link ConfigSchema#record(String, Class, ConfigMetaCodec, LensGetter)}
      * contribute metadata into this codec.
      *
      * @param recordClass the record class represented by this codec

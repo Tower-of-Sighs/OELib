@@ -5,28 +5,18 @@ import cc.sighs.oelib.config.codecs.ConfigSealedCodec;
 import cc.sighs.oelib.config.model.ConfigValueMeta;
 import cc.sighs.oelib.config.ui.ConfigUiHint;
 import cc.sighs.oelib.config.util.ConfigFieldMetaUtil;
+import com.flechazo.optics.LensGetter;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import java.util.*;
-import java.util.function.Function;
 
 /**
- * Static factory for field builders used inside
- * {@link cc.sighs.oelib.config.ConfigSchema} definitions.
+ * Creates typed field declarations for {@link cc.sighs.oelib.config.ConfigSchema}.
  *
- * <p>Each factory method returns a specialized builder that accumulates
- * metadata and finally produces a {@link RecordCodecBuilder} entry via
- * {@link BaseFieldBuilder#forGetter(Function)}.
- *
- * <p>Example usage:
- * <pre>{@code
- * ConfigField.intRange("port", 1, 65535)
- *     .comment("The listening port")
- *     .tooltip()
- *     .forGetter(MyConfig::port)
- * }</pre>
+ * <p>Each declaration specifies the serialized value contract and is completed by binding it to a
+ * record component through {@link BaseFieldBuilder#forGetter(LensGetter)}.
  */
 public final class ConfigField {
     private ConfigField() {
@@ -35,7 +25,7 @@ public final class ConfigField {
     /**
      * Records field metadata into the active {@link ConfigContext}.
      *
-     * @param meta the field metadata to record
+     * @param meta the field descriptor to append
      * @throws IllegalStateException if no {@link ConfigContext} is active
      */
     public static void recordMeta(ConfigValueMeta meta) {
@@ -171,6 +161,15 @@ public final class ConfigField {
         private final int max;
         private final double step;
 
+        /**
+         * Creates an integer field builder with a slider presentation hint.
+         *
+         * @param key the serialized field name
+         * @param codec the codec for integer values
+         * @param min the minimum slider value
+         * @param max the maximum slider value
+         * @param step the positive slider increment
+         */
         public IntBuilder(String key, Codec<Integer> codec, int min, int max, double step) {
             super(key, codec);
             this.min = min;
@@ -182,7 +181,7 @@ public final class ConfigField {
         /**
          * Switches the UI hint to a text field.
          *
-         * @return this builder
+         * @return this builder instance
          */
         public IntBuilder text() {
             this.metaBuilder.uiHint(ConfigUiHint.text());
@@ -192,7 +191,7 @@ public final class ConfigField {
         /**
          * Switches the UI hint to a slider.
          *
-         * @return this builder
+         * @return this builder instance
          */
         public IntBuilder slider() {
             this.metaBuilder.uiHint(ConfigUiHint.slider(min, max, step));
@@ -208,6 +207,15 @@ public final class ConfigField {
         private final double max;
         private final double step;
 
+        /**
+         * Creates a decimal field builder with a slider presentation hint.
+         *
+         * @param key the serialized field name
+         * @param codec the codec for decimal values
+         * @param min the minimum slider value
+         * @param max the maximum slider value
+         * @param step the positive slider increment
+         */
         public DoubleBuilder(String key, Codec<Double> codec, double min, double max, double step) {
             super(key, codec);
             this.min = min;
@@ -219,7 +227,7 @@ public final class ConfigField {
         /**
          * Switches the UI hint to a text field.
          *
-         * @return this builder
+         * @return this builder instance
          */
         public DoubleBuilder text() {
             this.metaBuilder.uiHint(ConfigUiHint.text());
@@ -229,7 +237,7 @@ public final class ConfigField {
         /**
          * Switches the UI hint to a slider.
          *
-         * @return this builder
+         * @return this builder instance
          */
         public DoubleBuilder slider() {
             this.metaBuilder.uiHint(ConfigUiHint.slider(min, max, step));
@@ -241,6 +249,12 @@ public final class ConfigField {
      * Builder for {@code boolean} fields.
      */
     public static final class BoolBuilder extends BaseFieldBuilder<Boolean, BoolBuilder> {
+        /**
+         * Creates a Boolean field builder.
+         *
+         * @param key the serialized field name
+         * @param codec the codec for Boolean values
+         */
         public BoolBuilder(String key, Codec<Boolean> codec) {
             super(key, codec);
         }
@@ -250,6 +264,12 @@ public final class ConfigField {
      * Builder for {@link String} fields.
      */
     public static final class StringBuilder extends BaseFieldBuilder<String, StringBuilder> {
+        /**
+         * Creates a string field builder.
+         *
+         * @param key the serialized field name
+         * @param codec the codec for string values
+         */
         public StringBuilder(String key, Codec<String> codec) {
             super(key, codec);
         }
@@ -263,6 +283,13 @@ public final class ConfigField {
     public static final class EnumBuilder<E extends Enum<E>> extends BaseFieldBuilder<E, EnumBuilder<E>> {
         private final Class<E> enumClass;
 
+        /**
+         * Creates an enumeration field builder with a dropdown presentation hint.
+         *
+         * @param key the serialized field name
+         * @param codec the codec for enumeration values
+         * @param enumClass the enumeration type whose constants populate the dropdown
+         */
         public EnumBuilder(String key, Codec<E> codec, Class<E> enumClass) {
             super(key, codec);
             this.enumClass = enumClass;
@@ -275,6 +302,12 @@ public final class ConfigField {
      * Builder for {@link Dynamic} passthrough fields.
      */
     public static final class DynamicBuilder extends BaseFieldBuilder<Dynamic<?>, DynamicBuilder> {
+        /**
+         * Creates a dynamic passthrough field builder.
+         *
+         * @param key the serialized field name
+         * @param codec the codec for dynamic values
+         */
         public DynamicBuilder(String key, Codec<Dynamic<?>> codec) {
             super(key, codec);
         }
@@ -294,7 +327,7 @@ public final class ConfigField {
         }
 
         @Override
-        public <O> RecordCodecBuilder<O, List<T>> forGetter(Function<O, List<T>> getter) {
+        public <O> RecordCodecBuilder<O, List<T>> forGetter(LensGetter<O, List<T>> getter) {
             var cfgId = ConfigContext.currentConfigId();
             if (cfgId != null) {
                 String autoKey = ConfigFieldMetaUtil.autoTranslationKey(cfgId, key);
@@ -303,6 +336,9 @@ public final class ConfigField {
                     metaBuilder.tooltip(autoKey + ".tooltip");
                 }
             }
+            metaBuilder.valueCodec(codec)
+                    .defaultValue(defaultValue)
+                    .accessor(ConfigContext.compileAccessor(getter));
             var meta = ConfigFieldMetaUtil.qualifyForContext(metaBuilder.build());
             recordMeta(meta);
             var field = Codec.list(elementCodec).fieldOf(key);
@@ -332,7 +368,7 @@ public final class ConfigField {
 
 
         @Override
-        public <O> RecordCodecBuilder<O, Map<K, V>> forGetter(Function<O, Map<K, V>> getter) {
+        public <O> RecordCodecBuilder<O, Map<K, V>> forGetter(LensGetter<O, Map<K, V>> getter) {
             var cfgId = ConfigContext.currentConfigId();
             if (cfgId != null) {
                 String autoKey = ConfigFieldMetaUtil.autoTranslationKey(cfgId, key);
@@ -341,6 +377,9 @@ public final class ConfigField {
                     metaBuilder.tooltip(autoKey + ".tooltip");
                 }
             }
+            metaBuilder.valueCodec(codec)
+                    .defaultValue(defaultValue)
+                    .accessor(ConfigContext.compileAccessor(getter));
             var meta = ConfigFieldMetaUtil.qualifyForContext(metaBuilder.build());
             recordMeta(meta);
             var field = Codec.unboundedMap(keyCodec, valueCodec).fieldOf(key);
@@ -389,7 +428,7 @@ public final class ConfigField {
         }
 
         @Override
-        public <O> RecordCodecBuilder<O, Optional<T>> forGetter(Function<O, Optional<T>> getter) {
+        public <O> RecordCodecBuilder<O, Optional<T>> forGetter(LensGetter<O, Optional<T>> getter) {
             Objects.requireNonNull(getter);
             if (beforeMetaHook != null) {
                 beforeMetaHook.accept(metaBuilder);
@@ -402,6 +441,9 @@ public final class ConfigField {
                     metaBuilder.tooltip(autoKey + ".tooltip");
                 }
             }
+            metaBuilder.valueCodec(codec)
+                    .defaultValue(defaultValue)
+                    .accessor(ConfigContext.compileAccessor(getter));
             var meta = ConfigFieldMetaUtil.qualifyForContext(metaBuilder.build());
             recordMeta(meta);
             var mc = elementCodec.optionalFieldOf(key);
@@ -430,7 +472,7 @@ public final class ConfigField {
         }
 
         @Override
-        public <O> RecordCodecBuilder<O, T> forGetter(Function<O, T> getter) {
+        public <O> RecordCodecBuilder<O, T> forGetter(LensGetter<O, T> getter) {
             Objects.requireNonNull(getter);
             if (beforeMetaHook != null) {
                 beforeMetaHook.accept(metaBuilder);
@@ -447,9 +489,12 @@ public final class ConfigField {
             // Keep its metadata for whole-value validation, migration, and
             // serialization comments, but hide it from field rendering.
             metaBuilder.hidden(true);
+            metaBuilder.valueCodec(codec)
+                    .defaultValue(defaultValue)
+                    .accessor(ConfigContext.compileAccessor(getter));
             var meta = ConfigFieldMetaUtil.qualifyForContext(metaBuilder.build());
             recordMeta(meta);
-            recordSealedMeta(key, sealedCodec);
+            recordSealedMeta(key, getter, sealedCodec);
             var field = sealedCodec.fieldOf(key).orElse(defaultValue);
             if (afterMetaHook != null) {
                 afterMetaHook.accept(meta);
@@ -457,11 +502,12 @@ public final class ConfigField {
             return field.forGetter(getter);
         }
 
-        private static <T> void recordSealedMeta(String key, ConfigSealedCodec<T> sealedCodec) {
+        private static <O, T> void recordSealedMeta(
+                String key, LensGetter<O, T> getter, ConfigSealedCodec<T> sealedCodec) {
             if (!ConfigContext.isActive()) {
                 return;
             }
-            ConfigContext.withRecord(key, sealedCodec.baseClass(), () -> {
+            ConfigContext.withRecord(key, sealedCodec.baseClass(), getter, () -> {
                 var configId = ConfigContext.currentConfigId();
                 for (ConfigValueMeta localMeta : sealedCodec.fields()) {
                     recordMeta(ConfigFieldMetaUtil.rewriteNestedMetaForContext(localMeta, configId));

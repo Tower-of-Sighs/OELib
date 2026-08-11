@@ -2,14 +2,12 @@ package cc.sighs.oelib.config;
 
 import com.flechazo.optics.Affine;
 import com.flechazo.optics.Lens;
-import com.flechazo.optics.util.Affines;
 import com.mojang.datafixers.util.Either;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class ConfigPrismOptionalTest {
 
@@ -48,8 +46,8 @@ class ConfigPrismOptionalTest {
         Lens<OptionalRoot, Optional<Integer>> lens = RecordLensBuilder.lens(OptionalRoot.class, OptionalRoot::value);
         Affine<OptionalRoot, Integer> affine = RecordLensBuilder.optional(lens);
 
-        assertTrue(Affines.previewOptional(affine, new OptionalRoot(Optional.of(2), 0)).isPresent());
-        assertTrue(Affines.previewOptional(affine, new OptionalRoot(Optional.empty(), 0)).isEmpty());
+        assertTrue(affine.matches(new OptionalRoot(Optional.of(2), 0)));
+        assertFalse(affine.matches(new OptionalRoot(Optional.empty(), 0)));
     }
 
     @Test

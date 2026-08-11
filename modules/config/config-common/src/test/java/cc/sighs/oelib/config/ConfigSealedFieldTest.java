@@ -30,21 +30,21 @@ class ConfigSealedFieldTest {
                 ).apply(schema, SealedRoot::new)
         );
 
-        assertEquals(new SealedRoot(new LevelMode(2), "demo"), definition.unit().getDefaultValue());
+        assertEquals(new SealedRoot(new LevelMode(2), "demo"), definition.getDefaultValue());
 
-        Map<String, ConfigValueMeta> metasByKey = definition.unit().codec().fields().stream()
+        Map<String, ConfigValueMeta> metasByKey = definition.codec().fields().stream()
                 .collect(Collectors.toMap(ConfigValueMeta::key, meta -> meta));
         assertEquals(Set.of("mode", "mode.type", "mode.level", "mode.enabled", "name"), metasByKey.keySet());
         assertTrue(metasByKey.get("mode").hidden());
         assertFalse(metasByKey.get("mode.type").hidden());
-        assertEquals("mode.type", metasByKey.get("mode.level").visibleWhenPath().orElseThrow());
-        assertEquals("level", metasByKey.get("mode.level").visibleWhenValue().orElseThrow());
-        assertEquals("mode.type", metasByKey.get("mode.enabled").visibleWhenPath().orElseThrow());
-        assertEquals("toggle", metasByKey.get("mode.enabled").visibleWhenValue().orElseThrow());
+        assertEquals("mode.type", metasByKey.get("mode.level").visibleWhenPath().get());
+        assertEquals("level", metasByKey.get("mode.level").visibleWhenValue().get());
+        assertEquals("mode.type", metasByKey.get("mode.enabled").visibleWhenPath().get());
+        assertEquals("toggle", metasByKey.get("mode.enabled").visibleWhenValue().get());
     }
 
     @Test
-    void pathSubtypeCanUpdateSealedField() {
+    void subtypeFocusCanUpdateSealedField() {
         var definition = ConfigSchema.defineClient(
                 MethodHandles.lookup(),
                 ResourceLocation.fromNamespaceAndPath("oelibtest", "sealed_path"),
@@ -56,11 +56,11 @@ class ConfigSealedFieldTest {
                 ).apply(schema, SealedRoot::new)
         );
 
-        ConfigUnit<SealedRoot> unit = definition.unit();
-        var path = definition.pathSubtype(SealedRoot::mode, LevelMode.class).then(LevelMode::level);
+        ConfigUnit<SealedRoot> unit = definition;
+        var focus = unit.focusSubtype(SealedRoot::mode, LevelMode.class).then(LevelMode::level);
 
         unit.get();
-        SealedRoot updated = ConfigUnitOps.paths(unit).ifPresentNoSave(path, value -> value + 3);
+        SealedRoot updated = unit.ifPresentNoSave(focus, value -> value + 3);
         assertEquals(new LevelMode(5), updated.mode());
     }
 

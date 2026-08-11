@@ -11,6 +11,10 @@ import cc.sighs.oelib.config.util.ConfigPathUtil;
 import cc.sighs.oelib.config.util.ConfigSerializationUtil;
 import cc.sighs.oelib.config.util.GsonUtil;
 import cc.sighs.oelib.network.api.NetworkManager;
+import com.flechazo.hkt.Try;
+import com.flechazo.hkt.Unit;
+import com.flechazo.hkt.business.util.OptionalOps;
+import com.flechazo.hkt.tuple.Tuple2;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
@@ -108,13 +112,21 @@ public class ConfigScreen extends Screen {
             this.working = new JsonObject();
             return;
         }
-        var opt = ConfigManager.get(chosen);
-        var cast = opt.map(ConfigGuiUtil::castUnit).orElse(null);
+        var opt = OptionalOps.toMaybe(ConfigManager.get(chosen));
+        if (opt.isEmpty()) {
+            this.configId = chosen;
+            this.unit = null;
+            this.codec = null;
+            this.fields = List.of();
+            this.working = new JsonObject();
+            return;
+        }
+        var cast = ConfigGuiUtil.castUnit(opt.get());
         this.configId = chosen;
         this.unit = cast;
         this.codec = cast.codec();
         this.fields = codec.fields();
-        this.unit.reload();
+        ConfigLifecycle.reload(this.unit);
         this.working = ConfigGuiUtil.toJson(unit.get(), this);
     }
 
@@ -215,18 +227,20 @@ public class ConfigScreen extends Screen {
         items.add(new EmptyEntry(5));
         var searchLower = searchText.toLowerCase(Locale.ROOT);
         for (ResourceLocation id : modConfigs) {
-            var optUnit = ConfigManager.get(id);
+            var optUnit = OptionalOps.toMaybe(ConfigManager.get(id));
             if (optUnit.isEmpty()) continue;
             var u = ConfigGuiUtil.castUnit(optUnit.get());
-            u.reload();
+            ConfigLifecycle.reload(u);
             var c = u.codec();
             var preserved = preservedWorking.get(id);
             var preservedStash = preservedConditionalStash.get(id);
             var workingJson = preserved != null
                     ? preserved.deepCopy()
                     : ConfigGuiUtil.encodeToJsonObject(c.codec(), u.get());
-            var defaultObj = c.codec().parse(JsonOps.INSTANCE, new JsonObject()).result().orElse(null);
-            var defaultsJson = defaultObj != null ? ConfigGuiUtil.encodeToJsonObject(c.codec(), defaultObj) : new JsonObject();
+            var defaultsJson = OptionalOps.toMaybe(
+                            c.codec().parse(JsonOps.INSTANCE, new JsonObject()).result())
+                    .map(defaultValue -> ConfigGuiUtil.encodeToJsonObject(c.codec(), defaultValue))
+                    .orElseGet(JsonObject::new);
             var flds = c.fields();
             Map<String, JsonElement> stash = preservedStash != null
                     ? deepCopyStash(preservedStash)
@@ -244,7 +258,7 @@ public class ConfigScreen extends Screen {
             int w = this.font.width(Component.literal("- ").append(r.label()).getVisualOrderText());
             if (w > longest) longest = w;
         }
-        sideExpandLimit = Math.min(Math.max(80, longest + 16), this.width / 4);
+        sideExpandLimit = Math.clamp(longest + 16, 80, this.width / 4);
         sideSlider.setMaxScroll(sideExpandLimit - 14);
         sideSlider.offset(sidebarExpanded ? sideExpandLimit - 14 : -sideExpandLimit);
         int attachY = y;
@@ -471,15 +485,16 @@ public class ConfigScreen extends Screen {
             }
 
             var parseResult = ctx.codec.codec().parse(JsonOps.INSTANCE, ctx.working);
-            if (parseResult.error().isPresent()) {
-                String message = parseResult.error().get().message();
+            var parseError = OptionalOps.toMaybe(parseResult.error());
+            if (parseError.isDefined()) {
+                String message = parseError.get().message();
                 OELibConfig.LOGGER.error("Failed to parse edited config {}: {}", ctx.id, message);
                 errors.put(ctx.id.toString(), Component.literal("[" + ctx.id + "] " + message));
                 allOk = false;
                 continue;
             }
 
-            var valueOpt = parseResult.result();
+            var valueOpt = OptionalOps.toMaybe(parseResult.result());
             if (valueOpt.isEmpty()) {
                 String message = "Parse returned empty result";
                 OELibConfig.LOGGER.error("Failed to parse edited config {}: {}", ctx.id, message);
@@ -489,30 +504,30 @@ public class ConfigScreen extends Screen {
             }
 
             var value = valueOpt.get();
-            try {
+            Try<Unit> saved = Try.of(() -> {
                 var side = ctx.codec.meta().side();
                 if (side == ConfigSide.CLIENT) {
-                    ctx.unit.setValue(value);
-                    ctx.unit.save();
+                    ConfigLifecycle.replace(ctx.unit, value, true);
                 } else if (side == ConfigSide.SERVER) {
-                    ctx.unit.setValue(value);
-                    ctx.unit.save();
+                    ConfigLifecycle.replace(ctx.unit, value, true);
                     if (Minecraft.getInstance().getConnection() != null) {
                         var format = ctx.codec.meta().format();
                         var encoded = ConfigSerializationUtil.encodeToString(value, format, ctx.codec.codec(), ctx.codec.fields());
                         if (encoded.isEmpty()) {
-                            String message = "Failed to encode payload for server update";
-                            OELibConfig.LOGGER.error("{} {}", message, ctx.id);
-                            errors.put(ctx.id.toString(), Component.literal("[" + ctx.id + "] " + message));
-                            allOk = false;
-                            continue;
+                            throw new IllegalStateException(
+                                    "Failed to encode payload for server update");
                         }
                         NetworkManager.sendToServer(new ConfigUpdateRequestPacket(ctx.id, encoded.get(), format, true));
                     }
                 }
-            } catch (Throwable t) {
-                OELibConfig.LOGGER.error("Exception while saving config {}: {}", ctx.id, t.getMessage(), t);
-                errors.put(ctx.id.toString(), Component.literal("[" + ctx.id + "] " + t.getMessage()));
+                return Unit.INSTANCE;
+            });
+            if (saved.isFailure()) {
+                Throwable error = saved.cause();
+                OELibConfig.LOGGER.error(
+                        "Exception while saving config {}: {}", ctx.id, error.getMessage(), error);
+                errors.put(ctx.id.toString(),
+                        Component.literal("[" + ctx.id + "] " + error.getMessage()));
                 allOk = false;
             }
         }
@@ -553,16 +568,15 @@ public class ConfigScreen extends Screen {
 
     private boolean needsRefreshFromUnits() {
         if (dirty) return false;
-        try {
+        return Try.of(() -> {
             for (ConfigCtx ctx : contexts) {
                 var fresh = ConfigGuiUtil.encodeToJsonObject(ctx.codec.codec(), ctx.unit.get());
                 if (!Objects.equals(fresh.toString(), ctx.working.toString())) {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
-        }
-        return false;
+            return false;
+        }).orElse(false);
     }
 
     private record FieldRef(ConfigValueMeta meta, Component label, int topY) {
@@ -860,14 +874,14 @@ public class ConfigScreen extends Screen {
         var value = ConfigGuiUtil.getPath(workingJson, meta.key());
         if (value != null && value.isJsonArray()) {
             ListEntry listEntry = new ListEntry(meta.key(), label, workingJson, listControlWidth, rowHeight,
-                    meta.tooltip().map(Component::translatable).orElse(null));
+                    meta.tooltip().map(Component::translatable));
             items.add(listEntry);
             defaultsMap.put(listEntry, defaultsJson);
             return;
         }
         if (value != null && value.isJsonObject()) {
             MapEntry mapEntry = new MapEntry(meta.key(), label, workingJson, listControlWidth, rowHeight,
-                    meta.tooltip().map(Component::translatable).orElse(null));
+                    meta.tooltip().map(Component::translatable));
             items.add(mapEntry);
             defaultsMap.put(mapEntry, defaultsJson);
             return;
@@ -891,13 +905,12 @@ public class ConfigScreen extends Screen {
     }
 
     private static boolean isCurrentlyVisible(ConfigValueMeta meta, JsonObject workingJson) {
-        String visibleWhenPath = meta.visibleWhenPath().orElse(null);
-        String visibleWhenValue = meta.visibleWhenValue().orElse(null);
-        if (visibleWhenPath == null || visibleWhenValue == null) {
-            return true;
-        }
-        JsonElement current = ConfigGuiUtil.getPath(workingJson, visibleWhenPath);
-        return current != null && current.isJsonPrimitive() && visibleWhenValue.equals(current.getAsString());
+        return meta.visibleWhenPath().flatMap(path -> meta.visibleWhenValue().map(expected -> {
+            JsonElement current = ConfigGuiUtil.getPath(workingJson, path);
+            return current != null
+                    && current.isJsonPrimitive()
+                    && expected.equals(current.getAsString());
+        })).orElse(true);
     }
 
     private static boolean reconcileConditionalFields(
@@ -908,11 +921,13 @@ public class ConfigScreen extends Screen {
     ) {
         boolean changed = false;
         for (ConfigValueMeta meta : fields) {
-            String visibleWhenPath = meta.visibleWhenPath().orElse(null);
-            String visibleWhenValue = meta.visibleWhenValue().orElse(null);
-            if (!Objects.equals(visibleWhenPath, changedPath) || visibleWhenValue == null) {
+            var condition = meta.visibleWhenPath().flatMap(path ->
+                    meta.visibleWhenValue().map(expected -> Tuple2.of(path, expected)));
+            if (condition.isEmpty() || !Objects.equals(condition.get().first(), changedPath)) {
                 continue;
             }
+            String visibleWhenPath = condition.get().first();
+            String visibleWhenValue = condition.get().second();
             JsonElement current = ConfigGuiUtil.getPath(workingJson, visibleWhenPath);
             boolean shouldBeVisible = current != null && current.isJsonPrimitive() && visibleWhenValue.equals(current.getAsString());
             JsonElement existing = ConfigGuiUtil.getPath(workingJson, meta.key());
@@ -922,12 +937,10 @@ public class ConfigScreen extends Screen {
                     if (restoredValue != null) {
                         ConfigGuiUtil.setPath(workingJson, meta.key(), restoredValue.deepCopy());
                         changed = true;
-                    } else {
-                        JsonElement defaultValue = meta.defaultJsonValue().orElse(null);
-                        if (defaultValue != null) {
-                            ConfigGuiUtil.setPath(workingJson, meta.key(), defaultValue.deepCopy());
-                            changed = true;
-                        }
+                    } else if (meta.defaultJsonValue().isDefined()) {
+                        ConfigGuiUtil.setPath(
+                                workingJson, meta.key(), meta.defaultJsonValue().get().deepCopy());
+                        changed = true;
                     }
                 }
             } else if (existing != null) {

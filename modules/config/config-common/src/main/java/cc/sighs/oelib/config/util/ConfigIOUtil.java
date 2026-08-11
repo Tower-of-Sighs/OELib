@@ -1,21 +1,23 @@
 package cc.sighs.oelib.config.util;
 
-import cc.sighs.oelib.config.ConfigManager;
-import cc.sighs.oelib.config.ConfigUnit;
-import cc.sighs.oelib.config.OELibConfig;
-import cc.sighs.oelib.config.ServerConfigManager;
+import cc.sighs.oelib.config.*;
 import cc.sighs.oelib.config.datafix.ConfigFixRegistry;
 import cc.sighs.oelib.config.model.ConfigMeta;
 import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import cc.sighs.oelib.config.net.ConfigSyncPacket;
+import cc.sighs.oelib.config.validation.ConfigValidationException;
 import cc.sighs.oelib.network.api.NetworkManager;
 import cc.sighs.oelib.platform.Platform;
+import com.flechazo.hkt.Try;
+import com.flechazo.hkt.Unit;
+import com.flechazo.hkt.business.util.OptionalOps;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 /**
  * File I/O helpers for loading, saving, migrating, and applying remote
@@ -53,37 +55,30 @@ public final class ConfigIOUtil {
             return;
         }
 
-        try {
-            unit.reload();
-            var currentEncodedOpt = ConfigManager.encodeToString(unit.id());
+        Try.of(() -> {
+            ConfigLifecycle.reload(unit);
+            var currentEncodedOpt = OptionalOps.toMaybe(ConfigManager.encodeToString(unit.id()));
             var lastBroadcastOpt = ServerConfigManager.getLastBroadcast(unit.id());
-            if (currentEncodedOpt.isPresent() && lastBroadcastOpt.isPresent() && !currentEncodedOpt.get().payload().equals(lastBroadcastOpt.get())) {
+            if (currentEncodedOpt.isDefined() && lastBroadcastOpt.isDefined() && !currentEncodedOpt.get().payload().equals(lastBroadcastOpt.get())) {
                 OELibConfig.LOGGER.info("Server-side change detected for config {}, ignoring client update and broadcasting server state", unit.id());
                 NetworkManager.sendToAll(new ConfigSyncPacket(unit.id(), currentEncodedOpt.get().payload(), currentEncodedOpt.get().format()));
                 ServerConfigManager.recordBroadcast(unit.id(), currentEncodedOpt.get().payload());
-                return;
+                return Unit.INSTANCE;
             }
             var result = ConfigSerializationUtil.parse(payload, format, unit.codec().codec());
-            if (result.error().isPresent()) {
-                OELibConfig.LOGGER.error("Failed to parse update for config {}: {}", unit.id(), result.error().get().message());
-                return;
+            var parseError = OptionalOps.toMaybe(result.error());
+            if (parseError.isDefined()) {
+                OELibConfig.LOGGER.error("Failed to parse update for config {}: {}", unit.id(), parseError.get().message());
+                return Unit.INSTANCE;
             }
-            result.result().ifPresent(v -> {
+            OptionalOps.toMaybe(result.result()).ifPresent(v -> {
                 OELibConfig.LOGGER.info("Server applying update for config {} requested by {} with format {} (save={})",
                         unit.id(), player.getGameProfile().getName(), format, save);
-                unit.setValue(v);
-                if (save) {
-                    unit.save();
-                }
-                ConfigManager.encodeToString(unit.id()).ifPresent(encoded -> {
-                    OELibConfig.LOGGER.info("Broadcasting config {} to clients", unit.id());
-                    NetworkManager.sendToAll(new ConfigSyncPacket(unit.id(), encoded.payload(), encoded.format()));
-                    ServerConfigManager.recordBroadcast(unit.id(), encoded.payload());
-                });
+                ConfigLifecycle.replace(unit, v, save);
             });
-        } catch (Exception e) {
-            OELibConfig.LOGGER.error("Exception while applying server config update {}", unit.id(), e);
-        }
+            return Unit.INSTANCE;
+        }).peekFailure(error -> OELibConfig.LOGGER.error(
+                "Exception while applying server config update {}", unit.id(), error));
     }
 
     /**
@@ -95,21 +90,21 @@ public final class ConfigIOUtil {
      */
     public static <T> void initializeIfMissing(ConfigUnit<T> unit) {
         var path = resolveSavePath(unit.meta());
-        try {
+        Try.of(() -> {
             if (!Files.exists(path)) {
                 var meta = unit.meta();
-                var chainOpt = ConfigFixRegistry.get(meta.id());
-                int version = chainOpt.map(ConfigFixRegistry.Chain::currentVersion).orElse(0);
+                int version = ConfigFixRegistry.currentVersion(
+                        meta.id(), unit.codec().fields());
                 var content = ConfigSerializationUtil.encodeToStringWithVersion(
                         unit.getDefaultValue(), version, meta.format(), unit.codec().codec(), unit.codec().fields()
                 );
-                boolean success = content.isPresent();
+                boolean success = content.isDefined();
                 if (success) {
                     var parent = path.getParent();
                     if (parent != null) {
                         Files.createDirectories(parent);
                     }
-                    Files.writeString(path, content.get(), StandardCharsets.UTF_8);
+                    writeAtomically(path, content.get());
                 }
                 if (success) {
                     OELibConfig.LOGGER.info("Initialized config {} at {}", meta.id(), path);
@@ -117,47 +112,64 @@ public final class ConfigIOUtil {
                     OELibConfig.LOGGER.error("Failed to initialize config {} at {}", meta.id(), path);
                 }
             }
-        } catch (Exception e) {
-            OELibConfig.LOGGER.error("Exception during config initialization {}", unit.meta().id(), e);
-        }
+            return Unit.INSTANCE;
+        }).peekFailure(error -> OELibConfig.LOGGER.error(
+                "Exception during config initialization {}", unit.meta().id(), error));
     }
 
     /**
-     * Runs automatic migration on a configuration file when a unit is
-     * registered, applying datafix chains and migrating format if needed.
+     * Applies configured migrations and storage-format changes during registration.
+     *
+     * <p>A migration, decoding, validation, encoding, or write failure is logged and leaves the
+     * source file unchanged.
      *
      * @param unit the configuration unit
      * @param <T>  the configuration value type
      */
     public static <T> void applyAutoMigrationOnRegister(ConfigUnit<T> unit) {
         var meta = unit.meta();
-        try {
+        Try.of(() -> {
             var existing = findExistingPathAnyFormat(meta);
             var target = resolveSavePath(meta);
             if (existing == null && !Files.exists(target)) {
                 initializeIfMissing(unit);
-                return;
+                return Unit.INSTANCE;
             }
             var source = existing != null ? existing : target;
             String raw = Files.readString(source, StandardCharsets.UTF_8);
             var formatSource = detectFormatFromPath(source, meta.format());
             var dyn = ConfigSerializationUtil.parseToDynamic(raw, formatSource);
             int inputVersion = dyn.get("__cfg_version").asInt(0);
-            var chainOpt = ConfigFixRegistry.get(meta.id());
-            var migrated = dyn;
-            int currentVersion = 0;
-            if (chainOpt.isPresent()) {
-                var chain = chainOpt.get();
-                currentVersion = chain.currentVersion();
-                migrated = chain.apply(dyn, inputVersion);
+            int currentVersion = ConfigFixRegistry.currentVersion(
+                    meta.id(), unit.codec().fields());
+            var fixed = ConfigFixRegistry.apply(
+                    meta.id(), dyn, inputVersion, unit.codec().fields());
+            if (fixed.left().isPresent()) {
+                var error = fixed.left().orElseThrow();
+                throw new IllegalStateException(
+                        "Config migration failed [" + error.code() + "]: " + error.message(),
+                        error.cause());
             }
+            var migrated = fixed.right().orElseThrow();
             var result = unit.codec().codec().parse(migrated);
-            var value = result.result().orElse(unit.getDefaultValue());
+            var decodeError = OptionalOps.toMaybe(result.error());
+            if (decodeError.isDefined()) {
+                throw new IllegalStateException(
+                        "Config decode failed for " + meta.id() + ": "
+                                + decodeError.get().message());
+            }
+            var value = OptionalOps.toMaybe(result.result()).fold(
+                    () -> { throw new IllegalStateException(
+                            "Config decode returned no value for " + meta.id()); },
+                    decodedValue -> decodedValue);
+            unit.validate(value).ifPresent(report -> {
+                throw new ConfigValidationException(report);
+            });
             var encoded = ConfigSerializationUtil.encodeToStringWithVersion(
                     value, currentVersion, meta.format(), unit.codec().codec(), unit.codec().fields()
             );
             if (encoded.isEmpty()) {
-                return;
+                return Unit.INSTANCE;
             }
             String newContent = encoded.get();
             boolean changed = !normalize(raw).equals(normalize(newContent)) ||
@@ -167,21 +179,18 @@ public final class ConfigIOUtil {
                 if (parent != null) {
                     Files.createDirectories(parent);
                 }
-                Files.writeString(target, newContent, StandardCharsets.UTF_8);
+                writeAtomically(target, newContent);
                 if (existing != null && !existing.equals(target) && Files.exists(existing)) {
-                    try {
-                        Files.delete(existing);
-                    } catch (Exception ignored) {
-                    }
+                    Files.delete(existing);
                 }
                 OELibConfig.LOGGER.info("Migrated and rewrote config {} to {}", meta.id(), target);
-                unit.reload();
+                ConfigLifecycle.reload(unit);
             } else {
-                unit.reload();
+                ConfigLifecycle.reload(unit);
             }
-        } catch (Exception e) {
-            OELibConfig.LOGGER.error("Exception during auto migration for {}", meta.id(), e);
-        }
+            return Unit.INSTANCE;
+        }).peekFailure(error -> OELibConfig.LOGGER.error(
+                "Exception during auto migration for {}", meta.id(), error));
     }
 
     /**
@@ -282,5 +291,20 @@ public final class ConfigIOUtil {
 
     private static String normalize(String s) {
         return s.replace("\r\n", "\n").trim();
+    }
+
+    private static void writeAtomically(Path path, String content) throws Exception {
+        Path parent = path.toAbsolutePath().getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        Path temp = Files.createTempFile(parent, path.getFileName().toString(), ".tmp");
+        try {
+            Files.writeString(temp, content, StandardCharsets.UTF_8);
+            Files.move(temp, path, StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            Files.deleteIfExists(temp);
+        }
     }
 }

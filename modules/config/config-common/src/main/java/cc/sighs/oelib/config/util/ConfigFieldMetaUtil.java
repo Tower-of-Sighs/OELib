@@ -45,18 +45,23 @@ public final class ConfigFieldMetaUtil {
         if (!ConfigContext.isActive()) {
             return meta;
         }
-        return ConfigValueMeta.builder(ConfigContext.qualifyKey(meta.key()))
-                .comment(meta.comment().orElse(null))
-                .uiHint(meta.uiHint().orElse(null))
-                .translationKey(meta.translationKey().orElse(null))
-                .tooltip(meta.tooltip().orElse(null))
+        ConfigValueMeta.Builder builder = ConfigValueMeta.builder(ConfigContext.qualifyKey(meta.key()))
                 .hidden(meta.hidden())
-                .visibleWhenPath(meta.visibleWhenPath().map(ConfigContext::qualifyKey).orElse(null))
-                .visibleWhenValue(meta.visibleWhenValue().orElse(null))
-                .defaultJsonValue(meta.defaultJsonValue().orElse(null))
                 .validators(meta.validators())
-                .migrations(meta.migrations())
-                .build();
+                .migrations(meta.migrations());
+        meta.comment().ifPresent(builder::comment);
+        meta.uiHint().ifPresent(builder::uiHint);
+        meta.translationKey().ifPresent(builder::translationKey);
+        meta.tooltip().ifPresent(builder::tooltip);
+        meta.visibleWhenPath().map(ConfigContext::qualifyKey).ifPresent(builder::visibleWhenPath);
+        meta.visibleWhenValue().ifPresent(builder::visibleWhenValue);
+        meta.defaultJsonValue().ifPresent(builder::defaultJsonValue);
+        meta.valueCodec().ifPresent(builder::valueCodec);
+        meta.defaultValue().ifPresent(builder::defaultValue);
+        if (meta.hasReader()) {
+            builder.accessor(meta::read);
+        }
+        return builder.build();
     }
 
     /**
@@ -69,24 +74,31 @@ public final class ConfigFieldMetaUtil {
      */
     public static ConfigValueMeta rewriteNestedMetaForContext(ConfigValueMeta meta, @Nullable ResourceLocation configId) {
         ConfigValueMeta.Builder builder = ConfigValueMeta.builder(meta.key())
-                .comment(meta.comment().orElse(null))
-                .uiHint(meta.uiHint().orElse(null))
                 .hidden(meta.hidden())
-                .visibleWhenPath(meta.visibleWhenPath().orElse(null))
-                .visibleWhenValue(meta.visibleWhenValue().orElse(null))
-                .defaultJsonValue(meta.defaultJsonValue().orElse(null))
                 .validators(meta.validators())
                 .migrations(meta.migrations());
+
+        meta.comment().ifPresent(builder::comment);
+        meta.uiHint().ifPresent(builder::uiHint);
+        meta.visibleWhenPath().ifPresent(builder::visibleWhenPath);
+        meta.visibleWhenValue().ifPresent(builder::visibleWhenValue);
+        meta.defaultJsonValue().ifPresent(builder::defaultJsonValue);
+        meta.valueCodec().ifPresent(builder::valueCodec);
+        meta.defaultValue().ifPresent(builder::defaultValue);
+
+        if (meta.hasReader()) {
+            builder.accessor(ConfigContext.rebaseAccessor(meta::read));
+        }
 
         if (configId != null) {
             String autoKey = autoTranslationKey(configId, meta.key());
             builder.translationKey(autoKey);
-            if (meta.tooltip().isPresent()) {
+            if (meta.tooltip().isDefined()) {
                 builder.tooltip(autoKey + ".tooltip");
             }
         } else {
-            builder.translationKey(meta.translationKey().orElse(null));
-            builder.tooltip(meta.tooltip().orElse(null));
+            meta.translationKey().ifPresent(builder::translationKey);
+            meta.tooltip().ifPresent(builder::tooltip);
         }
 
         return qualifyForContext(builder.build());

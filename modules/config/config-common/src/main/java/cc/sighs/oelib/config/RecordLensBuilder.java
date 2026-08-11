@@ -1,46 +1,40 @@
 package cc.sighs.oelib.config;
 
+import com.flechazo.hkt.Try;
+import com.flechazo.hkt.business.util.OptionalOps;
 import com.flechazo.optics.Affine;
 import com.flechazo.optics.Lens;
-import com.flechazo.optics.generated.LensGetter;
-import com.flechazo.optics.generated.RecordOptics;
-import com.flechazo.optics.util.Affines;
+import com.flechazo.optics.LensGetter;
 import com.flechazo.optics.util.Prisms;
+import org.jetbrains.annotations.ApiStatus;
 
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.invoke.SerializedLambda;
-import java.lang.reflect.Method;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.RecordComponent;
-import java.lang.reflect.Type;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.lang.reflect.*;
+import java.util.*;
 
 /**
- * Resolves generated accessors for record component getter references.
+ *  Creates record and container optics from serializable record component accessors.
  */
+@ApiStatus.Internal
 public final class RecordLensBuilder {
-    private static final MethodHandles.Lookup INTERNAL_LOOKUP = MethodHandles.lookup();
-
     private RecordLensBuilder() {
     }
 
     static <S, A> Lens<S, A> lens(Class<S> recordClass, LensGetter<S, A> getter) {
-        return lens(INTERNAL_LOOKUP, recordClass, getter);
-    }
-
-    static <S, A> Lens<S, A> lens(MethodHandles.Lookup lookup, Class<S> recordClass, LensGetter<S, A> getter) {
-        Objects.requireNonNull(lookup);
         Objects.requireNonNull(recordClass);
         Objects.requireNonNull(getter);
-        return RecordOptics.recordLens(recordClass, getter, lookup);
+        return Lens.of(recordClass, getter);
     }
 
     static <S, A> Affine<S, A> optional(Lens<S, Optional<A>> lens) {
         Objects.requireNonNull(lens);
-        return lens.andThen(Affines.optionalValue());
+        Affine<Optional<A>, A> optionalValue = Affine.of(
+                optional -> OptionalOps.toEither(optional, () -> optional),
+                (optional, value) -> Optional.of(value)
+        );
+        return lens.andThen(optionalValue);
     }
 
     static <S, A, X extends A> Affine<S, X> subtype(Lens<S, A> lens, Class<X> subtypeClass) {
@@ -50,11 +44,10 @@ public final class RecordLensBuilder {
     }
 
     static String componentName(LensGetter<?, ?> getter) {
-        try {
-            return serializedLambda(getter).getImplMethodName();
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("Failed to inspect getter lambda; use a record accessor method reference", e);
-        }
+        return Try.of(() -> serializedLambda(getter).getImplMethodName()).fold(
+                error -> { throw new IllegalStateException(
+                        "Failed to inspect getter lambda; use a record accessor method reference", error); },
+                name -> name);
     }
 
     static Class<?> componentType(Class<?> recordClass, String componentName) {
@@ -79,6 +72,22 @@ public final class RecordLensBuilder {
         return genericReturnTypeArgument(getter, List.class, 0);
     }
 
+    static Class<?> setElementType(LensGetter<?, ?> getter) {
+        return genericReturnTypeArgument(getter, Set.class, 0);
+    }
+
+    static Class<?> arrayElementType(LensGetter<?, ?> getter) {
+        Type returnType = genericReturnType(getter);
+        if (returnType instanceof Class<?> arrayClass && arrayClass.isArray()) {
+            return arrayClass.getComponentType();
+        }
+        if (returnType instanceof GenericArrayType arrayType
+                && arrayType.getGenericComponentType() instanceof Class<?> componentClass) {
+            return componentClass;
+        }
+        throw new IllegalArgumentException("Getter return type is not an array with a reifiable component type");
+    }
+
     static Class<?> mapKeyType(LensGetter<?, ?> getter) {
         return genericReturnTypeArgument(getter, Map.class, 0);
     }
@@ -88,28 +97,52 @@ public final class RecordLensBuilder {
     }
 
     private static Class<?> genericReturnTypeArgument(LensGetter<?, ?> getter, Class<?> rawType, int index) {
-        try {
-            SerializedLambda lambda = serializedLambda(getter);
-            Class<?> implClass = Class.forName(lambda.getImplClass().replace('/', '.'));
-            Method method = implClass.getDeclaredMethod(lambda.getImplMethodName());
-            Type returnType = method.getGenericReturnType();
-            if (returnType instanceof ParameterizedType parameterizedType && parameterizedType.getRawType() == rawType) {
-                Type argument = parameterizedType.getActualTypeArguments()[index];
-                if (argument instanceof Class<?> clazz) {
-                    return clazz;
-                }
+        Type returnType = genericReturnType(getter);
+        if (returnType instanceof ParameterizedType parameterizedType && parameterizedType.getRawType() == rawType) {
+            Type argument = parameterizedType.getActualTypeArguments()[index];
+            if (argument instanceof Class<?> clazz) {
+                return clazz;
             }
-            throw new IllegalArgumentException(
-                    "Getter return type is not " + rawType.getSimpleName() + " with a reifiable type argument: " + lambda.getImplMethodName()
-            );
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("Failed to inspect getter lambda; use a record accessor method reference", e);
         }
+        throw new IllegalArgumentException(
+                "Getter return type is not " + rawType.getSimpleName() + " with a reifiable type argument"
+        );
+    }
+
+    private static Type genericReturnType(LensGetter<?, ?> getter) {
+        return Try.of(() -> {
+            SerializedLambda lambda = serializedLambda(getter);
+            Class<?> implClass = Class.forName(
+                    lambda.getImplClass().replace('/', '.'),
+                    false,
+                    getter.getClass().getClassLoader()
+            );
+            Method method = implClass.getDeclaredMethod(lambda.getImplMethodName());
+            return method.getGenericReturnType();
+        }).fold(
+                error -> { throw new IllegalStateException(
+                        "Failed to inspect getter lambda; use a record accessor method reference", error); },
+                returnType -> returnType);
     }
 
     private static SerializedLambda serializedLambda(LensGetter<?, ?> getter) throws ReflectiveOperationException {
-        Method method = getter.getClass().getDeclaredMethod("writeReplace");
-        method.setAccessible(true);
-        return (SerializedLambda) method.invoke(getter);
+        try {
+            MethodHandles.Lookup projectLookup = ConfigOpticsLookupProvider.registeredLookup(getter.getClass());
+            MethodHandles.Lookup lambdaLookup = MethodHandles.privateLookupIn(getter.getClass(), projectLookup);
+            Object replacement = lambdaLookup.findVirtual(
+                    getter.getClass(),
+                    "writeReplace",
+                    MethodType.methodType(Object.class)
+            ).invoke(getter);
+            if (replacement instanceof SerializedLambda lambda) {
+                return lambda;
+            }
+            throw new IllegalArgumentException("Getter did not serialize to SerializedLambda");
+        } catch (Throwable e) {
+            if (e instanceof ReflectiveOperationException reflective) {
+                throw reflective;
+            }
+            throw new ReflectiveOperationException("Failed to resolve getter SerializedLambda", e);
+        }
     }
 }

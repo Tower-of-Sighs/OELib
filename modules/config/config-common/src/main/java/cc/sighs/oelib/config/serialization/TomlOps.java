@@ -1,5 +1,6 @@
 package cc.sighs.oelib.config.serialization;
 
+import com.flechazo.hkt.Try;
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.*;
 
@@ -11,16 +12,10 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
 /**
- * A {@link DynamicOps} implementation that reads and writes TOML-compatible
- * object trees.
+ * Reads and writes TOML-compatible object trees through the {@link DynamicOps} contract.
  *
- * <p>Two instances are available: {@link #INSTANCE} for standard TOML
- * encoding and {@link #COMPRESSED} for a mode where numeric and string
- * conversions are more permissive (numbers may be read as strings and
- * vice versa).
- *
- * <p>This class is an internal implementation detail of the TOML serialization
- * pipeline and is not intended for direct use outside the config framework.
+ * <p>{@link #INSTANCE} preserves standard TOML value categories. {@link #COMPRESSED} additionally
+ * accepts compatible numeric and string representations during conversion.
  */
 public class TomlOps implements DynamicOps<Object> {
     /** Standard TOML operations instance. */
@@ -72,25 +67,25 @@ public class TomlOps implements DynamicOps<Object> {
         }
         if (input instanceof Number) {
             var value = input instanceof BigDecimal ? (BigDecimal) input : new BigDecimal(input.toString());
-            try {
-                long l = value.longValueExact();
-                if ((byte) l == l) {
-                    return outOps.createByte((byte) l);
-                }
-                if ((short) l == l) {
-                    return outOps.createShort((short) l);
-                }
-                if ((int) l == l) {
-                    return outOps.createInt((int) l);
-                }
-                return outOps.createLong(l);
-            } catch (ArithmeticException e) {
+            return Try.of(value::longValueExact).fold(error -> {
                 double d = value.doubleValue();
                 if ((float) d == d) {
                     return outOps.createFloat((float) d);
                 }
                 return outOps.createDouble(d);
-            }
+            }, l -> {
+                long integer = l;
+                if ((byte) integer == integer) {
+                    return outOps.createByte((byte) integer);
+                }
+                if ((short) integer == integer) {
+                    return outOps.createShort((short) integer);
+                }
+                if ((int) integer == integer) {
+                    return outOps.createInt((int) integer);
+                }
+                return outOps.createLong(integer);
+            });
         }
         return outOps.empty();
     }
@@ -101,11 +96,9 @@ public class TomlOps implements DynamicOps<Object> {
             return DataResult.success((Number) input);
         }
         if (compressed && input instanceof String) {
-            try {
-                return DataResult.success(Integer.parseInt((String) input));
-            } catch (NumberFormatException e) {
-                return DataResult.error(() -> "Not a number: " + e + " " + input);
-            }
+            return Try.of(() -> Integer.parseInt((String) input)).fold(
+                    error -> DataResult.error(() -> "Not a number: " + error + " " + input),
+                    DataResult::success);
         }
         return DataResult.error(() -> "Not a number: " + input);
     }

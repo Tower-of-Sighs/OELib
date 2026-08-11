@@ -12,6 +12,12 @@ public abstract class ConfigSaveEvent<T> implements Event {
     private final ConfigUnit<T> unit;
     private final T value;
 
+    /**
+     * Creates a persistence event.
+     *
+     * @param unit the configuration being persisted
+     * @param value the value supplied to the persistence operation
+     */
     protected ConfigSaveEvent(ConfigUnit<T> unit, T value) {
         this.unit = unit;
         this.value = value;
@@ -36,18 +42,34 @@ public abstract class ConfigSaveEvent<T> implements Event {
     }
 
     /**
-     * Fired before the value is written to disk.
+     * Indicates that a configuration value is about to be persisted.
+     *
+     * @param <T> the type of the configuration value
      */
     public static final class Pre<T> extends ConfigSaveEvent<T> {
+        /**
+         * Creates a pre-persistence event.
+         *
+         * @param unit the configuration being persisted
+         * @param value the value supplied to the persistence operation
+         */
         public Pre(ConfigUnit<T> unit, T value) {
             super(unit, value);
         }
     }
 
     /**
-     * Fired after the value has been written to disk.
+     * Indicates that a configuration value was successfully persisted.
+     *
+     * @param <T> the type of the configuration value
      */
     public static final class Post<T> extends ConfigSaveEvent<T> {
+        /**
+         * Creates a post-persistence event.
+         *
+         * @param unit the configuration that was persisted
+         * @param value the persisted value
+         */
         public Post(ConfigUnit<T> unit, T value) {
             super(unit, value);
         }

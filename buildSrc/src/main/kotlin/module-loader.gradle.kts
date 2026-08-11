@@ -5,9 +5,6 @@ plugins {
     id("module-common")
 }
 
-val mavenGroup: String = property("group") as String
-val modId: String = extra["mod_id"] as String
-
 // Shared dependencies DSL — add loader-specific deps for all modules
 // Usage: sharedDependencies { fabric("com.terraformersmc:modmenu:7.2.2") }
 fun sharedDependencies(action: SharedDependenciesExtension.() -> Unit) {
@@ -134,8 +131,13 @@ tasks.named<JavaCompile>("compileJava") {
 }
 
 tasks.named<ProcessResources>("processResources") {
-    dependsOn(configurations.getByName("commonResources"))
-    from(configurations.getByName("commonResources"))
+    // Fabric already receives the common resource directory through main.resources
+    // above so Loom can discover access wideners during configuration. Adding the
+    // commonResources artifact again would copy every common resource twice.
+    if (suffix != "fabric") {
+        dependsOn(configurations.getByName("commonResources"))
+        from(configurations.getByName("commonResources"))
+    }
 }
 
 tasks.named<Javadoc>("javadoc") {
@@ -146,6 +148,10 @@ tasks.named<Javadoc>("javadoc") {
 tasks.named<Jar>("sourcesJar") {
     dependsOn(configurations.getByName("commonJava"))
     from(configurations.getByName("commonJava"))
-    dependsOn(configurations.getByName("commonResources"))
-    from(configurations.getByName("commonResources"))
+    // Fabric's main source set already contains the common resources. Keep the
+    // explicit copy only for loaders that do not register that resource directory.
+    if (suffix != "fabric") {
+        dependsOn(configurations.getByName("commonResources"))
+        from(configurations.getByName("commonResources"))
+    }
 }

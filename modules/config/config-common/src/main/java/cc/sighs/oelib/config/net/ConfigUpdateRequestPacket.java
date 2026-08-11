@@ -8,6 +8,7 @@ import cc.sighs.oelib.network.api.INetworkContext;
 import cc.sighs.oelib.network.api.INetworkPacket;
 import cc.sighs.oelib.network.api.NetworkPacket;
 import cc.sighs.oelib.network.api.Side;
+import com.flechazo.hkt.business.util.OptionalOps;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -37,7 +38,7 @@ public record ConfigUpdateRequestPacket(
             if (player == null) {
                 return;
             }
-            var unitOpt = ConfigManager.get(configId);
+            var unitOpt = OptionalOps.toMaybe(ConfigManager.get(configId));
             if (unitOpt.isEmpty()) {
                 OELibConfig.LOGGER.warn("Config {} not found for update request", configId);
                 return;

@@ -129,18 +129,7 @@ public class NetworkManagerImpl implements INetworkManager {
         if (players.isEmpty()) return;
 
         if (threshold > 0) {
-            @SuppressWarnings("unchecked")
-            NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
-            if (info == null) return;
-
-            var buf = NetworkUtil.createBufferFromFirstPlayer(players);
-
-            try {
-                byte[] data = NetworkUtil.encodePacket(packet, info, buf);
-                NetworkUtil.sendChunkedPacketToAll(data, packet.type().id(), threshold);
-            } finally {
-                buf.release();
-            }
+            sendWithChunking(packet, players, threshold);
         } else {
             for (ServerPlayer player : players) {
                 ServerPlayNetworking.send(player, packet);
@@ -207,8 +196,16 @@ public class NetworkManagerImpl implements INetworkManager {
 
         if (players.isEmpty()) return;
 
+        if (threshold <= 0) {
+            players.forEach(player -> ServerPlayNetworking.send(player, packet));
+            return;
+        }
+
         NetworkUtil.PacketInfo<T> info = (NetworkUtil.PacketInfo<T>) registeredPackets.get(packet.type());
-        if (info == null) return;
+        if (info == null) {
+            players.forEach(player -> ServerPlayNetworking.send(player, packet));
+            return;
+        }
 
         var buf = NetworkUtil.createBufferFromFirstPlayer(players);
 

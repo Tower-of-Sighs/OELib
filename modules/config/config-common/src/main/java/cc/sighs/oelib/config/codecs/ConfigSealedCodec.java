@@ -3,6 +3,8 @@ package cc.sighs.oelib.config.codecs;
 import cc.sighs.oelib.config.model.ConfigValueMeta;
 import cc.sighs.oelib.config.ui.ConfigUiHint;
 import cc.sighs.oelib.config.util.ConfigPathUtil;
+import com.flechazo.hkt.Maybe;
+import com.flechazo.hkt.business.util.OptionalOps;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.datafixers.util.Pair;
@@ -177,23 +179,28 @@ public final class ConfigSealedCodec<T> implements Codec<T> {
     private static <T> ConfigValueMeta conditionVariantMeta(String typeKey, Variant<T> variant, ConfigValueMeta meta) {
         JsonObject defaultJson = encodeVariantDefault(variant);
         JsonElement defaultValue = ConfigPathUtil.getJsonByPath(defaultJson, meta.key());
-        return ConfigValueMeta.builder(meta.key())
-                .comment(meta.comment().orElse(null))
-                .uiHint(meta.uiHint().orElse(null))
-                .translationKey(meta.translationKey().orElse(null))
-                .tooltip(meta.tooltip().orElse(null))
+        ConfigValueMeta.Builder builder = ConfigValueMeta.builder(meta.key())
                 .hidden(meta.hidden())
                 .visibleWhenPath(typeKey)
                 .visibleWhenValue(variant.id())
-                .defaultJsonValue(defaultValue)
                 .validators(meta.validators())
-                .migrations(meta.migrations())
-                .build();
+                .migrations(meta.migrations());
+        meta.comment().ifPresent(builder::comment);
+        meta.uiHint().ifPresent(builder::uiHint);
+        meta.translationKey().ifPresent(builder::translationKey);
+        meta.tooltip().ifPresent(builder::tooltip);
+        Maybe.ofNullable(defaultValue).ifPresent(builder::defaultJsonValue);
+        meta.valueCodec().ifPresent(builder::valueCodec);
+        meta.defaultValue().ifPresent(builder::defaultValue);
+        if (meta.hasReader()) {
+            builder.accessor(meta::read);
+        }
+        return builder.build();
     }
 
     private static <T> JsonObject encodeVariantDefault(Variant<T> variant) {
-        JsonElement encoded = variant.codec().encodeStart(JsonOps.INSTANCE, variant.codec().defaultValue())
-                .result()
+        JsonElement encoded = OptionalOps.toMaybe(
+                        variant.codec().encodeStart(JsonOps.INSTANCE, variant.codec().defaultValue()).result())
                 .orElseGet(JsonObject::new);
         return encoded.isJsonObject() ? encoded.getAsJsonObject() : new JsonObject();
     }
@@ -222,6 +229,13 @@ public final class ConfigSealedCodec<T> implements Codec<T> {
      * @param <T> the concrete variant type
      */
     public record Variant<T>(String id, Class<T> variantClass, ConfigMetaCodec<T> codec) {
+        /**
+         * Validates the required variant attributes.
+         *
+         * @param id the discriminator value
+         * @param variantClass the concrete variant type
+         * @param codec the codec and field descriptors for the variant
+         */
         public Variant {
             Objects.requireNonNull(id);
             Objects.requireNonNull(variantClass);

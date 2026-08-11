@@ -1,10 +1,10 @@
 package cc.sighs.oelib.config.ui.entries;
 
+import com.flechazo.hkt.Maybe;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
-import java.util.Optional;
 
 /**
  * A collapsible group header for nested configuration paths.
@@ -131,7 +131,7 @@ public class PathGroupEntry extends AbstractConfigEntry<Object> {
     }
 
     @Override
-    public Optional<Object> getDefaultValue() {
-        return Optional.empty();
+    public Maybe<Object> getDefaultValue() {
+        return Maybe.none();
     }
 }

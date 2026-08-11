@@ -1,6 +1,6 @@
 package cc.sighs.oelib.config.ui.entries;
 
-import net.minecraft.client.Minecraft;
+import com.flechazo.hkt.Maybe;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarratableEntry;
@@ -10,7 +10,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -24,7 +23,6 @@ import java.util.function.Consumer;
  * @param <T> the value type associated with this entry
  */
 public abstract class AbstractConfigEntry<T> implements GuiEventListener, NarratableEntry {
-    protected final Minecraft mc = Minecraft.getInstance();
     @Nullable
     protected Consumer<T> saveCallback;
 
@@ -80,17 +78,17 @@ public abstract class AbstractConfigEntry<T> implements GuiEventListener, Narrat
     /**
      * Returns the default value of this entry.
      *
-     * @return the default value, or {@link Optional#empty()}
+     * @return the default value, or an empty value
      */
-    public abstract Optional<T> getDefaultValue();
+    public abstract Maybe<T> getDefaultValue();
 
     /**
      * Returns a configuration error message, if any.
      *
-     * @return the error message, or {@link Optional#empty()}
+     * @return the error message, or an empty value
      */
-    public Optional<Component> getConfigError() {
-        return Optional.empty();
+    public Maybe<Component> getConfigError() {
+        return Maybe.none();
     }
 
     /**
@@ -100,7 +98,7 @@ public abstract class AbstractConfigEntry<T> implements GuiEventListener, Narrat
      * @return {@code true} if edited
      */
     public boolean isEdited() {
-        return getConfigError().isPresent();
+        return getConfigError().isDefined();
     }
 
     /**

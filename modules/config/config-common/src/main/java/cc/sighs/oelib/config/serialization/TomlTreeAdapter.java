@@ -69,7 +69,7 @@ public final class TomlTreeAdapter {
                 config.set(localPath, value);
             }
             for (ConfigValueMeta meta : fields) {
-                if (meta.key().equals(fullPath) && meta.comment().isPresent()) {
+                if (meta.key().equals(fullPath) && meta.comment().isDefined()) {
                     config.setComment(localPath, meta.comment().get());
                     break;
                 }

@@ -219,7 +219,6 @@ public final class EventBus {
     }
 
     // no per-phase internal dispatch
-
     private <E extends Event> CompletableFuture<E> postAsyncInternal(E event) {
         if (event instanceof CancellableEvent) {
             throw new IllegalStateException("postAsync does not support CancellableEvent. Use post() on main thread or design immutable, non-cancellable events for async.");

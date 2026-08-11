@@ -3,6 +3,9 @@ package cc.sighs.oelib.config.util;
 import cc.sighs.oelib.config.ConfigUnit;
 import cc.sighs.oelib.config.OELibConfig;
 import cc.sighs.oelib.config.ui.screen.ConfigScreen;
+import com.flechazo.hkt.Maybe;
+import com.flechazo.hkt.Try;
+import com.flechazo.hkt.business.util.OptionalOps;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
@@ -91,13 +94,13 @@ public final class ConfigGuiUtil {
         if (str.equalsIgnoreCase("true") || str.equalsIgnoreCase("false")) {
             return new JsonPrimitive(Boolean.parseBoolean(str));
         }
-        if (str.matches("^-?\\d+$")) {
-            try { return new JsonPrimitive(Integer.parseInt(str)); } catch (Exception ignored) {}
-        }
-        if (str.matches("^-?\\d+(?:\\.\\d+)?$")) {
-            try { return new JsonPrimitive(Double.parseDouble(str)); } catch (Exception ignored) {}
-        }
-        return new JsonPrimitive(str);
+        Maybe<JsonPrimitive> integer = str.matches("^-?\\d+$")
+                ? Try.of(() -> Integer.parseInt(str)).toMaybe().map(JsonPrimitive::new)
+                : Maybe.none();
+        return integer.or(() -> str.matches("^-?\\d+(?:\\.\\d+)?$")
+                        ? Try.of(() -> Double.parseDouble(str)).toMaybe().map(JsonPrimitive::new)
+                        : Maybe.none())
+                .orElseGet(() -> new JsonPrimitive(str));
     }
 
     /**
@@ -122,7 +125,7 @@ public final class ConfigGuiUtil {
     @SuppressWarnings("unchecked")
     public static JsonObject encodeToJsonObject(Codec<?> codec, Object value) {
         var res = ((Codec<Object>) codec).encodeStart(JsonOps.INSTANCE, value);
-        var el = res.result().orElse(new JsonObject());
+        var el = OptionalOps.toMaybe(res.result()).orElseGet(JsonObject::new);
         return el.isJsonObject() ? el.getAsJsonObject() : new JsonObject();
     }
 
@@ -135,11 +138,12 @@ public final class ConfigGuiUtil {
      */
     public static JsonObject toJson(Object value, ConfigScreen screen) {
         var result = screen.codec.codec().encodeStart(JsonOps.INSTANCE, value);
-        if (result.error().isPresent()) {
-            OELibConfig.LOGGER.error("Failed to encode config {} to JSON: {}", screen.configId, result.error().get().message());
+        var encodeError = OptionalOps.toMaybe(result.error());
+        if (encodeError.isDefined()) {
+            OELibConfig.LOGGER.error("Failed to encode config {} to JSON: {}", screen.configId, encodeError.get().message());
             return new JsonObject();
         }
-        var element = result.result().orElse(new JsonObject());
+        var element = OptionalOps.toMaybe(result.result()).orElseGet(JsonObject::new);
         if (element.isJsonObject()) {
             return element.getAsJsonObject();
         }

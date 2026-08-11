@@ -1,27 +1,23 @@
 package cc.sighs.oelib.config;
 
 import cc.sighs.oelib.config.model.ConfigSide;
+import com.flechazo.hkt.Maybe;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Registry for client-side configuration units.
+ * Registers and reloads client-side configuration units.
  *
- * <p>This manager stores all configurations whose {@link ConfigSide} is
- * {@link ConfigSide#CLIENT}. It reloads configs when the Minecraft resource
- * manager triggers a reload, which covers resource-pack switches and
- * locale changes.
- *
- * <p>The public-facing {@link ConfigManager} delegates client-related
- * operations to this class. Direct use is rarely needed outside the
- * framework internals.
+ * <p>A resource-manager reload reloads every registered unit. Duplicate identifiers replace the
+ * previously registered unit.
  */
+@ApiStatus.Internal
 public class ClientConfigManager implements ResourceManagerReloadListener {
     private static final Map<ResourceLocation, ConfigUnit<?>> CONFIGS = new ConcurrentHashMap<>();
 
@@ -37,8 +33,8 @@ public class ClientConfigManager implements ResourceManagerReloadListener {
         unit.applyAutoMigrationOnRegister();
     }
 
-    static Optional<ConfigUnit<?>> get(ResourceLocation id) {
-        return Optional.ofNullable(CONFIGS.get(id));
+    static Maybe<ConfigUnit<?>> get(ResourceLocation id) {
+        return Maybe.ofNullable(CONFIGS.get(id));
     }
 
     /**
@@ -52,7 +48,7 @@ public class ClientConfigManager implements ResourceManagerReloadListener {
 
     static void reloadAll() {
         for (ConfigUnit<?> unit : CONFIGS.values()) {
-            unit.reload();
+            ConfigLifecycle.reload(unit);
         }
     }
 

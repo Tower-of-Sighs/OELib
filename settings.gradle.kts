@@ -27,8 +27,13 @@ include("neoforge")
 
 // Auto-discover modules in the modules/ directory
 val modulesDir = file("modules")
+val moduleDirs: List<File> = if (modulesDir.exists()) {
+    modulesDir.listFiles()?.filter { it.isDirectory && !it.name.startsWith("_") } ?: emptyList()
+} else {
+    emptyList()
+}
 if (modulesDir.exists()) {
-    modulesDir.listFiles()?.filter { it.isDirectory && !it.name.startsWith("_") }?.forEach { moduleDir ->
+    moduleDirs.forEach { moduleDir ->
         val moduleName = moduleDir.name
         listOf("common", "fabric", "neoforge").forEach { loader ->
             val subprojectDir = File(moduleDir, "${moduleName}-${loader}")
@@ -52,9 +57,10 @@ fun loadModuleProps(moduleName: String): Map<String, String> {
 
 val moduleProps = mutableMapOf<String, Map<String, String>>()
 if (modulesDir.exists()) {
-    modulesDir.listFiles()?.filter { it.isDirectory && !it.name.startsWith("_") }?.forEach { moduleDir ->
+    moduleDirs.forEach { moduleDir ->
         val name = moduleDir.name
         moduleProps[name] = loadModuleProps(name)
     }
 }
 gradle.extra["moduleProps"] = moduleProps
+gradle.extra["moduleDirs"] = moduleDirs

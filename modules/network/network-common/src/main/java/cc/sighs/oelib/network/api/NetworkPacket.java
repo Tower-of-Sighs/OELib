@@ -1,5 +1,7 @@
 package cc.sighs.oelib.network.api;
 
+import org.jetbrains.annotations.Range;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -16,6 +18,12 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface NetworkPacket {
+
+    int MIN_CHUNK_SIZE = 1024;
+    int MAX_SERVERBOUND_CHUNK_SIZE = 30_000;
+    int MAX_CLIENTBOUND_CHUNK_SIZE = 1_000_000;
+    int MAX_CHUNK_COUNT = 4096;
+    int MAX_CHUNKED_PACKET_SIZE = 64 * 1024 * 1024;
 
     /**
      * Mod identifier of this packet.
@@ -64,12 +72,25 @@ public @interface NetworkPacket {
     /**
      * Chunking threshold in bytes.
      * <p>
-     * When the encoded packet size exceeds this value, platform implementations
-     * may transparently split the payload into multiple chunks for transfer.
-     * Values less than or equal to zero disable chunking.
+     * On Fabric, when the encoded packet size exceeds this value, OELib splits
+     * the payload into chunks for transfer. The OELib NeoForge implementation
+     * intentionally ignores this value and sends the original payload directly;
+     * NeoForge's negotiated {@code GenericPacketSplitter} transparently handles
+     * complete packets that exceed the platform frame limit.
+     * Zero disables chunking; negative values are invalid.
+     * On Fabric, a positive value is also used as the maximum data size of each
+     * chunk and must be at least {@link #MIN_CHUNK_SIZE}. Client-bound packets
+     * may use up to {@link #MAX_CLIENTBOUND_CHUNK_SIZE}; server-bound and
+     * bidirectional packets are limited to {@link #MAX_SERVERBOUND_CHUNK_SIZE}
+     * so the chunk envelope remains below Minecraft's server-bound custom
+     * payload limit. These constraints are validated on every loader so a
+     * shared packet declaration remains safe when the same mod targets Fabric.
+     * Runtime validation is authoritative; {@link Range} only supplies static
+     * analysis metadata and cannot express the side-dependent constraints.
      * </p>
      *
-     * @return chunk threshold, default is {@code 0} (no chunking)
+     * @return Fabric chunk threshold, ignored by NeoForge; default is {@code 0}
      */
+    @Range(from = 0, to = MAX_CLIENTBOUND_CHUNK_SIZE)
     int chunkThreshold() default 0;
 }

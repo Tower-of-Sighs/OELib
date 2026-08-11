@@ -1,3 +1,5 @@
+import cc.sighs.gradle.configureCommonSourceArtifacts
+
 plugins {
     id("module-common")
     id("net.neoforged.moddev")
@@ -14,21 +16,13 @@ neoForge {
     }
 }
 
+extra["mavenDependencyWhitelist"] = listOf("com.flechazo:optics-java", "io.smallrye.classfile:jdk-classfile-backport")
 dependencies {
-}
-
-configurations {
-    register("commonJava") {
-        isCanBeResolved = false
-        isCanBeConsumed = true
-    }
-    register("commonResources") {
-        isCanBeResolved = false
-        isCanBeConsumed = true
+    implementation("io.smallrye.classfile:jdk-classfile-backport:26")
+    api("com.flechazo:optics-java:1.0.8-beta") {
+        exclude(group = "com.google.guava", module = "guava")
+        exclude(group = "it.unimi.dsi", module = "fastutil")
     }
 }
 
-artifacts {
-    add("commonJava", sourceSets.main.get().java.sourceDirectories.singleFile)
-    add("commonResources", sourceSets.main.get().resources.sourceDirectories.singleFile)
-}
+configureCommonSourceArtifacts()

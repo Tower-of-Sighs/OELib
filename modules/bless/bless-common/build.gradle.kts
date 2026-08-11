@@ -1,3 +1,5 @@
+import cc.sighs.gradle.configureCommonSourceArtifacts
+
 plugins {
     id("module-common")
     id("net.neoforged.moddev")
@@ -26,18 +28,4 @@ moduleDependencies {
     api(":modules:misc")
 }
 
-configurations {
-    register("commonJava") {
-        isCanBeResolved = false
-        isCanBeConsumed = true
-    }
-    register("commonResources") {
-        isCanBeResolved = false
-        isCanBeConsumed = true
-    }
-}
-
-artifacts {
-    add("commonJava", sourceSets.main.get().java.sourceDirectories.singleFile)
-    add("commonResources", sourceSets.main.get().resources.sourceDirectories.singleFile)
-}
+configureCommonSourceArtifacts()

@@ -7,23 +7,10 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * A sealed interface describing how a configuration field is rendered in
- * the auto-generated config screen.
+ * Describes the control used to edit a field in a generated configuration screen.
  *
- * <p>Each variant maps to a widget type:
- * <ul>
- *   <li>{@link Slider} — a numeric slider with configurable range and step</li>
- *   <li>{@link Text} — a text input field</li>
- *   <li>{@link Toggle} — a checkbox for boolean values</li>
- *   <li>{@link Dropdown} — a cycle button with predefined options</li>
- *   <li>{@link Group} — a visual grouping element</li>
- *   <li>{@link Custom} — a custom widget registered via
- *       {@link ConfigWidgetRegistry}</li>
- * </ul>
- *
- * <p>Hints are created through the static factory methods and attached to
- * fields via {@link cc.sighs.oelib.config.model.ConfigValueMeta.Builder#uiHint(ConfigUiHint)
- * ConfigValueMeta.Builder.uiHint}.
+ * <p>Implementations specify numeric ranges, fixed options, standard input categories, or a
+ * registered custom control. The hint does not contain a field value.
  */
 public sealed interface ConfigUiHint permits ConfigUiHint.Slider, ConfigUiHint.Text, ConfigUiHint.Toggle,
         ConfigUiHint.Dropdown, ConfigUiHint.Group, ConfigUiHint.Custom {
@@ -93,6 +80,10 @@ public sealed interface ConfigUiHint permits ConfigUiHint.Slider, ConfigUiHint.T
 
     /**
      * A slider with a defined range and step.
+     *
+     * @param min the inclusive minimum value
+     * @param max the inclusive maximum value
+     * @param step the positive increment between selectable values
      */
     record Slider(double min, double max, double step) implements ConfigUiHint {
     }
@@ -111,8 +102,15 @@ public sealed interface ConfigUiHint permits ConfigUiHint.Slider, ConfigUiHint.T
 
     /**
      * A dropdown selector with a fixed set of options.
+     *
+     * @param options the selectable values in display order
      */
     record Dropdown(List<String> options) implements ConfigUiHint {
+        /**
+         * Creates a dropdown hint containing an immutable copy of its options.
+         *
+         * @param options the selectable values in display order
+         */
         public Dropdown {
             options = List.copyOf(options);
         }
@@ -127,8 +125,17 @@ public sealed interface ConfigUiHint permits ConfigUiHint.Slider, ConfigUiHint.T
     /**
      * A reference to a custom widget registered via
      * {@link ConfigWidgetRegistry#register(ResourceLocation, ConfigWidgetRegistry.CustomWidgetFactory)}.
+     *
+     * @param widgetId the registered custom widget identifier
+     * @param args the widget arguments
      */
     record Custom(ResourceLocation widgetId, JsonObject args) implements ConfigUiHint {
+        /**
+         * Creates a custom widget hint and copies its arguments.
+         *
+         * @param widgetId the registered custom widget identifier
+         * @param args the widget arguments, or {@code null} to use an empty object
+         */
         public Custom {
             args = args == null ? new JsonObject() : args.deepCopy();
         }

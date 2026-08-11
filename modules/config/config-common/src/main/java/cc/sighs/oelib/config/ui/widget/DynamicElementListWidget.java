@@ -16,15 +16,21 @@ import java.util.List;
  */
 public class DynamicElementListWidget {
 
+    /** The active Minecraft client. */
     protected final Minecraft minecraft;
+    /** The entries rendered by this widget in encounter order. */
     protected final List<AbstractConfigEntry<?>> children = new ArrayList<>();
+    /** The left coordinate of the widget. */
     public int left;
+    /** The total widget width in pixels. */
     public int width;
+    /** The top coordinate of the visible area. */
     public int top;
+    /** The bottom coordinate of the visible area. */
     public int bottom;
 
     /**
-     * Constructs a list widget.
+     * Creates a list widget.
      *
      * @param minecraft the Minecraft instance
      * @param width     the total width

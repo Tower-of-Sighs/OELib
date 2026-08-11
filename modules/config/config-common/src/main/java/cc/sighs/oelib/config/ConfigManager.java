@@ -3,6 +3,7 @@ package cc.sighs.oelib.config;
 import cc.sighs.oelib.config.api.IConfigPermissionChecker;
 import cc.sighs.oelib.config.model.ConfigSide;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
+import com.flechazo.hkt.business.util.OptionalOps;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.Optional;
@@ -28,9 +29,6 @@ public final class ConfigManager {
 
     private static final ThreadLocal<Boolean> UPDATING_FROM_SERVER = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
-    private ConfigManager() {
-    }
-
     /**
      * Registers a client-side configuration unit.
      *
@@ -54,13 +52,15 @@ public final class ConfigManager {
      * Creates a {@link ConfigUnit} from a codec and default value,
      * registers it, and returns the unit.
      *
+     * @param rootClass    the configuration root type
      * @param codec        the codec describing the configuration
      * @param defaultValue the default value used when no file exists
      * @param <T>          the type of the configuration value
      * @return the registered configuration unit
      */
-    public static <T> ConfigUnit<T> register(ConfigCodec<T> codec, T defaultValue) {
-        var unit = ConfigUnit.of(codec, defaultValue);
+    public static <T> ConfigUnit<T> register(
+            Class<T> rootClass, ConfigCodec<T> codec, T defaultValue) {
+        var unit = ConfigUnit.of(rootClass, codec, defaultValue);
         registerUnit(unit);
         return unit;
     }
@@ -112,11 +112,8 @@ public final class ConfigManager {
      * @return an {@link Optional} containing the unit, or {@link Optional#empty()} if not found
      */
     public static Optional<ConfigUnit<?>> get(ResourceLocation id) {
-        var server = ServerConfigManager.get(id);
-        if (server.isPresent()) {
-            return server;
-        }
-        return ClientConfigManager.get(id);
+        return OptionalOps.fromMaybe(
+                ServerConfigManager.get(id).or(() -> ClientConfigManager.get(id)));
     }
 
     /**
@@ -125,7 +122,7 @@ public final class ConfigManager {
      * @param id the configuration id
      */
     public static void reload(ResourceLocation id) {
-        get(id).ifPresent(ConfigUnit::reload);
+        get(id).ifPresent(ConfigLifecycle::reload);
     }
 
     /**
@@ -214,7 +211,7 @@ public final class ConfigManager {
      *         or {@link Optional#empty()} if the configuration is not found
      */
     public static Optional<EncodedPayload> encodeToString(ResourceLocation id) {
-        return ServerConfigManager.encodeToString(id);
+        return OptionalOps.fromMaybe(ServerConfigManager.encodeToString(id));
     }
 
     /**

@@ -1,15 +1,15 @@
 package cc.sighs.oelib.config;
 
-import cc.sighs.oelib.config.codecs.ConfigMetaCodec;
+import cc.sighs.oelib.config.api.ConfigChangedEvent;
 import cc.sighs.oelib.config.field.ConfigField;
 import cc.sighs.oelib.config.model.ConfigStorageFormat;
 import cc.sighs.oelib.config.testsupport.TestFileUtil;
 import cc.sighs.oelib.config.testsupport.TestPlatform;
 import cc.sighs.oelib.config.util.ConfigIOUtil;
-import cc.sighs.oelib.config.util.ConfigSerializationUtil;
+import cc.sighs.oelib.event.EventBus;
+import cc.sighs.oelib.event.Subscribe;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
-import com.mojang.serialization.Dynamic;
 import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,18 +17,13 @@ import org.junit.jupiter.api.Test;
 import java.lang.invoke.MethodHandles;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class ConfigUnitRuntimeTest {
-    private static Dynamic<?> absNumberMigration(Dynamic<?> dynamic) {
-        int raw = dynamic.asInt(0);
-        return dynamic.createInt(Math.abs(raw));
-    }
 
     @BeforeEach
     void clean() throws Exception {
@@ -37,289 +32,170 @@ class ConfigUnitRuntimeTest {
     }
 
     @Test
-    void updateSaveValidateAndMigrateWorkTogether() throws Exception {
-        String fileName = "config_" + UUID.randomUUID().toString().replace("-", "");
-        var definition = ConfigSchema.defineClient(
-                MethodHandles.lookup(),
-                ResourceLocation.fromNamespaceAndPath("oelibtest", "runtime"),
-                RuntimeConfig.class,
-                meta -> meta.fileName(fileName).directory("unit-tests").format(ConfigStorageFormat.JSON),
-                schema -> schema.group(
-                        ConfigField.intRange("count", Integer.MIN_VALUE, Integer.MAX_VALUE)
-                                .defaultValue(1)
-                                .validate((value, object) -> value != null && value <= 10 ? Optional.empty() : Optional.of("count must be <= 10"))
-                                .migrate(1, ConfigUnitRuntimeTest::absNumberMigration)
-                                .forGetter(RuntimeConfig::count),
-                        ConfigField.optional("opt", Codec.INT).forGetter(RuntimeConfig::opt)
-                ).apply(schema, RuntimeConfig::new)
-        );
-
-        ConfigUnit<RuntimeConfig> unit = definition.unit();
-
-        var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
-        Files.createDirectories(savePath.getParent());
-        Files.writeString(savePath, "{\"count\":-4,\"opt\":5}", StandardCharsets.UTF_8);
-
-        RuntimeConfig loaded = unit.get();
-        assertEquals(4, loaded.count());
-        assertEquals(Optional.of(5), loaded.opt());
-        assertEquals(Optional.of(5), unit.preview(RuntimeConfig::opt));
-
-        unit.update(RuntimeConfig::count, value -> value + 1);
-        unit.ifPresent(RuntimeConfig::opt, value -> value + 2);
-        assertEquals(5, unit.get().count());
-        assertEquals(Optional.of(7), unit.get().opt());
-
-        assertThrows(IllegalStateException.class, () -> unit.update(RuntimeConfig::count, ignored -> 99));
-        assertEquals(5, unit.get().count());
-
-        unit.setValue(new RuntimeConfig(123, Optional.of(9)));
-        unit.save();
-        assertEquals(5, unit.get().count());
-        assertEquals(Optional.of(7), unit.get().opt());
-        assertTrue(Files.exists(savePath));
-    }
-
-    @Test
-    void subtypePrismUpdatesOnlyMatchingSubtype() {
-        var modeLens = RecordLensBuilder.lens(ModeHolder.class, ModeHolder::mode);
-        var aPrism = RecordLensBuilder.subtype(modeLens, ModeA.class);
-
-        ModeHolder aSource = new ModeHolder(new ModeA(2));
-        ModeHolder bSource = new ModeHolder(new ModeB("x"));
-
-        ModeHolder aUpdated = aPrism.modify(mode -> new ModeA(mode.value() + 1), aSource);
-        ModeHolder bUpdated = aPrism.modify(mode -> new ModeA(mode.value() + 1), bSource);
-
-        assertEquals(3, ((ModeA) aUpdated.mode()).value());
-        assertSame(bSource.mode(), bUpdated.mode());
-    }
-
-    @Test
-    void noSaveUpdatesOnlyPersistAfterExplicitSave() throws Exception {
-        String fileName = "nosave_" + UUID.randomUUID().toString().replace("-", "");
-        var definition = ConfigSchema.defineClient(
-                MethodHandles.lookup(),
-                ResourceLocation.fromNamespaceAndPath("oelibtest", "nosave"),
-                RuntimeConfig.class,
-                meta -> meta.fileName(fileName).directory("unit-tests").format(ConfigStorageFormat.JSON),
-                schema -> schema.group(
-                        ConfigField.intRange("count", Integer.MIN_VALUE, Integer.MAX_VALUE).defaultValue(1).forGetter(RuntimeConfig::count),
-                        ConfigField.optional("opt", Codec.INT).forGetter(RuntimeConfig::opt)
-                ).apply(schema, RuntimeConfig::new)
-        );
-        ConfigUnit<RuntimeConfig> unit = definition.unit();
+    void defaultUpdateAutomaticallyPersists() throws Exception {
+        ConfigUnit<RuntimeConfig> unit = definition("automatic_save");
         var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
 
-        unit.get();
-        ConfigUnitOps.updateNoSave(unit, RuntimeConfig::count, value -> value + 4);
-        assertEquals(5, unit.get().count());
-        assertFalse(Files.exists(savePath));
+        RuntimeConfig updated = unit.update(RuntimeConfig::count, value -> value + 4);
 
-        unit.save();
+        assertEquals(5, updated.count());
         assertTrue(Files.exists(savePath));
         String content = Files.readString(savePath, StandardCharsets.UTF_8);
         assertEquals(5, JsonParser.parseString(content).getAsJsonObject().get("count").getAsInt());
     }
 
     @Test
-    void batchUpdatePersistsOnceAfterMultipleMutations() {
-        String fileName = "batch_" + UUID.randomUUID().toString().replace("-", "");
-        var definition = ConfigSchema.defineClient(
-                MethodHandles.lookup(),
-                ResourceLocation.fromNamespaceAndPath("oelibtest", "batch"),
-                RuntimeConfig.class,
-                meta -> meta.fileName(fileName).directory("unit-tests").format(ConfigStorageFormat.JSON),
-                schema -> schema.group(
-                        ConfigField.intRange("count", Integer.MIN_VALUE, Integer.MAX_VALUE).defaultValue(1).forGetter(RuntimeConfig::count),
-                        ConfigField.optional("opt", Codec.INT).forGetter(RuntimeConfig::opt)
-                ).apply(schema, RuntimeConfig::new)
-        );
-
-        ConfigUnit<RuntimeConfig> unit = definition.unit();
+    void noSaveUpdatesMemoryWithoutWritingFile() {
+        ConfigUnit<RuntimeConfig> unit = definition("no_save");
         var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
 
-        unit.get();
-        ConfigUnitOps.withBatchNoSave(unit, batch -> {
-            batch.updateInt(RuntimeConfig::count, value -> value + 3);
-            batch.ifPresent(RuntimeConfig::opt, value -> value + 1);
-        });
+        RuntimeConfig updated = unit.updateNoSave(RuntimeConfig::count, value -> value + 4);
+
+        assertEquals(5, updated.count());
+        assertEquals(5, unit.get().count());
         assertFalse(Files.exists(savePath));
-
-        ConfigUnitOps.withBatch(unit, batch -> {
-            batch.updateInt(RuntimeConfig::count, value -> value + 2);
-            batch.ifPresent(RuntimeConfig::opt, value -> value + 1);
-        });
-
-        assertTrue(Files.exists(savePath));
-        assertEquals(6, unit.get().count());
-        assertEquals(Optional.empty(), unit.get().opt());
     }
 
     @Test
-    void setAndGetPersistsAndReturnsUpdatedValue() throws Exception {
-        String fileName = "setandget_" + UUID.randomUUID().toString().replace("-", "");
-        var definition = ConfigSchema.defineClient(
+    void mutationCommitsOnceAndNoSaveVariantSkipsPersistence() {
+        ConfigUnit<RuntimeConfig> unit = definition("mutation");
+        var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
+        ChangeCounter counter = new ChangeCounter(unit);
+        EventBus.register(counter);
+        try {
+
+            RuntimeConfig draft = unit.applyMutationNoSave(unit.mutation()
+                    .map(RuntimeConfig::count, value -> value + 2)
+                    .set(RuntimeConfig::opt, Optional.of(10))
+                    .ifPresent(RuntimeConfig::opt, value -> value + 1));
+
+            assertEquals(new RuntimeConfig(3, Optional.of(11)), draft);
+            assertFalse(Files.exists(savePath));
+            assertEquals(1, counter.changes.get());
+
+            RuntimeConfig saved = unit.applyMutation(unit.mutation()
+                    .map(RuntimeConfig::count, value -> value * 2)
+                    .ifPresent(RuntimeConfig::opt, value -> value + 1));
+
+            assertEquals(new RuntimeConfig(6, Optional.of(12)), saved);
+            assertTrue(Files.exists(savePath));
+            assertEquals(2, counter.changes.get());
+        } finally {
+            EventBus.unregister(counter);
+        }
+    }
+
+    @Test
+    void failedValidationDoesNotReplaceCurrentValue() {
+        ConfigUnit<RuntimeConfig> unit = definition("validation");
+        RuntimeConfig original = unit.get();
+
+        assertThrows(IllegalStateException.class,
+                () -> unit.update(RuntimeConfig::count, ignored -> 99));
+        assertEquals(original, unit.get());
+    }
+
+    @Test
+    void unchangedCommitDoesNotWriteOrPublishAChange() {
+        ConfigUnit<RuntimeConfig> unit = definition("unchanged");
+        var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
+        ChangeCounter counter = new ChangeCounter(unit);
+        EventBus.register(counter);
+        try {
+            RuntimeConfig unchanged = unit.update(RuntimeConfig::count, value -> value);
+
+            assertEquals(new RuntimeConfig(1, Optional.empty()), unchanged);
+            assertFalse(Files.exists(savePath));
+            assertEquals(0, counter.changes.get());
+        } finally {
+            EventBus.unregister(counter);
+        }
+    }
+
+    @Test
+    void persistenceFailureLeavesMemoryUntouchedAndPublishesNoChange() throws Exception {
+        ConfigUnit<RuntimeConfig> unit = definition("write_failure");
+        RuntimeConfig original = unit.get();
+        var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
+        Files.createDirectories(savePath);
+        ChangeCounter counter = new ChangeCounter(unit);
+        EventBus.register(counter);
+        try {
+            assertThrows(IllegalStateException.class,
+                    () -> unit.update(RuntimeConfig::count, value -> value + 1));
+
+            assertEquals(original, unit.get());
+            assertEquals(0, counter.changes.get());
+            assertTrue(Files.isDirectory(savePath));
+        } finally {
+            EventBus.unregister(counter);
+        }
+    }
+
+    @Test
+    void reloadFailureRetainsTheMostRecentlyAcceptedNoSaveValue() throws Exception {
+        ConfigUnit<RuntimeConfig> unit = definition("reload_failure");
+        RuntimeConfig accepted = unit.updateNoSave(RuntimeConfig::count, value -> value + 3);
+        var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
+        Files.createDirectories(savePath.getParent());
+        Files.writeString(savePath, "[]", StandardCharsets.UTF_8);
+
+        ConfigLifecycle.reload(unit);
+
+        assertEquals(accepted, unit.get());
+        assertEquals("[]", Files.readString(savePath, StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void explicitPersistFailureRetainsTheMostRecentlyAcceptedValue() throws Exception {
+        ConfigUnit<RuntimeConfig> unit = definition("explicit_save_failure");
+        RuntimeConfig accepted = unit.updateNoSave(RuntimeConfig::count, value -> value + 2);
+        var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
+        Files.createDirectories(savePath);
+
+        assertDoesNotThrow(() -> ConfigLifecycle.persist(unit));
+
+        assertEquals(accepted, unit.get());
+        assertTrue(Files.isDirectory(savePath));
+    }
+
+    private static ConfigUnit<RuntimeConfig> definition(String prefix) {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        return ConfigSchema.defineClient(
                 MethodHandles.lookup(),
-                ResourceLocation.fromNamespaceAndPath("oelibtest", "setandget"),
+                ResourceLocation.fromNamespaceAndPath("oelibtest", prefix + "_" + suffix),
                 RuntimeConfig.class,
-                meta -> meta.fileName(fileName).directory("unit-tests").format(ConfigStorageFormat.JSON),
+                meta -> meta.fileName(prefix + "_" + suffix)
+                        .directory("unit-tests")
+                        .format(ConfigStorageFormat.JSON),
                 schema -> schema.group(
-                        ConfigField.intRange("count", Integer.MIN_VALUE, Integer.MAX_VALUE).defaultValue(1).forGetter(RuntimeConfig::count),
+                        ConfigField.intRange("count", 0, 10)
+                                .defaultValue(1)
+                                .validate("maximum", value -> value <= 10
+                                        ? Optional.empty()
+                                        : Optional.of("must not exceed 10"))
+                                .forGetter(RuntimeConfig::count),
                         ConfigField.optional("opt", Codec.INT).forGetter(RuntimeConfig::opt)
                 ).apply(schema, RuntimeConfig::new)
         );
-        ConfigUnit<RuntimeConfig> unit = definition.unit();
-        var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
-
-        unit.get();
-        int updated = ConfigUnitOps.setAndGet(unit, RuntimeConfig::count, 11);
-        assertEquals(11, updated);
-        assertEquals(11, unit.get().count());
-        assertTrue(Files.exists(savePath));
-        String content = Files.readString(savePath, StandardCharsets.UTF_8);
-        assertEquals(11, JsonParser.parseString(content).getAsJsonObject().get("count").getAsInt());
-    }
-
-    @Test
-    void setAndGetNoSaveDefersPersistenceUntilExplicitSave() throws Exception {
-        String fileName = "setandget_nosave_" + UUID.randomUUID().toString().replace("-", "");
-        var definition = ConfigSchema.defineClient(
-                MethodHandles.lookup(),
-                ResourceLocation.fromNamespaceAndPath("oelibtest", "setandget_nosave"),
-                RuntimeConfig.class,
-                meta -> meta.fileName(fileName).directory("unit-tests").format(ConfigStorageFormat.JSON),
-                schema -> schema.group(
-                        ConfigField.intRange("count", Integer.MIN_VALUE, Integer.MAX_VALUE).defaultValue(1).forGetter(RuntimeConfig::count),
-                        ConfigField.optional("opt", Codec.INT).forGetter(RuntimeConfig::opt)
-                ).apply(schema, RuntimeConfig::new)
-        );
-        ConfigUnit<RuntimeConfig> unit = definition.unit();
-        var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
-
-        unit.get();
-        int updated = ConfigUnitOps.setAndGetNoSave(unit, RuntimeConfig::count, 13);
-        assertEquals(13, updated);
-        assertEquals(13, unit.get().count());
-        assertFalse(Files.exists(savePath));
-
-        unit.save();
-        assertTrue(Files.exists(savePath));
-        String content = Files.readString(savePath, StandardCharsets.UTF_8);
-        assertEquals(13, JsonParser.parseString(content).getAsJsonObject().get("count").getAsInt());
-    }
-
-    @Test
-    void batchSetAndGetWorksForNoSaveAndSaveModes() throws Exception {
-        String fileName = "batch_setandget_" + UUID.randomUUID().toString().replace("-", "");
-        var definition = ConfigSchema.defineClient(
-                MethodHandles.lookup(),
-                ResourceLocation.fromNamespaceAndPath("oelibtest", "batch_setandget"),
-                RuntimeConfig.class,
-                meta -> meta.fileName(fileName).directory("unit-tests").format(ConfigStorageFormat.JSON),
-                schema -> schema.group(
-                        ConfigField.intRange("count", Integer.MIN_VALUE, Integer.MAX_VALUE).defaultValue(1).forGetter(RuntimeConfig::count),
-                        ConfigField.optional("opt", Codec.INT).forGetter(RuntimeConfig::opt)
-                ).apply(schema, RuntimeConfig::new)
-        );
-        ConfigUnit<RuntimeConfig> unit = definition.unit();
-        var savePath = ConfigIOUtil.resolveSavePath(unit.meta());
-
-        unit.get();
-        ConfigUnitOps.withBatchNoSave(unit, batch -> {
-            int noSaveValue = batch.setAndGet(RuntimeConfig::count, 17);
-            assertEquals(17, noSaveValue);
-        });
-        assertEquals(17, unit.get().count());
-        assertFalse(Files.exists(savePath));
-
-        ConfigUnitOps.withBatch(unit, batch -> {
-            int savedValue = batch.setAndGet(RuntimeConfig::count, 19);
-            assertEquals(19, savedValue);
-        });
-        assertEquals(19, unit.get().count());
-        assertTrue(Files.exists(savePath));
-        String content = Files.readString(savePath, StandardCharsets.UTF_8);
-        assertEquals(19, JsonParser.parseString(content).getAsJsonObject().get("count").getAsInt());
-    }
-
-    @Test
-    void tomlEncodingSupportsListsAndMapsOfNestedRecords() {
-        var definition = ConfigSchema.defineClient(
-                MethodHandles.lookup(),
-                ResourceLocation.fromNamespaceAndPath("oelibtest", "toml_nested"),
-                TomlRoot.class,
-                meta -> meta.fileName("toml_nested").directory("unit-tests").format(ConfigStorageFormat.TOML),
-                schema -> schema.group(
-                        ConfigField.list("entries", TomlEntry.META_CODEC)
-                                .defaultValue(List.of(
-                                        new TomlEntry("alpha", 1, Optional.of(new TomlNested(true, 2))),
-                                        new TomlEntry("beta", 2, Optional.empty())
-                                ))
-                                .forGetter(TomlRoot::entries),
-                        ConfigField.map("entryMap", Codec.STRING, TomlEntry.META_CODEC)
-                                .defaultValue(Map.of(
-                                        "left", new TomlEntry("left", 3, Optional.empty()),
-                                        "right", new TomlEntry("right", 4, Optional.of(new TomlNested(false, 5)))
-                                ))
-                                .forGetter(TomlRoot::entryMap)
-                ).apply(schema, TomlRoot::new)
-        );
-
-        TomlRoot value = definition.unit().getDefaultValue();
-        String encoded = ConfigSerializationUtil.encodeToString(
-                value,
-                ConfigStorageFormat.TOML,
-                definition.unit().codec().codec(),
-                definition.unit().codec().fields()
-        ).orElseThrow();
-
-        TomlRoot decoded = ConfigSerializationUtil.parse(
-                encoded,
-                ConfigStorageFormat.TOML,
-                definition.unit().codec().codec()
-        ).result().orElseThrow();
-
-        assertEquals(value, decoded);
-    }
-
-    private sealed interface Mode permits ModeA, ModeB {
     }
 
     private record RuntimeConfig(int count, Optional<Integer> opt) {
     }
 
-    private record ModeA(int value) implements Mode {
-    }
+    private static final class ChangeCounter {
+        private final ConfigUnit<?> expected;
+        private final AtomicInteger changes = new AtomicInteger();
 
-    private record ModeB(String value) implements Mode {
-    }
+        private ChangeCounter(ConfigUnit<?> expected) {
+            this.expected = expected;
+        }
 
-    private record ModeHolder(Mode mode) {
+        @Subscribe
+        public void changed(ConfigChangedEvent<?> event) {
+            if (event.unit() == expected) {
+                changes.incrementAndGet();
+            }
+        }
     }
-
-    private record TomlRoot(List<TomlEntry> entries, Map<String, TomlEntry> entryMap) {
-    }
-
-    private record TomlNested(boolean enabled, int level) {
-    }
-
-    private record TomlEntry(String id, int weight, Optional<TomlNested> extra) {
-        private static final ConfigMetaCodec<TomlEntry> META_CODEC = ConfigSchema.metaCodec(
-                TomlEntry.class,
-                schema -> schema.group(
-                        ConfigField.string("id").defaultValue("entry").forGetter(TomlEntry::id),
-                        ConfigField.intRange("weight", 0, 100).defaultValue(0).forGetter(TomlEntry::weight),
-                        ConfigField.optional("extra", TOML_NESTED_CODEC).forGetter(TomlEntry::extra)
-                ).apply(schema, TomlEntry::new)
-        );
-    }
-
-    private static final ConfigMetaCodec<TomlNested> TOML_NESTED_CODEC = ConfigSchema.metaCodec(
-            TomlNested.class,
-            schema -> schema.group(
-                    ConfigField.bool("enabled").defaultValue(true).forGetter(TomlNested::enabled),
-                    ConfigField.intRange("level", 0, 10).defaultValue(0).forGetter(TomlNested::level)
-            ).apply(schema, TomlNested::new)
-    );
 }
